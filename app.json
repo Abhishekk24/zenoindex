@@ -1,4 +1,43 @@
 {
-  "name": "ZenoIndexMobile",
-  "displayName": "ZenoIndexMobile"
+  "expo": {
+    "name": "Zeno",
+    "slug": "zeno-mobile",
+    "scheme": "zeno",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#050706",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.zeno.mobile"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#050706",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.zeno.mobile"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-status-bar",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#050706",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160,
+          "resizeMode": "contain"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
 }
