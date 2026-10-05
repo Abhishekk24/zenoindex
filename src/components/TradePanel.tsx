@@ -3,7 +3,7 @@
  * connection: the API returns a draft transaction and the user's wallet
  * signs it; the app never moves funds itself.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Text, View } from 'react-native';
 
 import * as api from '../lib/api';
@@ -47,15 +47,18 @@ export function TradePanel({
 }) {
   const [side, setSide] = useState<Side>(initialSide);
   const [amount, setAmount] = useState('');
-  const [preview, setPreview] = useState<TradePreview>();
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string>();
-
-  // A preview is only valid for the inputs it was made from.
-  useEffect(() => {
-    setPreview(undefined);
-    setError(undefined);
-  }, [side, amount]);
+  // A preview (or its error) is only valid for the inputs it was made from,
+  // so it is kept with them and hidden as soon as either input changes.
+  const [result, setResult] = useState<{
+    inputs: string;
+    preview?: TradePreview;
+    error?: string;
+  }>();
+  const inputs = `${side}|${amount}`;
+  const current = result?.inputs === inputs ? result : undefined;
+  const preview = current?.preview;
+  const error = current?.error;
 
   const unit = side === 'invest' ? baseSymbol : dtf.symbol;
   const valid = isDecimal(amount) && isPositive(amount);
@@ -68,9 +71,12 @@ export function TradePanel({
   const review = async () => {
     setBusy(true);
     try {
-      setPreview(await api.previewTrade(dtf, side, amount));
+      setResult({ inputs, preview: await api.previewTrade(dtf, side, amount) });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not prepare a preview.');
+      setResult({
+        inputs,
+        error: e instanceof Error ? e.message : 'Could not prepare a preview.',
+      });
     } finally {
       setBusy(false);
     }

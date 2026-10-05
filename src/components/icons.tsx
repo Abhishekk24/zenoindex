@@ -1,8 +1,9 @@
 /** Tab bar icons (24px line icons). */
 import React from 'react';
+import type { ColorValue } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 
-type IconProps = { color: string; size?: number };
+type IconProps = { color: ColorValue; size?: number };
 
 export function ExploreIcon({ color, size = 24 }: IconProps) {
   return (

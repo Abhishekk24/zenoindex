@@ -19,18 +19,13 @@ export type Asset = {
   tradable: boolean;
   mode: 'zap' | 'in-kind';
   underlyingTransferPolicy?:
-    | 'open'
-    | 'issuer_allowlist'
-    | 'venue_gated'
-    | 'unknown';
+    'open' | 'issuer_allowlist' | 'venue_gated' | 'unknown';
 };
 
 export type Weight = { assetId: string; weightBps: number };
 
 export type StrategyType =
-  | 'standard'
-  | 'market-cap-weighted'
-  | 'volatility-weighted';
+  'standard' | 'market-cap-weighted' | 'volatility-weighted';
 
 export type DtfStatus = 'coming_soon' | 'active';
 
@@ -119,12 +114,12 @@ export type DtfDetail = Dtf & {
 
 export type WalletPortfolio = {
   wallet: string;
-  positions: Array<{
+  positions: {
     dtfId: string;
     shares: string;
     value: string;
     asOf: string;
-  }>;
+  }[];
 };
 
 /** A wallet's transaction across baskets (web: RecentTransaction). */

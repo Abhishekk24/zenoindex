@@ -276,8 +276,8 @@ export function Stat({
     tone === 'up'
       ? colors.green
       : tone === 'down'
-      ? colors.danger
-      : colors.muted;
+        ? colors.danger
+        : colors.muted;
   return (
     <View style={styles.stat}>
       <Label>{label}</Label>
@@ -382,14 +382,14 @@ export function Button({
     variant === 'gold'
       ? colors.gold
       : variant === 'green'
-      ? colors.primaryGreen
-      : 'transparent';
+        ? colors.primaryGreen
+        : 'transparent';
   const fg =
     variant === 'gold'
       ? colors.onGold
       : variant === 'ghost'
-      ? colors.gold
-      : colors.text;
+        ? colors.gold
+        : colors.text;
   const inactive = disabled || loading;
   return (
     <Pressable

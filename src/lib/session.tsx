@@ -1,6 +1,6 @@
 /**
  * Who is signed in, and how far through onboarding they are. The root
- * navigator picks the auth or app screens from `stage`.
+ * layout (src/app/_layout.tsx) picks the auth or app routes from `stage`.
  *
  * Held in memory only for now: the session token (and where it is stored on
  * the device) is decided when the app is connected to the web app's API.
