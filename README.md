@@ -48,3 +48,40 @@ src/lib/session.tsx         signed-in user and onboarding stage
 src/lib/types.ts            API shapes copied from @dtf/core-api
 src/theme/tokens.ts         black-and-gold tokens and font families
 ```
+
+## Mobile Wallet Integration
+
+### Current status
+
+- Expo SDK 57 migration verified.
+- Generic device wallet flow uses Reown AppKit + Wagmi.
+- Robinhood Chain Testnet is currently configured with chain ID `46630`.
+- Wallet connection is available from Profile → Wallets.
+- Connected EVM address and chain ID are validated before linking.
+- Reown social/email wallet login is disabled because Zeno authentication is handled separately through email sign-in.
+- Solana Kit + Wallet UI dependencies are installed as the foundation for the Solana/Seeker flow.
+
+### Device-specific wallet architecture
+
+Generic Device:
+- Reown AppKit
+- Wagmi / viem
+- Robinhood EVM
+
+Solana Device / Seeker:
+- Solana Mobile Wallet Adapter
+- Solana wallet flow is separate from Reown
+
+### Remaining work
+
+- Device detection
+- Solana Mobile Wallet Adapter integration
+- Native wallet testing
+- Confirm final production network configuration
+- Contract transaction integration
+
+### Verification
+
+```bash
+npm run typecheck
+npx expo export --platform web
