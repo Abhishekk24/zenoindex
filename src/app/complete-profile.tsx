@@ -1,6 +1,6 @@
 /** First sign-in: the personal details the account needs before investing. */
 import React, { useState } from 'react';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import {
   Body,
@@ -13,7 +13,7 @@ import {
 } from '../components/ui';
 import * as api from '../lib/api';
 import { useSession, useUser } from '../lib/session';
-import { space } from '../theme/tokens';
+import { colors, space, type } from '../theme/tokens';
 
 export default function CompleteProfileScreen() {
   const user = useUser();
@@ -22,12 +22,14 @@ export default function CompleteProfileScreen() {
   const [lastName, setLastName] = useState(user.lastName ?? '');
   const [country, setCountry] = useState(user.country ?? '');
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
 
   const complete =
     firstName.trim() && lastName.trim() && /^[A-Za-z]{2}$/.test(country.trim());
 
   const save = async () => {
     setBusy(true);
+    setError(undefined);
     try {
       setUser(
         await api.completeProfile(user, {
@@ -36,6 +38,8 @@ export default function CompleteProfileScreen() {
           country: country.trim().toUpperCase(),
         }),
       );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong.');
     } finally {
       setBusy(false);
     }
@@ -73,6 +77,9 @@ export default function CompleteProfileScreen() {
           autoCapitalize="characters"
           maxLength={2}
         />
+        {error ? (
+          <Text style={[type.small, { color: colors.danger }]}>{error}</Text>
+        ) : null}
         <Button
           label="Save and continue"
           onPress={save}

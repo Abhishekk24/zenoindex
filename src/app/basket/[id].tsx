@@ -51,14 +51,22 @@ export default function BasketDetailScreen() {
       ? params.side
       : undefined;
   const user = useUser();
-  const { data, error, loading, reload } = api.useLoad(async () => {
-    const [dtf, assets, eligibility] = await Promise.all([
-      api.getDtf(id),
-      api.listAssets(),
-      api.getEligibility(user.wallets[0]?.address ?? null),
-    ]);
-    return { dtf, assets: assetMap(assets), eligibility };
-  }, id);
+  const wallet =
+    user.wallets.find(w => w.primary)?.address ??
+    user.walletAddress ??
+    user.wallets[0]?.address ??
+    null;
+  const { data, error, loading, reload } = api.useLoad(
+    async () => {
+      const [dtf, assets, eligibility] = await Promise.all([
+        api.getDtf(id),
+        api.listAssets(),
+        api.getEligibility(wallet),
+      ]);
+      return { dtf, assets: assetMap(assets), eligibility };
+    },
+    `${id}#${wallet ?? 'none'}`,
+  );
 
   if (!data) return <LoadState error={error} onRetry={reload} />;
   const { dtf, assets, eligibility } = data;
@@ -78,7 +86,14 @@ export default function BasketDetailScreen() {
       <Stats dtf={dtf} baseSymbol={baseSymbol} />
 
       <Card title="NAV performance">
-        <NavChart points={dtf.performance} />
+        {dtf.readModels.performance === 'unavailable' ? (
+          <Empty
+            title="Pricing is still indexing"
+            body="NAV history appears once the indexer has priced this basket."
+          />
+        ) : (
+          <NavChart points={dtf.performance} />
+        )}
       </Card>
 
       <Card title="Target allocation">
@@ -97,6 +112,7 @@ export default function BasketDetailScreen() {
         baseSymbol={baseSymbol}
         initialSide={side}
         notice={notice}
+        onConfirmed={reload}
         disabledReason={
           isComingSoon(dtf)
             ? 'This basket opens for investment once the manager publishes it.'
@@ -222,7 +238,12 @@ function Stats({ dtf, baseSymbol }: { dtf: DtfDetail; baseSymbol: string }) {
 function Holdings({ dtf, assets }: { dtf: DtfDetail; assets: AssetMap }) {
   return (
     <Card title="Holdings">
-      {dtf.holdings.length === 0 ? (
+      {dtf.readModels.holdings === 'unavailable' ? (
+        <Empty
+          title="Holdings are still indexing"
+          body="On-chain positions appear once the indexer catches up."
+        />
+      ) : dtf.holdings.length === 0 ? (
         <Empty title="No holdings yet" />
       ) : (
         dtf.holdings.map((h, i) => (
@@ -258,7 +279,12 @@ function Holdings({ dtf, assets }: { dtf: DtfDetail; assets: AssetMap }) {
 function Activity({ dtf, assets }: { dtf: DtfDetail; assets: AssetMap }) {
   return (
     <Card title="Recent activity">
-      {dtf.recentTransactions.length === 0 ? (
+      {dtf.readModels.recentTransactions === 'unavailable' ? (
+        <Empty
+          title="Activity is still indexing"
+          body="Deposits, redeems and rebalances appear once indexed."
+        />
+      ) : dtf.recentTransactions.length === 0 ? (
         <Empty title="No activity yet" />
       ) : (
         dtf.recentTransactions.map((tx, i) => (

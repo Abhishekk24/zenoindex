@@ -1,5 +1,5 @@
 /** Sign in with an email code. The wallet is linked later and never signs in. */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -30,6 +30,15 @@ export default function SignInScreen() {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const [notice, setNotice] = useState<string>();
+  // Server-enforced resend cooldown (from the OTP response envelope).
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setTimeout(() => setCooldown(s => s - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [cooldown]);
 
   async function run(task: () => Promise<void>) {
     setBusy(true);
@@ -43,10 +52,28 @@ export default function SignInScreen() {
     }
   }
 
+  const applyOtpResult = (result: api.OtpResult) => {
+    setCooldown(result.resendAfterSeconds ?? 0);
+    setNotice(
+      result.status === 'not_configured'
+        ? 'Email delivery is not configured on the server; the code is printed in the server console in development.'
+        : result.status === 'rate_limited'
+          ? `A code was already sent. You can resend in ${result.resendAfterSeconds ?? 0}s.`
+          : undefined,
+    );
+  };
+
   const sendCode = () =>
     run(async () => {
-      await api.requestEmailCode(email.trim());
+      const result = await api.requestEmailCode(email.trim());
+      applyOtpResult(result);
       setStep('code');
+    });
+
+  const resend = () =>
+    run(async () => {
+      setCode('');
+      applyOtpResult(await api.resendEmailCode(email.trim()));
     });
 
   const verify = () =>
@@ -96,6 +123,11 @@ export default function SignInScreen() {
                 We sent a 6-digit code to{' '}
                 <Text style={{ color: colors.text }}>{email.trim()}</Text>.
               </Body>
+              {notice ? (
+                <Text style={[type.small, { color: colors.gold }]}>
+                  {notice}
+                </Text>
+              ) : null}
               <Field
                 label="Enter the 6-digit code"
                 value={code}
@@ -123,13 +155,16 @@ export default function SignInScreen() {
                   onPress={() => {
                     setStep('email');
                     setCode('');
+                    setNotice(undefined);
                   }}
                 />
                 <Button
-                  label="Resend code"
+                  label={
+                    cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend code'
+                  }
                   variant="ghost"
-                  onPress={sendCode}
-                  disabled={busy}
+                  onPress={resend}
+                  disabled={busy || cooldown > 0}
                 />
               </View>
             </>
@@ -144,8 +179,8 @@ export default function SignInScreen() {
             <Label>Development</Label>
             <Body muted>
               Skip sign-in with the sample account (terms, profile and a linked
-              wallet already done). Any other email walks through the
-              new-account steps; any 6-digit code works.
+              wallet already done). API-backed data still requires the hosted
+              app to be reachable.
             </Body>
             <Button
               label="Continue as sample investor"

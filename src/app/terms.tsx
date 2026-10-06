@@ -37,11 +37,15 @@ export default function TermsScreen() {
   const [terms, setTerms] = useState(false);
   const [privacy, setPrivacy] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
 
   const accept = async () => {
     setBusy(true);
+    setError(undefined);
     try {
       setUser(await api.acceptTerms(user));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong.');
     } finally {
       setBusy(false);
     }
@@ -66,6 +70,9 @@ export default function TermsScreen() {
         <Check checked={privacy} onToggle={() => setPrivacy(v => !v)}>
           I have read the Privacy Policy.
         </Check>
+        {error ? (
+          <Text style={[type.small, { color: colors.danger }]}>{error}</Text>
+        ) : null}
         <Button
           label="Accept and continue"
           onPress={accept}
