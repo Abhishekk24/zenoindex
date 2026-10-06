@@ -1,6 +1,7 @@
 /** Account, linked wallets, eligibility and security (web: /profile, auth-profile-panel.tsx). */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { useAccount, useAppKit } from '@reown/appkit-react-native';
 
 import {
   Badge,
@@ -70,12 +71,61 @@ function Account({ user }: { user: User }) {
 }
 
 function Wallets({ user }: { user: User }) {
+  const { setUser } = useSession();
+  const { open } = useAppKit();
+  const { address, isConnected, chainId, namespace } = useAccount();
+
+  useEffect(() => {
+    if (!isConnected || !address || namespace !== 'eip155') {
+      return;
+    }
+
+    const connectedChainId = Number(chainId);
+
+    if (connectedChainId !== 46630) {
+      return;
+    }
+
+    const alreadyLinked = user.wallets.some(
+      wallet => wallet.address.toLowerCase() === address.toLowerCase(),
+    );
+
+    if (alreadyLinked) {
+      return;
+    }
+
+    setUser({
+      ...user,
+      wallets: [
+        ...user.wallets,
+        {
+          address,
+          chainId: 46630,
+          primary: user.wallets.length === 0,
+        },
+      ],
+    });
+  }, [
+    address,
+    chainId,
+    isConnected,
+    namespace,
+    setUser,
+    user,
+  ]);
+
+  const connectedToWrongNetwork =
+    isConnected &&
+    namespace === 'eip155' &&
+    Number(chainId) !== 46630;
+
   return (
     <Card title="Linked wallets" banded>
       <Body muted>
         A linked wallet holds your basket shares and signs your transactions. It
         does not sign you in.
       </Body>
+
       {user.wallets.length === 0 ? (
         <Text style={[type.small, { color: colors.muted }]}>
           No wallets linked yet.
@@ -94,10 +144,24 @@ function Wallets({ user }: { user: User }) {
           </View>
         ))
       )}
+
+      {connectedToWrongNetwork && (
+        <Body muted>
+          Please switch your wallet to Robinhood Chain Testnet before linking
+          it.
+        </Body>
+      )}
+
       <Button
-        label="Connect new wallet · coming soon"
+        label={
+          isConnected
+            ? connectedToWrongNetwork
+              ? 'Open wallet'
+              : 'Wallet connected'
+            : 'Connect new wallet'
+        }
         variant="green"
-        disabled
+        onPress={open}
       />
     </Card>
   );

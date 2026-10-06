@@ -10,12 +10,14 @@
  *   profile   → complete-profile
  *   ready     → (tabs): Explore · Portfolio · Profile, and basket/[id]
  */
+import { AppKitProvider } from '@reown/appkit-react-native';
 import { useFonts } from 'expo-font';
 import { DarkTheme, Stack, Theme, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect } from 'react';
 
+import { appKit } from '../config/wallet';
 import { SessionProvider, useSession } from '../lib/session';
 import { colors, fonts } from '../theme/tokens';
 
@@ -62,13 +64,15 @@ export default function RootLayout() {
   if (!loaded && !error) return null;
 
   return (
-    <ThemeProvider value={theme}>
+  <ThemeProvider value={theme}>
+    <AppKitProvider instance={appKit}>
       <SessionProvider>
         <StatusBar style="light" />
         <RootStack />
       </SessionProvider>
-    </ThemeProvider>
-  );
+    </AppKitProvider>
+  </ThemeProvider>
+);
 }
 
 function RootStack() {
