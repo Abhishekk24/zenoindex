@@ -365,6 +365,13 @@ export function sampleDtfDetail(id: string): DtfDetail | null {
     performanceDeltas: deltas(points),
     recentTransactions: transactions(item),
     corporateActions: corporateActions(item),
+    readModels: {
+      holdings: 'available',
+      performance: 'available',
+      performanceDeltas: 'available',
+      recentTransactions: 'available',
+      corporateActions: 'available',
+    },
   };
 }
 
@@ -469,10 +476,11 @@ export function sampleUser(email = 'investor@zeno.example'): User {
     firstName: 'Sample',
     lastName: 'Investor',
     country: 'GB',
+    walletAddress: SAMPLE_WALLET,
     wallets: [{ address: SAMPLE_WALLET, chainId: CHAIN_ID, primary: true }],
     twoFactorEnabled: false,
     termsAcceptedAt: AS_OF,
-    profileCompletedAt: AS_OF,
+    privacyAcceptedAt: AS_OF,
     createdAt: AS_OF,
   };
 }
@@ -486,9 +494,10 @@ export function sampleNewUser(email: string): User {
     firstName: null,
     lastName: null,
     country: null,
+    walletAddress: null,
     wallets: [],
     termsAcceptedAt: null,
-    profileCompletedAt: null,
+    privacyAcceptedAt: null,
   };
 }
 

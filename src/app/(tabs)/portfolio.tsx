@@ -17,7 +17,8 @@ import {
   StatGrid,
 } from '../../components/ui';
 import * as api from '../../lib/api';
-import { compare, ratioBps, sub, sum } from '../../lib/decimal';
+import { erc20BalanceOf } from '../../lib/chain';
+import { compare, fromRaw, mul, ratioBps, sub, sum } from '../../lib/decimal';
 import {
   formatDate,
   formatDecimal,
@@ -33,12 +34,44 @@ import { colors, space, type } from '../../theme/tokens';
 export default function PortfolioScreen() {
   const user = useUser();
   const wallet =
-    user.wallets.find(w => w.primary)?.address ?? user.wallets[0]?.address;
+    user.wallets.find(w => w.primary)?.address ??
+    user.walletAddress ??
+    user.wallets[0]?.address;
 
   const { data, error, loading, reload } = api.useLoad(async () => {
     if (!wallet) return null;
+    // BUG-1 fallback: while the API portfolio read model is a stub, derive
+    // positions from on-chain share balances for every listed DTF.
+    const positionsFromChain = async (dtfs: Dtf[]) => {
+      const positions = await Promise.all(
+        dtfs.map(async dtf => {
+          if (!dtf.contractAddress) return null;
+          try {
+            const shares = await erc20BalanceOf(
+              dtf.chainId,
+              dtf.contractAddress,
+              wallet,
+            );
+            if (shares === 0n) return null;
+            const sharesText = shares.toString();
+            return {
+              dtfId: dtf.id,
+              shares: sharesText,
+              value: mul(
+                fromRaw(sharesText, dtf.shareDecimals),
+                dtf.sharePrice,
+              ),
+              asOf: new Date().toISOString(),
+            };
+          } catch {
+            return null;
+          }
+        }),
+      );
+      return positions.filter(p => p !== null);
+    };
     const [view, dtfs] = await Promise.all([
-      api.getPortfolio(wallet),
+      api.getPortfolio(wallet, positionsFromChain),
       api.listDtfs(),
     ]);
     return { ...view, dtfs: new Map(dtfs.map(d => [d.id, d])) };
@@ -61,9 +94,11 @@ export default function PortfolioScreen() {
   }
   if (!data) return <LoadState error={error} onRetry={reload} />;
 
-  const { portfolio, costBasis, activity, dtfs } = data;
+  const { portfolio, costBasis, activity, dtfs, source } = data;
   const positions = portfolio.positions;
   const marketValue = sum(positions.map(p => p.value));
+  // Cost basis is only known when the API read model has wallet transactions.
+  const hasCost = positions.some(p => costBasis[p.dtfId] !== undefined);
   const cost = sum(positions.map(p => costBasis[p.dtfId] ?? '0'));
   const pnl = sub(marketValue, cost);
   const pnlBps = ratioBps(pnl, cost);
@@ -86,18 +121,28 @@ export default function PortfolioScreen() {
   return (
     <Screen onRefresh={reload} refreshing={loading}>
       <Card banded>
+        {source === 'chain' ? (
+          <Text style={[type.small, { color: colors.muted }]}>
+            Live on-chain balances — account valuations are still indexing.
+          </Text>
+        ) : null}
         <StatGrid>
           <Stat
             label="Market value"
             value={formatDecimal(marketValue)}
             hint={`across ${positions.length} baskets`}
           />
-          <Stat label="Cost basis" value={formatDecimal(cost)} />
+          <Stat
+            label="Cost basis"
+            value={hasCost ? formatDecimal(cost) : '—'}
+          />
           <Stat
             label="Unrealized P&L"
-            value={formatSigned(pnl)}
-            hint={`${formatSignedBps(pnlBps)} since entry`}
-            tone={tone}
+            value={hasCost ? formatSigned(pnl) : '—'}
+            hint={
+              hasCost ? `${formatSignedBps(pnlBps)} since entry` : undefined
+            }
+            tone={hasCost ? tone : undefined}
           />
         </StatGrid>
       </Card>
@@ -116,8 +161,11 @@ export default function PortfolioScreen() {
       <Card title="Holdings">
         {positions.map((p, i) => {
           const dtf = nameOf(p.dtfId);
-          const positionPnl = sub(p.value, costBasis[p.dtfId] ?? '0');
-          const up = compare(positionPnl, '0') >= 0;
+          const hasPositionCost = costBasis[p.dtfId] !== undefined;
+          const positionPnl = hasPositionCost
+            ? sub(p.value, costBasis[p.dtfId]!)
+            : null;
+          const up = positionPnl !== null && compare(positionPnl, '0') >= 0;
           return (
             <View key={p.dtfId} style={{ gap: space.sm }}>
               {i > 0 && <Divider />}
@@ -135,8 +183,17 @@ export default function PortfolioScreen() {
                 </View>
                 <View style={styles.end}>
                   <Mono size={15}>{formatDecimal(p.value)}</Mono>
-                  <Mono size={12} color={up ? colors.green : colors.danger}>
-                    {formatSigned(positionPnl)}
+                  <Mono
+                    size={12}
+                    color={
+                      positionPnl === null
+                        ? colors.muted
+                        : up
+                          ? colors.green
+                          : colors.danger
+                    }
+                  >
+                    {positionPnl === null ? '—' : formatSigned(positionPnl)}
                   </Mono>
                 </View>
               </View>

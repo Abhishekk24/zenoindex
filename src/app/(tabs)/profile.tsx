@@ -1,7 +1,9 @@
 /** Account, linked wallets, eligibility and security (web: /profile, auth-profile-panel.tsx). */
-import React, { useEffect, useState } from 'react';
+import { useAppKit } from '@reown/appkit-react-native';
+import * as WebBrowser from 'expo-web-browser';
+import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { useAccount, useAppKit } from '@reown/appkit-react-native';
+import { useAccount, useSignMessage } from 'wagmi';
 
 import {
   Badge,
@@ -17,6 +19,7 @@ import {
   Segmented,
   Title,
 } from '../../components/ui';
+import { robinhoodTestnet } from '../../config/chains';
 import * as api from '../../lib/api';
 import { formatDate, shortAddress } from '../../lib/format';
 import { useSession, useUser } from '../../lib/session';
@@ -52,6 +55,7 @@ export default function ProfileScreen() {
 
 function Account({ user }: { user: User }) {
   const { signOut } = useSession();
+  const [error, setError] = useState<string>();
   return (
     <>
       <Card title="Personal details" banded>
@@ -65,59 +69,105 @@ function Account({ user }: { user: User }) {
           mono={false}
         />
       </Card>
-      <Button label="Sign out" variant="outline" onPress={signOut} />
+      {error ? (
+        <Text style={[type.small, { color: colors.danger }]}>{error}</Text>
+      ) : null}
+      <Button
+        label="Sign out"
+        variant="outline"
+        onPress={() => {
+          setError(undefined);
+          signOut().catch(e =>
+            setError(e instanceof Error ? e.message : 'Sign-out failed.'),
+          );
+        }}
+      />
     </>
   );
 }
 
+/**
+ * Connecting a wallet in AppKit does NOT link it — the backend must verify a
+ * challenge signature first (`/auth/wallet/challenge` → personal_sign →
+ * `/auth/wallet/verify`). Only verified wallets appear in the list.
+ */
 function Wallets({ user }: { user: User }) {
   const { setUser } = useSession();
   const { open } = useAppKit();
-  const { address, isConnected, chainId, namespace } = useAccount();
+  const { address, isConnected, chainId } = useAccount();
+  const { signMessageAsync } = useSignMessage();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string>();
+  const [notice, setNotice] = useState<string>();
 
-  useEffect(() => {
-    if (!isConnected || !address || namespace !== 'eip155') {
-      return;
+  // The chain the linked wallet must be on: the API's first supported chain.
+  const { data: chains } = api.useLoad(api.listChains, 'chains');
+  const expectedChainId = chains?.[0]?.chainId || robinhoodTestnet.id;
+  const expectedName =
+    chains?.[0]?.name ?? robinhoodTestnet.name ?? `chain ${expectedChainId}`;
+
+  const wrongNetwork =
+    isConnected && chainId !== undefined && chainId !== expectedChainId;
+
+  const link = async () => {
+    if (!address) return;
+    setBusy('link');
+    setError(undefined);
+    setNotice(undefined);
+    try {
+      if (chainId !== expectedChainId) {
+        throw new Error(
+          `Switch your wallet to ${expectedName} before linking.`,
+        );
+      }
+      const challenge = await api.requestWalletChallenge(address);
+      const signature = await signMessageAsync({
+        account: address as `0x${string}`,
+        message: challenge.message,
+      });
+      setUser(
+        await api.verifyWalletLink({
+          message: challenge.message,
+          signature,
+          chainId: expectedChainId,
+        }),
+      );
+      setNotice('Wallet verified and linked.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Wallet verification failed.');
+    } finally {
+      setBusy(null);
     }
+  };
 
-    const connectedChainId = Number(chainId);
-
-    if (connectedChainId !== 46630) {
-      return;
+  const makePrimary = async (wallet: string) => {
+    setBusy(`primary:${wallet}`);
+    setError(undefined);
+    try {
+      setUser(await api.setPrimaryWallet(wallet));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not set primary.');
+    } finally {
+      setBusy(null);
     }
+  };
 
-    const alreadyLinked = user.wallets.some(
-      wallet => wallet.address.toLowerCase() === address.toLowerCase(),
-    );
-
-    if (alreadyLinked) {
-      return;
+  const remove = async (wallet: string) => {
+    setBusy(`remove:${wallet}`);
+    setError(undefined);
+    try {
+      setUser(await api.removeWallet(wallet));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not remove the wallet.');
+    } finally {
+      setBusy(null);
     }
+  };
 
-    setUser({
-      ...user,
-      wallets: [
-        ...user.wallets,
-        {
-          address,
-          chainId: 46630,
-          primary: user.wallets.length === 0,
-        },
-      ],
-    });
-  }, [
-    address,
-    chainId,
-    isConnected,
-    namespace,
-    setUser,
-    user,
-  ]);
-
-  const connectedToWrongNetwork =
-    isConnected &&
-    namespace === 'eip155' &&
-    Number(chainId) !== 46630;
+  const connectedLinked = Boolean(
+    address &&
+    user.wallets.some(w => w.address.toLowerCase() === address.toLowerCase()),
+  );
 
   return (
     <Card title="Linked wallets" banded>
@@ -141,27 +191,58 @@ function Wallets({ user }: { user: User }) {
             <Text style={[type.small, { color: colors.muted }]}>
               Chain {wallet.chainId}
             </Text>
+            <View style={styles.walletActions}>
+              {!wallet.primary && (
+                <Button
+                  label="Make primary"
+                  variant="outline"
+                  style={styles.walletAction}
+                  loading={busy === `primary:${wallet.address}`}
+                  disabled={busy !== null}
+                  onPress={() => makePrimary(wallet.address)}
+                />
+              )}
+              <Button
+                label="Remove"
+                variant="ghost"
+                style={styles.walletAction}
+                loading={busy === `remove:${wallet.address}`}
+                disabled={busy !== null}
+                onPress={() => remove(wallet.address)}
+              />
+            </View>
           </View>
         ))
       )}
 
-      {connectedToWrongNetwork && (
+      {wrongNetwork && (
         <Body muted>
-          Please switch your wallet to Robinhood Chain Testnet before linking
-          it.
+          Your wallet is on a different network. Switch to {expectedName} to
+          link it.
         </Body>
       )}
+      {notice ? (
+        <Text style={[type.small, { color: colors.green }]}>{notice}</Text>
+      ) : null}
+      {error ? (
+        <Text style={[type.small, { color: colors.danger }]}>{error}</Text>
+      ) : null}
 
       <Button
+        label={isConnected ? 'Choose another wallet' : 'Connect wallet'}
+        variant="outline"
+        onPress={open}
+      />
+      <Button
         label={
-          isConnected
-            ? connectedToWrongNetwork
-              ? 'Open wallet'
-              : 'Wallet connected'
-            : 'Connect new wallet'
+          isConnected && connectedLinked
+            ? 'Connected wallet already linked'
+            : 'Sign to link connected wallet'
         }
         variant="green"
-        onPress={open}
+        onPress={link}
+        loading={busy === 'link'}
+        disabled={!isConnected || !address || connectedLinked || busy !== null}
       />
     </Card>
   );
@@ -178,11 +259,39 @@ const KYC: Record<
 };
 
 function EligibilityTab({ user }: { user: User }) {
-  const wallet = user.wallets[0]?.address ?? null;
+  const wallet =
+    user.wallets.find(w => w.primary)?.address ??
+    user.walletAddress ??
+    user.wallets[0]?.address ??
+    null;
   const { data, error, reload } = api.useLoad(
     () => api.getEligibility(wallet),
     wallet ?? 'none',
   );
+  const [busy, setBusy] = useState(false);
+  const [kycError, setKycError] = useState<string>();
+
+  const startVerification = async () => {
+    if (!wallet) return;
+    setBusy(true);
+    setKycError(undefined);
+    try {
+      const session = await api.startKyc(wallet);
+      if (session.url) {
+        await WebBrowser.openBrowserAsync(session.url);
+      } else {
+        setKycError('The provider returned no verification link.');
+      }
+      reload();
+    } catch (e) {
+      setKycError(
+        e instanceof Error ? e.message : 'Verification could not start.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (!data) return <LoadState error={error} onRetry={reload} />;
   const kyc = KYC[data.kycStatus];
   return (
@@ -210,9 +319,26 @@ function EligibilityTab({ user }: { user: User }) {
           />
         }
       />
-      {data.kycStatus !== 'verified' && (
-        <Button label="Start verification · coming soon" disabled />
+      {kycError ? (
+        <Text style={[type.small, { color: colors.danger }]}>{kycError}</Text>
+      ) : null}
+      {!wallet ? (
+        <Body muted>Link a wallet before starting verification.</Body>
+      ) : (
+        data.kycStatus !== 'verified' && (
+          <Button
+            label={
+              data.kycStatus === 'pending'
+                ? 'Continue verification'
+                : 'Start verification'
+            }
+            variant="outline"
+            onPress={startVerification}
+            loading={busy}
+          />
+        )
       )}
+      <Button label="Refresh status" variant="ghost" onPress={reload} />
     </Card>
   );
 }
@@ -263,6 +389,9 @@ function Security({ user }: { user: User }) {
             </View>
           ))
         )}
+        <Body muted>
+          Signing out on this device ends the session shown here.
+        </Body>
       </Card>
     </>
   );
@@ -276,4 +405,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: space.md,
   },
+  walletActions: { flexDirection: 'row', gap: space.sm },
+  walletAction: { flex: 1, minHeight: 38 },
 });

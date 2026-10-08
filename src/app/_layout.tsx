@@ -11,18 +11,23 @@
  *   ready     → (tabs): Explore · Portfolio · Profile, and basket/[id]
  */
 import { AppKitProvider } from '@reown/appkit-react-native';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useFonts } from 'expo-font';
 import { DarkTheme, Stack, Theme, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect } from 'react';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { WagmiProvider } from 'wagmi';
 
-import { appKit } from '../config/wallet';
+import { appKit, wagmiAdapter } from '../config/wallet';
 import { SessionProvider, useSession } from '../lib/session';
 import { colors, fonts } from '../theme/tokens';
 
 // Hold the splash screen until the fonts are ready.
 SplashScreen.preventAutoHideAsync();
+
+const queryClient = new QueryClient();
 
 const theme: Theme = {
   ...DarkTheme,
@@ -64,19 +69,31 @@ export default function RootLayout() {
   if (!loaded && !error) return null;
 
   return (
-  <ThemeProvider value={theme}>
-    <AppKitProvider instance={appKit}>
-      <SessionProvider>
-        <StatusBar style="light" />
-        <RootStack />
-      </SessionProvider>
-    </AppKitProvider>
-  </ThemeProvider>
-);
+    <WagmiProvider config={wagmiAdapter.wagmiConfig}>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider value={theme}>
+          <AppKitProvider instance={appKit}>
+            <SessionProvider>
+              <StatusBar style="light" />
+              <RootStack />
+            </SessionProvider>
+          </AppKitProvider>
+        </ThemeProvider>
+      </QueryClientProvider>
+    </WagmiProvider>
+  );
 }
 
 function RootStack() {
-  const { stage } = useSession();
+  const { stage, booted } = useSession();
+  if (!booted) {
+    // /auth/me is still being answered; hold a spinner under the splash.
+    return (
+      <View style={styles.boot}>
+        <ActivityIndicator color={colors.gold} />
+      </View>
+    );
+  }
   return (
     <Stack
       screenOptions={{
@@ -109,3 +126,12 @@ function RootStack() {
     </Stack>
   );
 }
+
+const styles = StyleSheet.create({
+  boot: {
+    flex: 1,
+    backgroundColor: colors.bg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
