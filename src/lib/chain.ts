@@ -14,11 +14,14 @@ import {
   type PublicClient,
 } from 'viem';
 
-import { robinhoodTestnet } from '../config/chains';
+import { localChain, robinhoodTestnet } from '../config/chains';
 import { listChains, type ChainInfo } from './api';
 
 const chains = new Map<number, Chain>([
   [robinhoodTestnet.id, robinhoodTestnet],
+  // Bundled def wins over the API's rpcUrl (typically 127.0.0.1, which only
+  // resolves on the dev machine — a phone needs EXPO_PUBLIC_CHAIN_RPC_URL).
+  [localChain.id, localChain],
 ]);
 const clients = new Map<number, PublicClient>();
 let chainsLoaded: Promise<void> | null = null;
