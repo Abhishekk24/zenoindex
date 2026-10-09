@@ -1,6 +1,7 @@
 /**
  * Reown AppKit (WalletConnect) for EVM wallets via wagmi, on Robinhood Chain
- * testnet. The WalletConnect polyfills are loaded first in src/app/_layout.tsx.
+ * testnet, plus a local Anvil chain when EXPO_PUBLIC_CHAIN_RPC_URL is set.
+ * The WalletConnect polyfills are loaded first in src/app/_layout.tsx.
  */
 import '@walletconnect/react-native-compat';
 
@@ -8,7 +9,7 @@ import { createAppKit } from '@reown/appkit-react-native';
 import { WagmiAdapter } from '@reown/appkit-wagmi-react-native';
 
 import { colors } from '../theme/tokens';
-import { robinhoodTestnet } from './chains';
+import { localChain, robinhoodTestnet } from './chains';
 import { appKitStorage } from './storage';
 
 const projectId = process.env.EXPO_PUBLIC_REOWN_PROJECT_ID;
@@ -19,7 +20,9 @@ if (!projectId) {
 
 const wagmiAdapter = new WagmiAdapter({
   projectId,
-  networks: [robinhoodTestnet],
+  networks: process.env.EXPO_PUBLIC_CHAIN_RPC_URL
+    ? [localChain, robinhoodTestnet]
+    : [robinhoodTestnet],
 });
 
 const robinhoodNetwork = {
@@ -28,6 +31,20 @@ const robinhoodNetwork = {
   caipNetworkId: `eip155:${robinhoodTestnet.id}` as const,
   testnet: true,
 };
+
+const localNetwork = {
+  ...localChain,
+  chainNamespace: 'eip155' as const,
+  caipNetworkId: `eip155:${localChain.id}` as const,
+  testnet: true,
+};
+
+// The local chain is only advertised when a chain RPC is explicitly
+// configured — production builds are identical to single-network setup.
+const useLocalChain = Boolean(process.env.EXPO_PUBLIC_CHAIN_RPC_URL);
+const appNetworks = useLocalChain
+  ? [localNetwork, robinhoodNetwork]
+  : [robinhoodNetwork];
 
 export const appKit = createAppKit({
   projectId,
@@ -44,9 +61,9 @@ export const appKit = createAppKit({
     },
   },
   adapters: [wagmiAdapter],
-  networks: [robinhoodNetwork],
+  networks: appNetworks,
   storage: appKitStorage,
-  defaultNetwork: robinhoodNetwork,
+  defaultNetwork: useLocalChain ? localNetwork : robinhoodNetwork,
   features: {
     socials: false,
   },
