@@ -31,9 +31,7 @@ export const localChain = defineChain({
   },
   rpcUrls: {
     default: {
-      http: [
-        process.env.EXPO_PUBLIC_CHAIN_RPC_URL ?? 'http://127.0.0.1:8545',
-      ],
+      http: [process.env.EXPO_PUBLIC_CHAIN_RPC_URL ?? 'http://127.0.0.1:8545'],
     },
   },
 });

@@ -9,6 +9,7 @@ import { useSession } from '../../hooks/useSession';
 import * as api from '../../lib/api';
 import { shortAddress } from '../../lib/format';
 import type { User } from '../../lib/types';
+import { withWalletOpen } from '../../lib/walletLink';
 import { colors, fonts, space, type } from '../../theme/tokens';
 import { Badge, Body, Button, Card, Divider, Mono } from '../ui';
 
@@ -49,10 +50,12 @@ export function WalletsTab({ user }: { user: User }) {
         );
       }
       const challenge = await api.requestWalletChallenge(address);
-      const signature = await signMessageAsync({
-        account: address as `0x${string}`,
-        message: challenge.message,
-      });
+      const signature = await withWalletOpen(() =>
+        signMessageAsync({
+          account: address as `0x${string}`,
+          message: challenge.message,
+        }),
+      );
       setUser(
         await api.verifyWalletLink({
           message: challenge.message,

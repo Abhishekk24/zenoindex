@@ -19,6 +19,7 @@ import { erc20Allowance, waitForReceipt } from '../lib/chain';
 import { compare, isDecimal, isPositive } from '../lib/decimal';
 import { formatBps, formatDecimal, shortAddress } from '../lib/format';
 import type { Dtf, Operation, TradePreview } from '../lib/types';
+import { withWalletOpen } from '../lib/walletLink';
 import { colors, space, type } from '../theme/tokens';
 import {
   Badge,
@@ -157,13 +158,15 @@ export function TradePanel({
       functionName: 'approve',
       args: [spender as Hex, amountRaw],
     });
-    const txHash = await sendTransactionAsync({
-      account: signer as Hex,
-      chainId: dtf.chainId,
-      to: dtf.baseAssetId as Hex,
-      data,
-      value: 0n,
-    });
+    const txHash = await withWalletOpen(() =>
+      sendTransactionAsync({
+        account: signer as Hex,
+        chainId: dtf.chainId,
+        to: dtf.baseAssetId as Hex,
+        data,
+        value: 0n,
+      }),
+    );
     const receipt = await waitForReceipt(dtf.chainId, txHash);
     if (receipt.status !== 'success') {
       throw new Error('The spend approval transaction failed on-chain.');
@@ -189,16 +192,18 @@ export function TradePanel({
         setStep('signing');
       }
 
-      const txHash = await sendTransactionAsync({
-        account: signer as Hex,
-        chainId,
-        to: draft.transaction.to as Hex,
-        data: draft.transaction.data,
-        value: BigInt(draft.transaction.value || '0'),
-        ...(draft.transaction.gas
-          ? { gas: BigInt(draft.transaction.gas) }
-          : {}),
-      });
+      const txHash = await withWalletOpen(() =>
+        sendTransactionAsync({
+          account: signer as Hex,
+          chainId,
+          to: draft.transaction.to as Hex,
+          data: draft.transaction.data,
+          value: BigInt(draft.transaction.value || '0'),
+          ...(draft.transaction.gas
+            ? { gas: BigInt(draft.transaction.gas) }
+            : {}),
+        }),
+      );
 
       setStep('broadcast');
       const submitted = await api.submitOperation(draft.requestId, txHash);

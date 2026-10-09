@@ -28,6 +28,7 @@ import { useKeyboardHeight } from '../hooks/useKeyboardHeight';
 import { useSession } from '../hooks/useSession';
 import * as api from '../lib/api';
 import { shortAddress } from '../lib/format';
+import { withWalletOpen } from '../lib/walletLink';
 import { colors, fonts } from '../theme/tokens';
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -124,10 +125,12 @@ export default function SignInScreen() {
       'wallet',
       async () => {
         const challenge = await api.requestWalletLoginChallenge(wallet);
-        const signature = await signMessageAsync({
-          account: wallet as `0x${string}`,
-          message: challenge.message,
-        });
+        const signature = await withWalletOpen(() =>
+          signMessageAsync({
+            account: wallet as `0x${string}`,
+            message: challenge.message,
+          }),
+        );
         setUser(
           await api.walletLogin({
             walletAddress: wallet,
