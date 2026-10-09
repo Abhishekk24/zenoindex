@@ -27,6 +27,8 @@ export const colors = {
   primaryGreen: '#2f7d58',
   danger: '#f0a0a0',
   dangerSoft: 'rgba(240, 160, 160, 0.1)',
+  /** Stronger red from the new designs: losses, ▼ changes, Sign out. */
+  red: '#e5484d',
   onGold: '#17140c',
 } as const;
 
@@ -46,25 +48,29 @@ export const radius = { sm: 8, md: 12, lg: 14, pill: 999 } as const;
 export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;
 
 /**
- * Bundled fonts (assets/fonts, linked with `npx react-native-asset`). Each
- * weight is its own family, named after the file's PostScript name so the
- * same string works on iOS and Android. Pick the weight with the family and
- * never add `fontWeight` or `fontStyle` to these: Android would fake a bold
- * or slant on top of the real face.
+ * The tab bar floats over the tab screens (translucent, blurred), so their
+ * content adds this much bottom space plus the safe-area inset.
+ */
+export const tabBarHeight = 64;
+
+/**
+ * App font: Space Grotesk (@expo-google-fonts/space-grotesk, loaded in
+ * src/app/_layout.tsx under these family names). Each weight is its own
+ * family: pick the weight with the family and never add `fontWeight` or
+ * `fontStyle`, or Android fakes a bold or slant on top of the real face.
  */
 export const fonts = {
-  regular: 'Inter-Regular',
-  medium: 'Inter-Medium',
-  semibold: 'Inter-SemiBold',
-  bold: 'Inter-Bold',
-  /** Playfair Display italic, for section headings. */
-  serif: 'PlayfairDisplay-Italic',
+  light: 'SpaceGrotesk-Light',
+  regular: 'SpaceGrotesk-Regular',
+  medium: 'SpaceGrotesk-Medium',
+  semibold: 'SpaceGrotesk-SemiBold',
+  bold: 'SpaceGrotesk-Bold',
   mono: Platform.select({ ios: 'Menlo', default: 'monospace' }),
 } as const;
 
 export const type = {
-  display: { fontFamily: fonts.serif, fontSize: 30, lineHeight: 36 },
-  title: { fontFamily: fonts.serif, fontSize: 22, lineHeight: 28 },
+  display: { fontFamily: fonts.medium, fontSize: 28, lineHeight: 34 },
+  title: { fontFamily: fonts.medium, fontSize: 19, lineHeight: 25 },
   heading: { fontFamily: fonts.semibold, fontSize: 17, lineHeight: 22 },
   body: { fontFamily: fonts.regular, fontSize: 15, lineHeight: 22 },
   small: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },

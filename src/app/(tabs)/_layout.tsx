@@ -1,44 +1,63 @@
 import { Tabs } from 'expo-router/js-tabs';
 import React from 'react';
+import { StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   ExploreIcon,
   PortfolioIcon,
   ProfileIcon,
 } from '../../components/icons';
-import { colors, fonts } from '../../theme/tokens';
+import { TabBarBackground } from '../../components/navigation/TabBarBackground';
+import { colors, fonts, tabBarHeight } from '../../theme/tokens';
 
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
   return (
     <Tabs
       screenOptions={{
         headerStyle: { backgroundColor: colors.bg },
         headerShadowVisible: false,
-        headerTitleStyle: { fontFamily: fonts.serif, fontSize: 22 },
+        headerTitleStyle: { fontFamily: fonts.medium, fontSize: 20 },
         headerTitleAlign: 'left',
-        tabBarActiveTintColor: colors.gold,
+        tabBarActiveTintColor: colors.text,
         tabBarInactiveTintColor: colors.dim,
+        tabBarLabelStyle: { fontFamily: fonts.medium, fontSize: 12 },
         tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.line,
+          position: 'absolute',
+          height: tabBarHeight + insets.bottom,
+          paddingTop: 8,
+          backgroundColor: 'transparent',
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: colors.lineStrong,
+          elevation: 0,
         },
+        tabBarBackground: TabBarBackground,
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Explore baskets',
-          tabBarLabel: 'Explore',
+          title: 'Explore',
+          headerShown: false,
           tabBarIcon: ExploreIcon,
         }}
       />
       <Tabs.Screen
         name="portfolio"
-        options={{ title: 'Portfolio', tabBarIcon: PortfolioIcon }}
+        options={{
+          title: 'Portfolio',
+          headerShown: false,
+          tabBarIcon: PortfolioIcon,
+        }}
       />
       <Tabs.Screen
         name="profile"
-        options={{ title: 'Profile', tabBarIcon: ProfileIcon }}
+        options={{
+          title: 'Profile',
+          headerShown: false,
+          tabBarIcon: ProfileIcon,
+        }}
       />
     </Tabs>
   );

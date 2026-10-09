@@ -1,24 +1,34 @@
-/** Browse, search and filter baskets (web: /products, product-explore.tsx). */
-import { router } from 'expo-router';
+/**
+ * Explore (home): browse, search and filter baskets (design: Explore mockup;
+ * web: /products, product-explore.tsx).
+ *
+ * Header actions: strategy and manager filters open their chips inline under
+ * the tabs (a gold ring marks an applied filter); search opens /search.
+ * Other screens can open a filter here via ?panel=strategy|manager.
+ */
+import { router, useLocalSearchParams } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { BasketCard } from '../../components/BasketCard';
+import { AppHeader } from '../../components/AppHeader';
+import { BasketCard } from '../../components/explore/BasketCard';
+import { ChipRow } from '../../components/explore/ChipRow';
 import {
-  Button,
   Chip,
   Empty,
-  Label,
   LoadState,
   Screen,
-  Segmented,
+  SwipeTabContent,
+  UnderlineTabs,
 } from '../../components/ui';
+import { useLoad } from '../../hooks/useLoad';
 import * as api from '../../lib/api';
 import { assetMap, isPermissioned, strategyOf } from '../../lib/basket';
 import { humanize, shortAddress } from '../../lib/format';
-import { colors, radius, space, type } from '../../theme/tokens';
+import { colors, fonts, space } from '../../theme/tokens';
 
 type Access = 'all' | 'open' | 'permissioned';
+type Panel = 'strategy' | 'manager' | null;
 
 const ACCESS = [
   { value: 'all', label: 'All' },
@@ -26,12 +36,32 @@ const ACCESS = [
   { value: 'permissioned', label: 'Permissioned' },
 ] as const;
 
+/** Baskets plus the asset list (for symbols and access policy). */
+async function loadExplore() {
+  const [dtfs, assets] = await Promise.all([api.listDtfs(), api.listAssets()]);
+  return { dtfs, assets };
+}
+
+function asPanel(value: string | undefined): Panel {
+  return value === 'strategy' || value === 'manager' ? value : null;
+}
+
 export default function ExploreScreen() {
-  const { data, error, loading, reload } = useLoad();
-  const [query, setQuery] = useState('');
+  const params = useLocalSearchParams<{ panel?: string; at?: string }>();
+  const { data, error, loading, reload } = useLoad(loadExplore, 'explore');
   const [access, setAccess] = useState<Access>('all');
   const [manager, setManager] = useState<string>();
   const [strategy, setStrategy] = useState<string>();
+  const [panel, setPanel] = useState<Panel>(asPanel(params.panel));
+
+  // Arriving from another screen's filter button: open that panel. Tracked
+  // during render (not in an effect) so it applies on the same frame.
+  const request = `${params.panel ?? ''}#${params.at ?? ''}`;
+  const [handled, setHandled] = useState(request);
+  if (request !== handled) {
+    setHandled(request);
+    if (asPanel(params.panel)) setPanel(asPanel(params.panel));
+  }
 
   const assets = useMemo(() => assetMap(data?.assets ?? []), [data]);
   const dtfs = useMemo(() => data?.dtfs ?? [], [data]);
@@ -45,16 +75,7 @@ export default function ExploreScreen() {
   );
 
   const visible = useMemo(() => {
-    const q = query.trim().toLowerCase();
     return dtfs.filter(dtf => {
-      if (
-        q &&
-        !dtf.name.toLowerCase().includes(q) &&
-        !dtf.symbol.toLowerCase().includes(q) &&
-        !dtf.manager.toLowerCase().includes(q)
-      ) {
-        return false;
-      }
       const permissioned = isPermissioned(dtf, assets);
       if (access === 'open' && permissioned) return false;
       if (access === 'permissioned' && !permissioned) return false;
@@ -62,140 +83,114 @@ export default function ExploreScreen() {
       if (strategy && strategyOf(dtf) !== strategy) return false;
       return true;
     });
-  }, [dtfs, assets, query, access, manager, strategy]);
+  }, [dtfs, assets, access, manager, strategy]);
 
-  const filtered = Boolean(query || access !== 'all' || manager || strategy);
+  const filtered = Boolean(manager || strategy);
   const clear = () => {
-    setQuery('');
-    setAccess('all');
     setManager(undefined);
     setStrategy(undefined);
+    setPanel(null);
   };
-
-  if (!data) return <LoadState error={error} onRetry={reload} />;
+  const toggle = (next: Exclude<Panel, null>) =>
+    setPanel(current => (current === next ? null : next));
 
   return (
-    <Screen onRefresh={reload} refreshing={loading}>
-      <Text style={[type.body, { color: colors.muted }]}>
-        Open-access baskets need only a linked wallet. Permissioned baskets
-        check your eligibility before you invest.
-      </Text>
-
-      <TextInput
-        value={query}
-        onChangeText={setQuery}
-        placeholder="Search by name, symbol or manager"
-        placeholderTextColor={colors.dim}
-        selectionColor={colors.gold}
-        autoCapitalize="none"
-        autoCorrect={false}
-        clearButtonMode="while-editing"
-        style={styles.search}
+    <View style={styles.root}>
+      <AppHeader
+        title="Explore baskets"
+        strategyActive={Boolean(strategy) || panel === 'strategy'}
+        managerActive={Boolean(manager) || panel === 'manager'}
+        onStrategy={() => toggle('strategy')}
+        onManager={() => toggle('manager')}
       />
 
-      <Segmented options={ACCESS} value={access} onChange={setAccess} />
-
-      <FilterRow label="Manager">
-        {managers.map(m => (
-          <Chip
-            key={m}
-            label={shortAddress(m)}
-            selected={manager === m}
-            onPress={() => setManager(manager === m ? undefined : m)}
-          />
-        ))}
-      </FilterRow>
-      <FilterRow label="Strategy">
-        {strategies.map(s => (
-          <Chip
-            key={s}
-            label={humanize(s)}
-            selected={strategy === s}
-            onPress={() => setStrategy(strategy === s ? undefined : s)}
-          />
-        ))}
-      </FilterRow>
-
-      <View style={styles.count}>
-        <Label>
-          {visible.length} of {dtfs.length} baskets
-        </Label>
-        {filtered ? (
-          <Button label="Clear filters" variant="ghost" onPress={clear} />
-        ) : null}
+      <View style={styles.tabs}>
+        <UnderlineTabs options={ACCESS} value={access} onChange={setAccess} />
       </View>
 
-      {dtfs.length === 0 ? (
-        <Empty
-          title="No baskets are listed yet"
-          body="Listed baskets appear here as soon as a manager publishes one."
-        />
-      ) : visible.length === 0 ? (
-        <Empty
-          title="No baskets match these filters"
-          body="Try adjusting the search, access, manager or strategy filters."
-        />
-      ) : (
-        visible.map(dtf => (
-          <BasketCard
-            key={dtf.id}
-            dtf={dtf}
-            assets={assets}
-            onPress={() =>
-              router.push({ pathname: '/basket/[id]', params: { id: dtf.id } })
-            }
-          />
-        ))
+      {panel === 'strategy' && (
+        <ChipRow>
+          {strategies.map(s => (
+            <Chip
+              key={s}
+              label={humanize(s)}
+              selected={strategy === s}
+              onPress={() => setStrategy(strategy === s ? undefined : s)}
+            />
+          ))}
+        </ChipRow>
       )}
-    </Screen>
-  );
-}
+      {panel === 'manager' && (
+        <ChipRow>
+          {managers.map(m => (
+            <Chip
+              key={m}
+              label={shortAddress(m)}
+              selected={manager === m}
+              onPress={() => setManager(manager === m ? undefined : m)}
+            />
+          ))}
+        </ChipRow>
+      )}
+      {filtered && (
+        <Pressable
+          onPress={clear}
+          accessibilityRole="button"
+          style={styles.clear}
+        >
+          <Text style={styles.clearText}>
+            {visible.length} of {dtfs.length} · Clear filters
+          </Text>
+        </Pressable>
+      )}
 
-function useLoad() {
-  return api.useLoad(async () => {
-    const [dtfs, assets] = await Promise.all([
-      api.listDtfs(),
-      api.listAssets(),
-    ]);
-    return { dtfs, assets };
-  }, 'explore');
-}
-
-function FilterRow({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <View style={{ gap: space.sm }}>
-      <Label>{label}</Label>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: space.sm }}
-      >
-        {children}
-      </ScrollView>
+      {!data ? (
+        <LoadState error={error} onRetry={reload} />
+      ) : (
+        <Screen tabBar onRefresh={reload} refreshing={loading}>
+          <SwipeTabContent
+            index={ACCESS.findIndex(a => a.value === access)}
+            count={ACCESS.length}
+            onIndexChange={i => setAccess(ACCESS[i]!.value)}
+          >
+            <View style={styles.list}>
+              {dtfs.length === 0 ? (
+                <Empty
+                  title="No baskets are listed yet"
+                  body="Listed baskets appear here as soon as a manager publishes one."
+                />
+              ) : visible.length === 0 ? (
+                <Empty
+                  title="No baskets match these filters"
+                  body="Try another tab, or adjust the search, manager or strategy filters."
+                />
+              ) : (
+                visible.map(dtf => (
+                  <BasketCard
+                    key={dtf.id}
+                    dtf={dtf}
+                    assets={assets}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/basket/[id]',
+                        params: { id: dtf.id },
+                      })
+                    }
+                  />
+                ))
+              )}
+            </View>
+          </SwipeTabContent>
+        </Screen>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  search: {
-    ...type.body,
-    color: colors.text,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.lineStrong,
-    borderRadius: radius.pill,
-    paddingHorizontal: space.lg,
-    minHeight: 46,
-  },
-  count: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+  root: { flex: 1, backgroundColor: colors.bg },
+  list: { gap: space.lg },
+  tabs: { marginTop: space.lg, paddingHorizontal: space.md },
+  clear: { paddingHorizontal: space.lg, paddingTop: space.md },
+  clearText: { fontFamily: fonts.medium, fontSize: 13, color: colors.gold },
 });

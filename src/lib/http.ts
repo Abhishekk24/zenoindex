@@ -124,9 +124,19 @@ async function request<T>(path: string, init: ApiRequest = {}): Promise<T> {
     });
   } catch (e) {
     if (e instanceof Error && e.name === 'AbortError') {
-      throw new ApiError(0, 'timeout', 'The request timed out.', true);
+      throw new ApiError(
+        0,
+        'timeout',
+        'This is taking too long. Check your connection and try again.',
+        true,
+      );
     }
-    throw new ApiError(0, 'network', 'Could not reach the server.', true);
+    throw new ApiError(
+      0,
+      'network',
+      "Can't connect. Check your internet connection and try again.",
+      true,
+    );
   } finally {
     clearTimeout(timer);
   }
@@ -134,7 +144,21 @@ async function request<T>(path: string, init: ApiRequest = {}): Promise<T> {
   captureSession(response.headers);
 
   const text = await response.text();
-  const body = text ? (JSON.parse(text) as Record<string, unknown>) : {};
+  let body: Record<string, unknown> = {};
+  if (text) {
+    try {
+      body = JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      // Not our API answering (e.g. a tunnel's "offline" page or a proxy's
+      // HTML error): say so plainly instead of surfacing a parser error.
+      throw new ApiError(
+        response.status,
+        'unavailable',
+        "Zeno's servers can't be reached right now. Please try again in a moment.",
+        true,
+      );
+    }
+  }
 
   if (!response.ok) {
     const error = (body['error'] ?? {}) as {

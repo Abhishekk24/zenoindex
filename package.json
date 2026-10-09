@@ -11,8 +11,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@expo-google-fonts/space-grotesk": "^0.4.1",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/netinfo": "12.0.1",
+    "@reown/appkit-react-native": "^2.0.6",
     "@reown/appkit-wagmi-react-native": "^2.0.6",
     "@solana/kit": "^7.1.1",
     "@solana/kit-plugin-instruction-plan": "0.13.0",
@@ -23,6 +25,7 @@
     "babel-preset-expo": "~57.0.0",
     "expo": "~57.0.26",
     "expo-application": "~57.0.3",
+    "expo-blur": "~57.0.3",
     "expo-constants": "~57.0.21",
     "expo-font": "~57.0.4",
     "expo-linking": "~57.0.11",
@@ -34,6 +37,7 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
+    "react-native-gesture-handler": "^3.3.0",
     "react-native-get-random-values": "~1.11.0",
     "react-native-reanimated": "4.5.1",
     "react-native-safe-area-context": "~5.7.0",
@@ -46,6 +50,12 @@
   },
   "engines": {
     "node": ">= 22.11.0"
+  },
+  "overrides": {
+    "@walletconnect/universal-provider": "2.21.10",
+    "@walletconnect/sign-client": "2.21.10",
+    "@walletconnect/core": "2.21.10",
+    "valtio": "2.1.8"
   },
   "devDependencies": {
     "@types/react": "~19.2.4",

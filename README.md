@@ -16,37 +16,45 @@ npm run lint
 
 Add packages with `npx expo install <package>` so they match the SDK.
 
-The app runs entirely on sample data (`src/lib/data.ts`) for now. On the sign-in
-screen, development builds show **Continue as sample investor**; any other email
-walks through the new-account steps (terms, then profile), and any 6-digit code
-is accepted.
+The app talks to the web app's `/api/v1`; set `EXPO_PUBLIC_API_URL` in `.env`
+(see `src/lib/env.ts`). Development builds show **Skip sign-in (dev)** on the
+sign-in screen to enter as the sample investor without a session.
 
 `ios/` and `android/` are generated (`npx expo prebuild`) and not committed;
 configure native behaviour in `app.json`.
 
 ## Fonts
 
-Inter (Regular, Medium, SemiBold, Bold) and Playfair Display Italic live in
-`assets/fonts` and load with `useFonts` in `src/app/_layout.tsx` (so they also
-work in Expo Go). Each weight is its own family; see `fonts` in
-`src/theme/tokens.ts`. Licences: `assets/licenses` (SIL OFL 1.1).
+The app font is **Space Grotesk** (Light, Regular, Medium, SemiBold, Bold) from
+`@expo-google-fonts/space-grotesk`, loaded with `useFonts` in
+`src/app/_layout.tsx` (so it also works in Expo Go). Each weight is its own
+family; use `fonts` from `src/theme/tokens.ts` and never set `fontWeight`.
 
-## Layout
+## Code structure
+
+One component per file; hooks live in `src/hooks/`, one per file.
 
 ```
 src/app/                    routes (Expo Router); every file is a screen
-  _layout.tsx               fonts, theme, and the sign-in stages
-  sign-in · terms · complete-profile
+  _layout.tsx               providers, fonts, splash
+  sign-in · terms · complete-profile · search
   (tabs)/                   Explore (index) · Portfolio · Profile
   basket/[id].tsx           basket detail and Invest/Redeem
-src/components/             ui primitives, charts, BasketCard, TradePanel
-src/lib/api.ts              the only data boundary (sample data today; /api/v1 later)
-src/lib/data.ts             development sample data, all in one file
+src/components/
+  ui/                       shared primitives (Button, Card, Screen, UnderlineTabs…), index.ts re-exports
+  icons/                    one icon per file, index.ts re-exports
+  navigation/               RootStack (sign-in stages), TabBarBackground
+  AppHeader.tsx             logo, title and header actions
+  auth/ explore/ search/ basket/ portfolio/ profile/   screen-specific parts
+  charts/                   NavChart, AllocationBar
+src/hooks/                  useLoad, useSession, useUser, useSlide, useKeyboardHeight
+src/lib/api.ts              the data boundary: the web app's /api/v1
+src/lib/http.ts             fetch, session cookie, error messages
+src/lib/session.tsx         SessionProvider (context in sessionContext.ts)
 src/lib/decimal.ts          BigInt decimal-string math; money is never a JS float
-src/lib/format.ts           display formatting (ported from the web app)
-src/lib/session.tsx         signed-in user and onboarding stage
+src/lib/format.ts, money.ts display formatting ($ amounts in money.ts)
 src/lib/types.ts            API shapes copied from @dtf/core-api
-src/theme/tokens.ts         black-and-gold tokens and font families
+src/theme/                  tokens (colours, spacing, fonts) and navigation theme
 ```
 
 ## Mobile Wallet Integration

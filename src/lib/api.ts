@@ -5,8 +5,6 @@
  *
  * Sample data (lib/data.ts) remains only behind __DEV__ escape hatches.
  */
-import { useCallback, useEffect, useState } from 'react';
-
 import {
   listAssetsOf,
   listDtfsOf,
@@ -208,6 +206,49 @@ export async function verifyWalletLink(input: {
       'Wallet verification failed.',
       true,
     );
+  return toUser(body.user);
+}
+
+/**
+ * POST /api/v1/auth/wallet/login/challenge — the message a wallet signs to
+ * sign in (no account or session needed).
+ */
+export async function requestWalletLoginChallenge(
+  walletAddress: string,
+): Promise<WalletChallenge> {
+  const body = await api.post<Row>('/auth/wallet/login/challenge', {
+    walletAddress,
+  });
+  const message = typeof body['message'] === 'string' ? body['message'] : '';
+  if (!message)
+    throw new ApiError(
+      500,
+      'bad_response',
+      'The server sent no challenge.',
+      true,
+    );
+  return {
+    message,
+    expiresInSeconds:
+      typeof body['expiresInSeconds'] === 'number'
+        ? body['expiresInSeconds']
+        : 300,
+  };
+}
+
+/**
+ * POST /api/v1/auth/wallet/login — the server recovers the signer and signs
+ * in that wallet's account, creating one on first use (terms and profile
+ * still follow). The `dtf_session` cookie is captured by the HTTP layer.
+ */
+export async function walletLogin(input: {
+  walletAddress: string;
+  message: string;
+  signature: string;
+}): Promise<User> {
+  const body = await api.post<{ user?: unknown }>('/auth/wallet/login', input);
+  if (!body.user)
+    throw new ApiError(500, 'bad_response', 'Wallet sign-in failed.', true);
   return toUser(body.user);
 }
 
@@ -680,63 +721,6 @@ export async function listSessions(): Promise<Session[]> {
 /** Development only: sign straight in as the sample investor (offline UI). */
 export function sampleInvestor(): User {
   return sampleUser();
-}
-
-// Hook ------------------------------------------------------------------------
-
-export type Loadable<T> = {
-  data?: T;
-  error?: string;
-  loading: boolean;
-  reload: () => void;
-};
-
-/**
- * Runs `load` on mount and whenever `key` changes. While a reload is in
- * flight the previous data stays visible.
- */
-export function useLoad<T>(load: () => Promise<T>, key: string): Loadable<T> {
-  const [attempt, setAttempt] = useState(0);
-  const request = `${key}#${attempt}`;
-  // Each result remembers the request it answers; `loading` means there is
-  // no result for the current request yet.
-  const [result, setResult] = useState<{
-    request?: string;
-    data?: T;
-    error?: string;
-  }>({});
-  useEffect(() => {
-    let live = true;
-    load().then(
-      data => {
-        if (live) setResult({ request, data });
-      },
-      (error: unknown) => {
-        if (live) {
-          setResult(previous => ({
-            request,
-            data: previous.data,
-            error:
-              error instanceof Error ? error.message : 'Something went wrong.',
-          }));
-        }
-      },
-    );
-    return () => {
-      live = false;
-    };
-    // `request` says when the inputs really changed.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [request]);
-
-  const reload = useCallback(() => setAttempt(n => n + 1), []);
-  const answered = result.request === request;
-  return {
-    data: result.data,
-    error: answered ? result.error : undefined,
-    loading: !answered,
-    reload,
-  };
 }
 
 export { ApiError };

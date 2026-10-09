@@ -5,19 +5,35 @@
     "scheme": "zeno",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/images/app-icon.png",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#050706",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.zeno.mobile"
+      "bundleIdentifier": "com.zeno.mobile",
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": [
+          "metamask",
+          "trust",
+          "rainbow",
+          "cbwallet",
+          "okx",
+          "zerion",
+          "uniswap",
+          "rabby",
+          "phantom",
+          "ledgerlive",
+          "exodus",
+          "imtokenv2",
+          "wc"
+        ]
+      }
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#050706",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "monochromeImage": "./assets/images/adaptive-icon-mono.png"
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.zeno.mobile"
@@ -30,13 +46,14 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#050706",
-          "image": "./assets/splash-icon.png",
-          "imageWidth": 160,
+          "image": "./assets/images/zeno-icon.png",
+          "imageWidth": 78,
           "resizeMode": "contain"
         }
       ],
       "expo-secure-store",
-      "expo-web-browser"
+      "expo-web-browser",
+      "./plugins/withWalletQueries"
     ],
     "experiments": {
       "typedRoutes": true

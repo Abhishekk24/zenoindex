@@ -18,7 +18,6 @@ import * as api from '../lib/api';
 import { erc20Allowance, waitForReceipt } from '../lib/chain';
 import { compare, isDecimal, isPositive } from '../lib/decimal';
 import { formatBps, formatDecimal, shortAddress } from '../lib/format';
-import { useUser } from '../lib/session';
 import type { Dtf, Operation, TradePreview } from '../lib/types';
 import { colors, space, type } from '../theme/tokens';
 import {
@@ -32,6 +31,7 @@ import {
   Row,
   Segmented,
 } from './ui';
+import { useUser } from '../hooks/useUser';
 
 type Side = TradePreview['side'];
 

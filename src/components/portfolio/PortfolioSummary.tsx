@@ -1,0 +1,102 @@
+import React from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+
+import { compare, ratioBps, sub } from '../../lib/decimal';
+import { formatSignedBps } from '../../lib/format';
+import { signedUsd, usd } from '../../lib/money';
+import { colors, fonts, radius, space } from '../../theme/tokens';
+import { Stripes } from '../ui';
+
+/**
+ * The striped summary card: change since entry, cost basis, unrealized P&L,
+ * market value and basket count. Cost figures show "—" until the API has the
+ * wallet's invest history.
+ */
+export function PortfolioSummary({
+  marketValue,
+  cost,
+  hasCost,
+  baskets,
+}: {
+  marketValue: string;
+  cost: string;
+  hasCost: boolean;
+  baskets: number;
+}) {
+  const pnl = sub(marketValue, cost);
+  const up = compare(pnl, '0') >= 0;
+  return (
+    <View style={styles.card}>
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <Stripes height={220} stripe={2} gap={7} opacity={0.07} />
+      </View>
+      <Text
+        style={[
+          styles.change,
+          { color: !hasCost ? colors.muted : up ? colors.green : colors.red },
+        ]}
+      >
+        {hasCost
+          ? `${up ? '▲' : '▼'} ${formatSignedBps(ratioBps(pnl, cost))} since entry`
+          : ' '}
+      </Text>
+      <View style={styles.row}>
+        <View>
+          <Text style={styles.label}>Cost Basis</Text>
+          <Text style={styles.value}>{hasCost ? usd(cost) : '—'}</Text>
+        </View>
+        <View style={styles.alignEnd}>
+          <Text style={styles.label}>Unrealized PNL</Text>
+          <Text style={styles.value}>{hasCost ? signedUsd(pnl) : '—'}</Text>
+        </View>
+      </View>
+      <View style={styles.rule} />
+      <View style={styles.row}>
+        <Text style={styles.marketLabel}>MARKET VALUE</Text>
+        <Text style={styles.label}>
+          {baskets} Basket{baskets === 1 ? '' : 's'}
+        </Text>
+      </View>
+      <Text style={styles.marketValue}>{usd(marketValue)}</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.line,
+    padding: space.lg,
+    overflow: 'hidden',
+  },
+  change: { fontFamily: fonts.regular, fontSize: 12, textAlign: 'right' },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginTop: space.xl,
+  },
+  alignEnd: { alignItems: 'flex-end' },
+  label: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted },
+  value: {
+    fontFamily: fonts.regular,
+    fontSize: 15,
+    color: colors.text,
+    marginTop: 4,
+  },
+  rule: { height: 1, backgroundColor: colors.line, marginTop: space.md },
+  marketLabel: {
+    fontFamily: fonts.medium,
+    fontSize: 11,
+    letterSpacing: 1.2,
+    color: colors.muted,
+  },
+  marketValue: {
+    fontFamily: fonts.regular,
+    fontSize: 30,
+    color: colors.text,
+    marginTop: space.sm,
+  },
+});

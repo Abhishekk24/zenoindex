@@ -12,8 +12,9 @@ import {
   Screen,
 } from '../components/ui';
 import * as api from '../lib/api';
-import { useSession, useUser } from '../lib/session';
 import { colors, space, type } from '../theme/tokens';
+import { useSession } from '../hooks/useSession';
+import { useUser } from '../hooks/useUser';
 
 export default function CompleteProfileScreen() {
   const user = useUser();
