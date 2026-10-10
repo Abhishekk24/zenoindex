@@ -1,0 +1,22 @@
+{
+  "name": "@zenoindex/sdk",
+  "version": "0.1.0",
+  "description": "Typed viem helpers for the ZenoIndex DTF contracts on Robinhood Chain mainnet",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "gen-abis": "node scripts/gen-abis.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "viem": "^2.57.3"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}
