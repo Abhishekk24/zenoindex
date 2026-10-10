@@ -52,7 +52,12 @@ export async function seedProject(
   db: Db,
   s: { name: string; chainId: number; factory: string; siweDomain: string; siweUri: string; keyHashes: { type: KeyType; hash: string }[] },
 ) {
-  const existing = await db.query<{ id: string }>("select id from projects where name = $1 order by created_at limit 1", [s.name]);
+  // Env is the source of truth for the seeded project's sign-in domain (PUBLIC_URL can change between deploys).
+  const existing = await db.query<{ id: string }>(
+    `update projects set siwe_domain = $2, siwe_uri = $3
+     where id = (select id from projects where name = $1 order by created_at limit 1) returning id`,
+    [s.name, s.siweDomain, s.siweUri],
+  );
   const projectId =
     existing.rows[0]?.id ??
     (await createProject(db, { organizationId: await createOrganization(db, s.name), ...s }));
