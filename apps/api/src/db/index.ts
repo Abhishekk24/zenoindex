@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readdirSync, readFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
@@ -12,7 +12,19 @@ export type Db = {
   close(): Promise<void>;
 };
 
-export function createDb(url: string): Db {
+export async function createDb(url: string): Promise<Db> {
+  // shortcut: `pglite:<dir>` runs an embedded file-backed Postgres for local runs without a server; use a real DATABASE_URL in production.
+  if (url.startsWith("pglite:")) {
+    const { PGlite } = await import("@electric-sql/pglite");
+    const dir = url.slice("pglite:".length);
+    mkdirSync(dir, { recursive: true });
+    const pg = new PGlite(dir);
+    return {
+      query: async (text, params) => ({ rows: (await pg.query(text, params)).rows as never[] }),
+      exec: (sql) => pg.exec(sql),
+      close: () => pg.close(),
+    };
+  }
   const pool = new pg.Pool({ connectionString: url, max: 10, statement_timeout: 15_000 });
   return {
     query: async (text, params) => ({ rows: (await pool.query(text, params)).rows }),

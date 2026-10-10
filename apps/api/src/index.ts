@@ -7,7 +7,7 @@ import { loadEnv } from "./env";
 import { seedProject, type KeyType } from "./tenancy";
 
 const env = loadEnv();
-const db = createDb(env.DATABASE_URL);
+const db = await createDb(env.DATABASE_URL);
 await migrate(db);
 
 if (env.SEED_PROJECT_NAME) {

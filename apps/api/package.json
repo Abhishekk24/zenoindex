@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.3.11",
     "@hono/node-server": "^1.19.5",
     "@zenoindex/sdk": "workspace:*",
     "hono": "^4.9.12",
@@ -20,7 +21,6 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.3.11",
     "@types/node": "^22.18.10",
     "@types/pg": "^8.15.5",
     "typescript": "^5.9.2",

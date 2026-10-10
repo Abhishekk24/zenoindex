@@ -10,6 +10,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@electric-sql/pglite':
+        specifier: ^0.3.11
+        version: 0.3.16
       '@hono/node-server':
         specifier: ^1.19.5
         version: 1.19.17(hono@4.13.13)
@@ -32,9 +35,6 @@ importers:
         specifier: ^4.1.12
         version: 4.6.5
     devDependencies:
-      '@electric-sql/pglite':
-        specifier: ^0.3.11
-        version: 0.3.16
       '@types/node':
         specifier: ^22.18.10
         version: 22.20.5
