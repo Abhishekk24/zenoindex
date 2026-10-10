@@ -1,5 +1,5 @@
 /**
- * Reown AppKit for EVM wallets via wagmi, on Robinhood Chain mainnet.
+ * Reown AppKit for EVM wallets via wagmi; the app trades on Robinhood Chain mainnet.
  * External wallets plus Reown email (embedded) wallets. Mirrors the tested
  * IMPACTMAX web setup: the network is served through the WalletConnect
  * Blockchain API RPC so embedded and external wallets can both reach it.
@@ -9,6 +9,7 @@ import '@walletconnect/react-native-compat';
 
 import { createAppKit } from '@reown/appkit-react-native';
 import { WagmiAdapter } from '@reown/appkit-wagmi-react-native';
+import { mainnet } from 'viem/chains';
 
 import { colors } from '../theme/tokens';
 import { robinhood } from './chains';
@@ -30,10 +31,17 @@ const robinhoodNetwork = {
   caipNetworkId,
 };
 
-const wagmiAdapter = new WagmiAdapter({
-  projectId,
-  networks: [robinhoodNetwork],
-});
+// Ethereum mainnet is the default network, as in IMPACTMAX: email (embedded)
+// wallets connect on a network they support out of the box. Sign-in is a
+// plain signature (no network switch); trades switch to Robinhood themselves.
+const ethereumNetwork = {
+  ...mainnet,
+  chainNamespace: 'eip155' as const,
+  caipNetworkId: `eip155:${mainnet.id}` as const,
+};
+const networks = [ethereumNetwork, robinhoodNetwork] as const;
+
+const wagmiAdapter = new WagmiAdapter({ projectId, networks });
 
 export const appKit = createAppKit({
   projectId,
@@ -50,9 +58,9 @@ export const appKit = createAppKit({
     },
   },
   adapters: [wagmiAdapter],
-  networks: [robinhoodNetwork],
+  networks: [...networks],
   storage: appKitStorage,
-  defaultNetwork: robinhoodNetwork,
+  defaultNetwork: ethereumNetwork,
   features: {
     // Email = Reown embedded wallet; external wallets stay listed below it.
     socials: ['email'],

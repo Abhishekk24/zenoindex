@@ -15,14 +15,12 @@ import { Badge, Body, Button, Card, Divider, Mono } from '../ui';
  */
 export function WalletsTab({ user }: { user: User }) {
   const { open } = useAppKit();
-  const { address, isConnected, chainId } = useAccount();
+  const { address, isConnected } = useAccount();
 
   const mismatch =
     isConnected &&
     address !== undefined &&
     !user.wallets.some(w => w.address.toLowerCase() === address.toLowerCase());
-  const wrongNetwork =
-    isConnected && chainId !== undefined && chainId !== robinhood.id;
 
   return (
     <Card title="Your wallet" banded>
@@ -46,11 +44,6 @@ export function WalletsTab({ user }: { user: User }) {
           The connected wallet ({shortAddress(address!)}) is not the one you
           signed in with. Switch back to it to trade, or sign out and sign in
           with the new one.
-        </Body>
-      )}
-      {wrongNetwork && (
-        <Body muted>
-          Your wallet is on a different network. Switch to {robinhood.name}.
         </Body>
       )}
 
