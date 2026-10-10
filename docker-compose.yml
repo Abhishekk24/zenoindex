@@ -1,0 +1,14 @@
+# Local Postgres for development. The API itself talks to Robinhood mainnet (read-only unless a user signs).
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: zeno
+      POSTGRES_PASSWORD: zeno
+      POSTGRES_DB: zenoindex
+    ports:
+      - "55432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+volumes:
+  pgdata:
