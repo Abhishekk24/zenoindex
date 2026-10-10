@@ -12,8 +12,7 @@ Plan and roadmap: [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
 
 ```bash
 pnpm install
-docker compose up -d                       # Postgres on :55432
-cp apps/api/.env.example apps/api/.env     # then load it, e.g. `set -a; . apps/api/.env; set +a`
+cp apps/api/.env.example apps/api/.env     # set DATABASE_URL (hosted Postgres), then load it: `set -a; . apps/api/.env; set +a`
 pnpm --filter @zenoindex/api cli create-org --name "Cyrene"
 pnpm --filter @zenoindex/api cli create-project --org <orgId> --name "ZenoIndex Mobile" --domain app.zenoindex.xyz --uri https://app.zenoindex.xyz
 pnpm --filter @zenoindex/api cli create-key --project <projectId> --type publishable --name mobile   # → EXPO_PUBLIC_API_KEY
@@ -24,7 +23,7 @@ curl -H "x-api-key: pk_live_…" http://localhost:8787/api/v1/dtfs
 
 ## Deploy
 
-Docker (`Dockerfile` at the repo root) or any Node 22 host: `pnpm install --frozen-lockfile --prod && pnpm --filter @zenoindex/api start`.
+Any Node 22 host: `pnpm install --frozen-lockfile --prod && pnpm --filter @zenoindex/api start`.
 Needs Postgres 13+. Migrations run on boot. Health check: `GET /health`.
 
 | Env | Required | |
