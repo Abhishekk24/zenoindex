@@ -1,10 +1,18 @@
 import { z } from "zod";
 
+const sha256Hex = z.string().regex(/^[0-9a-f]{64}$/, "must be a lowercase sha256 hex digest");
+
 const schema = z.object({
   DATABASE_URL: z.string().min(1),
   RPC_URL: z.url().default("https://rpc.mainnet.chain.robinhood.com"),
   PORT: z.coerce.number().int().positive().default(8787),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
+  /** Public https URL of this API; used as the SIWE domain/uri of the seeded project. */
+  PUBLIC_URL: z.url().optional(),
+  // Optional first-boot seed: one project + its keys, given only as SHA-256 hashes so the raw keys never sit in deploy config.
+  SEED_PROJECT_NAME: z.string().min(1).optional(),
+  SEED_PUBLISHABLE_KEY_SHA256: sha256Hex.optional(),
+  SEED_SECRET_KEY_SHA256: sha256Hex.optional(),
 });
 
 export type Env = z.infer<typeof schema>;

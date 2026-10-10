@@ -22,6 +22,20 @@ pnpm --filter @zenoindex/api dev           # http://localhost:8787
 curl -H "x-api-key: pk_live_…" http://localhost:8787/api/v1/dtfs
 ```
 
+## Deploy
+
+Docker (`Dockerfile` at the repo root) or any Node 22 host: `pnpm install --frozen-lockfile --prod && pnpm --filter @zenoindex/api start`.
+Needs Postgres 13+. Migrations run on boot. Health check: `GET /health`.
+
+| Env | Required | |
+|---|---|---|
+| `DATABASE_URL` | ✓ | Postgres connection string |
+| `PUBLIC_URL` | with seed | public https URL of this API; its host is the sign-in (SIWE) domain |
+| `NODE_ENV` | | `production` → `Secure` cookies |
+| `PORT` | | default 8787 |
+| `RPC_URL` | | Robinhood mainnet RPC (default public RPC); boot fails if it isn't chain 4663 |
+| `SEED_PROJECT_NAME`, `SEED_PUBLISHABLE_KEY_SHA256`, `SEED_SECRET_KEY_SHA256` | | first-boot project + keys, as SHA-256 hashes only; idempotent on every boot |
+
 ## Keys
 
 - `pk_live_…` publishable: ships inside the app. Public reads + login only; every user action also needs that user's session.

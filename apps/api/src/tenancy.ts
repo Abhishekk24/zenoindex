@@ -44,6 +44,28 @@ export async function createApiKey(db: Db, projectId: string, type: KeyType, nam
   return key;
 }
 
+/**
+ * Idempotent first-boot seed from env: creates the project (by name) and registers pre-generated key hashes.
+ * Lets keys be generated offline and handed to the app before the server is deployed.
+ */
+export async function seedProject(
+  db: Db,
+  s: { name: string; chainId: number; factory: string; siweDomain: string; siweUri: string; keyHashes: { type: KeyType; hash: string }[] },
+) {
+  const existing = await db.query<{ id: string }>("select id from projects where name = $1 order by created_at limit 1", [s.name]);
+  const projectId =
+    existing.rows[0]?.id ??
+    (await createProject(db, { organizationId: await createOrganization(db, s.name), ...s }));
+  for (const k of s.keyHashes) {
+    await db.query(
+      `insert into api_keys (project_id, type, prefix, key_hash, name) values ($1, $2, $3, $4, 'seed')
+       on conflict (key_hash) do nothing`,
+      [projectId, k.type, k.type === "publishable" ? "pk_live_" : "sk_live_", k.hash],
+    );
+  }
+  return projectId;
+}
+
 export async function resolveApiKey(db: Db, key: string): Promise<{ keyId: string; type: KeyType; project: Project } | null> {
   const { rows } = await db.query<{
     key_id: string;
