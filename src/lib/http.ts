@@ -1,7 +1,8 @@
 /**
- * Thin HTTP layer for the hosted app's /api/v1 proxy.
+ * Thin HTTP layer for zenoIndex-backend's /api/v1.
  *
- * - Session: the web app issues an `HttpOnly` `dtf_session` cookie. Native
+ * - Every request carries the project's publishable key (`x-api-key`).
+ * - Session: sign-in returns a token (also as a `dtf_session` cookie). Native
  *   cookie handling on device is inconsistent, so the token value is kept in
  *   SecureStore and sent as an explicit `Cookie` header.
  * - Errors: the API answers `{ error: { status, code, message, retryable } }`.
@@ -9,7 +10,7 @@
  */
 import * as SecureStore from 'expo-secure-store';
 
-import { API_BASE } from './env';
+import { API_BASE, API_KEY } from './env';
 
 const SESSION_KEY = 'dtf.session';
 const TIMEOUT_MS = 20_000;
@@ -47,6 +48,11 @@ async function saveSession(value: string | null): Promise<void> {
   } catch {
     // SecureStore unavailable (e.g. Expo Go); keep the in-memory value.
   }
+}
+
+/** Keep the session token returned in a sign-in response body (Set-Cookie can be unreadable on Android). */
+export async function setSessionToken(token: string): Promise<void> {
+  await saveSession(token);
 }
 
 /** Drop the held session — call after logout or on a 401. */
@@ -106,7 +112,10 @@ async function request<T>(path: string, init: ApiRequest = {}): Promise<T> {
     init.timeoutMs ?? TIMEOUT_MS,
   );
 
-  const headers: Record<string, string> = { accept: 'application/json' };
+  const headers: Record<string, string> = {
+    accept: 'application/json',
+    'x-api-key': API_KEY,
+  };
   const cookie = await storedSession();
   if (cookie) headers['cookie'] = `dtf_session=${cookie}`;
   if (init.chainId !== undefined)

@@ -293,6 +293,7 @@ export function toTxDraft(raw: unknown): TxDraft {
     },
     data: r['data'],
     operation,
+    finalStep: typeof r['finalStep'] === 'boolean' ? r['finalStep'] : undefined,
   };
 }
 

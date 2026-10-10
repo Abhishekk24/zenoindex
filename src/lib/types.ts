@@ -174,6 +174,8 @@ export type TxDraft = {
   /** Action-specific extras (quotes, estimatedBaseOut, shareAmount, …). */
   data: Record<string, unknown> | unknown;
   operation?: Operation;
+  /** Redeem only: false while more sell steps (swap/claim) follow this one. */
+  finalStep?: boolean;
 };
 
 /** What the Invest/Redeem panel shows before the wallet signs. */

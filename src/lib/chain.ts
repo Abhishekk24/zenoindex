@@ -1,8 +1,8 @@
 /**
  * Read-side chain access: the wallet signs and broadcasts, but receipts and
  * balances are read directly from the chain's RPC. Chain metadata (RPC,
- * explorer) comes from the hosted API's /v1/chains, with the bundled
- * Robinhood testnet definition as fallback.
+ * explorer) comes from the API's /chains, with the bundled Robinhood mainnet
+ * definition as fallback.
  */
 import {
   createPublicClient,
@@ -14,15 +14,10 @@ import {
   type PublicClient,
 } from 'viem';
 
-import { localChain, robinhoodTestnet } from '../config/chains';
+import { robinhood } from '../config/chains';
 import { listChains, type ChainInfo } from './api';
 
-const chains = new Map<number, Chain>([
-  [robinhoodTestnet.id, robinhoodTestnet],
-  // Bundled def wins over the API's rpcUrl (typically 127.0.0.1, which only
-  // resolves on the dev machine — a phone needs EXPO_PUBLIC_CHAIN_RPC_URL).
-  [localChain.id, localChain],
-]);
+const chains = new Map<number, Chain>([[robinhood.id, robinhood]]);
 const clients = new Map<number, PublicClient>();
 let chainsLoaded: Promise<void> | null = null;
 

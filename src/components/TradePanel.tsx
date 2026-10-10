@@ -18,7 +18,7 @@ import * as api from '../lib/api';
 import { erc20Allowance, waitForReceipt } from '../lib/chain';
 import { compare, isDecimal, isPositive } from '../lib/decimal';
 import { formatBps, formatDecimal, shortAddress } from '../lib/format';
-import type { Dtf, Operation, TradePreview } from '../lib/types';
+import type { Dtf, Operation, TradePreview, TxDraft } from '../lib/types';
 import { withWalletOpen } from '../lib/walletLink';
 import { colors, space, type } from '../theme/tokens';
 import {
@@ -111,7 +111,7 @@ export function TradePanel({
     if (!signer || !linked) {
       setResult({
         inputs,
-        error: 'Connect and link a wallet first (Profile → Wallets).',
+        error: 'Connect the wallet you signed in with first.',
       });
       return;
     }
@@ -142,8 +142,8 @@ export function TradePanel({
   }
 
   /**
-   * The invest draft calls `portfolio.invest`, which pulls the base asset via
-   * transferFrom — so the portfolio contract needs an ERC-20 allowance first.
+   * The invest draft calls the vault's `deposit`, which pulls USDG via
+   * transferFrom — so the vault needs an ERC-20 allowance first.
    */
   async function approveSpend(spender: string, amountRaw: bigint) {
     const allowance = await erc20Allowance(
@@ -173,15 +173,50 @@ export function TradePanel({
     }
   }
 
+  /** Signs, broadcasts and settles one prepared transaction. */
+  async function sendDraft(draft: TxDraft) {
+    const chainId = draft.transaction.chainId;
+    setStep('signing');
+    const txHash = await withWalletOpen(() =>
+      sendTransactionAsync({
+        account: signer as Hex,
+        chainId,
+        to: draft.transaction.to as Hex,
+        data: draft.transaction.data,
+        value: BigInt(draft.transaction.value || '0'),
+        ...(draft.transaction.gas
+          ? { gas: BigInt(draft.transaction.gas) }
+          : {}),
+      }),
+    );
+
+    setStep('broadcast');
+    setOperation(await api.submitOperation(draft.requestId, txHash));
+
+    setStep('confirming');
+    const receipt = await waitForReceipt(chainId, txHash);
+    const final =
+      receipt.status === 'success'
+        ? await api.confirmOperation(draft.requestId, txHash)
+        : await api.failOperation(
+            draft.requestId,
+            txHash,
+            'transaction reverted',
+          );
+    setOperation(final);
+    if (receipt.status !== 'success') {
+      throw new Error('The transaction reverted on-chain.');
+    }
+  }
+
   const confirmTrade = async () => {
     if (!preview || !signer) return;
-    const draft = preview.draft;
-    const chainId = draft.transaction.chainId;
+    let draft = preview.draft;
     setBusy(true);
     setOperation(undefined);
     try {
       setStep('signing');
-      await ensureChain(chainId);
+      await ensureChain(draft.transaction.chainId);
 
       if (side === 'invest') {
         setStep('approving');
@@ -189,39 +224,18 @@ export function TradePanel({
           draft.transaction.to,
           parseUnits(amount, dtf.baseAssetDecimals),
         );
-        setStep('signing');
       }
 
-      const txHash = await withWalletOpen(() =>
-        sendTransactionAsync({
-          account: signer as Hex,
-          chainId,
-          to: draft.transaction.to as Hex,
-          data: draft.transaction.data,
-          value: BigInt(draft.transaction.value || '0'),
-          ...(draft.transaction.gas
-            ? { gas: BigInt(draft.transaction.gas) }
-            : {}),
-        }),
-      );
-
-      setStep('broadcast');
-      const submitted = await api.submitOperation(draft.requestId, txHash);
-      setOperation(submitted);
-
-      setStep('confirming');
-      const receipt = await waitForReceipt(chainId, txHash);
-      const final =
-        receipt.status === 'success'
-          ? await api.confirmOperation(draft.requestId, txHash)
-          : await api.failOperation(
-              draft.requestId,
-              txHash,
-              'transaction reverted',
-            );
-      setOperation(final);
-      if (receipt.status !== 'success') {
-        throw new Error('The transaction reverted on-chain.');
+      await sendDraft(draft);
+      // Selling is several transactions (request → swap per asset → claim);
+      // the API hands out the next one until the last step is done.
+      while (side === 'redeem' && draft.finalStep === false) {
+        setStep('signing');
+        draft = await api.prepareTrade(dtf, 'redeem', {
+          amount,
+          recipient: signer,
+        });
+        await sendDraft(draft);
       }
       setStep('done');
       onConfirmed?.();

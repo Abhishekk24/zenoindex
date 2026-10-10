@@ -1,6 +1,8 @@
 /**
- * Reown AppKit (WalletConnect) for EVM wallets via wagmi, on Robinhood Chain
- * testnet, plus a local Anvil chain when EXPO_PUBLIC_CHAIN_RPC_URL is set.
+ * Reown AppKit for EVM wallets via wagmi, on Robinhood Chain mainnet.
+ * External wallets plus Reown email (embedded) wallets. Mirrors the tested
+ * IMPACTMAX web setup: the network is served through the WalletConnect
+ * Blockchain API RPC so embedded and external wallets can both reach it.
  * The WalletConnect polyfills are loaded first in src/app/_layout.tsx.
  */
 import '@walletconnect/react-native-compat';
@@ -9,7 +11,7 @@ import { createAppKit } from '@reown/appkit-react-native';
 import { WagmiAdapter } from '@reown/appkit-wagmi-react-native';
 
 import { colors } from '../theme/tokens';
-import { localChain, robinhoodTestnet } from './chains';
+import { robinhood } from './chains';
 import { appKitStorage } from './storage';
 
 const projectId = process.env.EXPO_PUBLIC_REOWN_PROJECT_ID;
@@ -18,33 +20,20 @@ if (!projectId) {
   throw new Error('Missing EXPO_PUBLIC_REOWN_PROJECT_ID');
 }
 
-const wagmiAdapter = new WagmiAdapter({
-  projectId,
-  networks: process.env.EXPO_PUBLIC_CHAIN_RPC_URL
-    ? [localChain, robinhoodTestnet]
-    : [robinhoodTestnet],
-});
+const caipNetworkId = `eip155:${robinhood.id}` as const;
+const walletConnectRpc = `https://rpc.walletconnect.org/v1/?chainId=${caipNetworkId}&projectId=${projectId}`;
 
 const robinhoodNetwork = {
-  ...robinhoodTestnet,
+  ...robinhood,
+  rpcUrls: { default: { http: [walletConnectRpc] } },
   chainNamespace: 'eip155' as const,
-  caipNetworkId: `eip155:${robinhoodTestnet.id}` as const,
-  testnet: true,
+  caipNetworkId,
 };
 
-const localNetwork = {
-  ...localChain,
-  chainNamespace: 'eip155' as const,
-  caipNetworkId: `eip155:${localChain.id}` as const,
-  testnet: true,
-};
-
-// The local chain is only advertised when a chain RPC is explicitly
-// configured — production builds are identical to single-network setup.
-const useLocalChain = Boolean(process.env.EXPO_PUBLIC_CHAIN_RPC_URL);
-const appNetworks = useLocalChain
-  ? [localNetwork, robinhoodNetwork]
-  : [robinhoodNetwork];
+const wagmiAdapter = new WagmiAdapter({
+  projectId,
+  networks: [robinhoodNetwork],
+});
 
 export const appKit = createAppKit({
   projectId,
@@ -61,11 +50,13 @@ export const appKit = createAppKit({
     },
   },
   adapters: [wagmiAdapter],
-  networks: appNetworks,
+  networks: [robinhoodNetwork],
   storage: appKitStorage,
-  defaultNetwork: useLocalChain ? localNetwork : robinhoodNetwork,
+  defaultNetwork: robinhoodNetwork,
   features: {
-    socials: false,
+    // Email = Reown embedded wallet; external wallets stay listed below it.
+    socials: ['email'],
+    showWallets: true,
   },
   themeMode: 'dark',
   themeVariables: {

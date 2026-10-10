@@ -1,9 +1,6 @@
 /**
  * The app's only data boundary. Every screen reads through these functions,
- * which call the hosted app's /api/v1 proxy. The proxy owns the session and
- * the core API key, so the app never calls the core API directly.
- *
- * Sample data (lib/data.ts) remains only behind __DEV__ escape hatches.
+ * which call zenoIndex-backend's /api/v1 (see src/lib/http.ts).
  */
 import {
   listAssetsOf,
@@ -16,8 +13,8 @@ import {
   toWalletPortfolio,
 } from './adapters';
 import { add, div, fromRaw, mul, mulBps, sub } from './decimal';
-import { ApiError, api, clearSession } from './http';
-import { sampleUser } from './data';
+import { robinhood } from '../config/chains';
+import { ApiError, api, clearSession, setSessionToken } from './http';
 import type {
   Asset,
   Dtf,
@@ -37,71 +34,58 @@ import type {
 type Row = Record<string, unknown>;
 
 // Auth ------------------------------------------------------------------------
+// Sign-in is Sign-In with Ethereum: the wallet (external or Reown email wallet)
+// is the account. No email codes, no separate wallet linking.
 
-export type OtpResult = {
-  email: string;
-  status: 'sent' | 'rate_limited' | 'not_configured' | string;
-  /** Seconds before another code can be requested (when rate limited). */
-  resendAfterSeconds?: number;
-  expiresInSeconds?: number;
+export type WalletChallenge = {
+  message: string;
+  expiresInSeconds: number;
 };
 
-function toOtpResult(body: unknown): OtpResult {
-  const r = (body ?? {}) as Row;
+/**
+ * POST /api/v1/auth/siwe/nonce — the server issues a single-use nonce and the
+ * exact EIP-4361 message for the wallet to sign (a signature, no transaction).
+ */
+export async function requestWalletLoginChallenge(
+  walletAddress: string,
+): Promise<WalletChallenge> {
+  const body = await api.post<Row>('/auth/siwe/nonce', {
+    walletAddress,
+    chainId: robinhood.id,
+  });
+  const message = typeof body['message'] === 'string' ? body['message'] : '';
+  if (!message)
+    throw new ApiError(
+      500,
+      'bad_response',
+      'The server sent no sign-in request.',
+      true,
+    );
   return {
-    email: String(r['email'] ?? ''),
-    status: String(r['status'] ?? 'sent'),
-    resendAfterSeconds:
-      typeof r['resendAfterSeconds'] === 'number'
-        ? r['resendAfterSeconds']
-        : undefined,
+    message,
     expiresInSeconds:
-      typeof r['expiresInSeconds'] === 'number'
-        ? r['expiresInSeconds']
-        : undefined,
+      typeof body['expiresInSeconds'] === 'number'
+        ? body['expiresInSeconds']
+        : 300,
   };
 }
 
-/** POST /api/v1/auth/otp/request */
-export async function requestEmailCode(email: string): Promise<OtpResult> {
-  const body = await api.post('/auth/otp/request', {
-    email,
-    purpose: 'login',
-  });
-  return toOtpResult(body);
-}
-
-/** POST /api/v1/auth/otp/resend */
-export async function resendEmailCode(email: string): Promise<OtpResult> {
-  const body = await api.post('/auth/otp/resend', {
-    email,
-    purpose: 'login',
-  });
-  return toOtpResult(body);
-}
-
 /**
- * POST /api/v1/auth/otp/verify. The response carries the `dtf_session`
- * cookie, which the HTTP layer captures into SecureStore.
+ * POST /api/v1/auth/siwe/verify — signs in that wallet's account, creating one
+ * on first use (terms and profile still follow). The session token comes back
+ * in the body (and as a `dtf_session` cookie); both are kept.
  */
-export async function verifyEmailCode(
-  email: string,
-  code: string,
-): Promise<User> {
-  if (!/^\d{6}$/.test(code))
-    throw new ApiError(
-      400,
-      'invalid_code',
-      'Enter the 6-digit code from your email.',
-      false,
-    );
-  const body = await api.post<{ user?: unknown }>('/auth/otp/verify', {
-    email,
-    purpose: 'login',
-    code,
-  });
+export async function walletLogin(input: {
+  message: string;
+  signature: string;
+}): Promise<User> {
+  const body = await api.post<{ user?: unknown; token?: unknown }>(
+    '/auth/siwe/verify',
+    input,
+  );
   if (!body.user)
-    throw new ApiError(500, 'bad_response', 'Sign-in failed.', true);
+    throw new ApiError(500, 'bad_response', 'Wallet sign-in failed.', true);
+  if (typeof body.token === 'string') await setSessionToken(body.token);
   return toUser(body.user);
 }
 
@@ -151,158 +135,6 @@ export async function signOut(): Promise<void> {
   } finally {
     await clearSession();
   }
-}
-
-// Wallet linking ---------------------------------------------------------------
-
-export type WalletChallenge = {
-  message: string;
-  expiresInSeconds: number;
-};
-
-/**
- * POST /api/v1/auth/wallet/challenge — a server-issued message the wallet
- * signs (EIP-191 `personal_sign`) to prove ownership.
- */
-export async function requestWalletChallenge(
-  walletAddress: string,
-): Promise<WalletChallenge> {
-  const body = await api.post<Row>('/auth/wallet/challenge', { walletAddress });
-  const message = typeof body['message'] === 'string' ? body['message'] : '';
-  if (!message)
-    throw new ApiError(
-      500,
-      'bad_response',
-      'The server sent no challenge.',
-      true,
-    );
-  return {
-    message,
-    expiresInSeconds:
-      typeof body['expiresInSeconds'] === 'number'
-        ? body['expiresInSeconds']
-        : 300,
-  };
-}
-
-/**
- * POST /api/v1/auth/wallet/verify — the server recovers the signer from the
- * signature, checks it against the stored challenge and links the wallet.
- */
-export async function verifyWalletLink(input: {
-  message: string;
-  signature: string;
-  chainId: number;
-}): Promise<User> {
-  const body = await api.post<{ user?: unknown }>('/auth/wallet/verify', {
-    message: input.message,
-    signature: input.signature,
-    chainId: input.chainId,
-  });
-  if (!body.user)
-    throw new ApiError(
-      500,
-      'bad_response',
-      'Wallet verification failed.',
-      true,
-    );
-  return toUser(body.user);
-}
-
-/**
- * POST /api/v1/auth/wallet/login/challenge — the message a wallet signs to
- * sign in (no account or session needed).
- */
-export async function requestWalletLoginChallenge(
-  walletAddress: string,
-): Promise<WalletChallenge> {
-  const body = await api.post<Row>('/auth/wallet/login/challenge', {
-    walletAddress,
-  });
-  const message = typeof body['message'] === 'string' ? body['message'] : '';
-  if (!message)
-    throw new ApiError(
-      500,
-      'bad_response',
-      'The server sent no challenge.',
-      true,
-    );
-  return {
-    message,
-    expiresInSeconds:
-      typeof body['expiresInSeconds'] === 'number'
-        ? body['expiresInSeconds']
-        : 300,
-  };
-}
-
-/**
- * POST /api/v1/auth/wallet/login — the server recovers the signer and signs
- * in that wallet's account, creating one on first use (terms and profile
- * still follow). The `dtf_session` cookie is captured by the HTTP layer.
- */
-export async function walletLogin(input: {
-  walletAddress: string;
-  message: string;
-  signature: string;
-}): Promise<User> {
-  const body = await api.post<{ user?: unknown }>('/auth/wallet/login', input);
-  if (!body.user)
-    throw new ApiError(500, 'bad_response', 'Wallet sign-in failed.', true);
-  return toUser(body.user);
-}
-
-/** GET /api/v1/auth/wallets */
-export async function listLinkedWallets(): Promise<{
-  wallets: User['wallets'];
-  primary: string | null;
-}> {
-  const body = await api.get<Row>('/auth/wallets');
-  const wallets = Array.isArray(body['wallets']) ? body['wallets'] : [];
-  const primary =
-    typeof body['primary'] === 'string' ? body['primary'].toLowerCase() : null;
-  return {
-    wallets: wallets.map(w => {
-      const r = (w ?? {}) as Row;
-      const address = String(r['address'] ?? '');
-      return {
-        address,
-        chainId: typeof r['chainId'] === 'number' ? r['chainId'] : 0,
-        primary: primary !== null && address.toLowerCase() === primary,
-      };
-    }),
-    primary: typeof body['primary'] === 'string' ? body['primary'] : null,
-  };
-}
-
-/** DELETE /api/v1/auth/wallets/:wallet */
-export async function removeWallet(wallet: string): Promise<User> {
-  const body = await api.delete<{ user?: unknown }>(
-    `/auth/wallets/${encodeURIComponent(wallet)}`,
-  );
-  if (!body.user)
-    throw new ApiError(
-      500,
-      'bad_response',
-      'Could not remove the wallet.',
-      true,
-    );
-  return toUser(body.user);
-}
-
-/** POST /api/v1/auth/wallets/:wallet/primary */
-export async function setPrimaryWallet(wallet: string): Promise<User> {
-  const body = await api.post<{ user?: unknown }>(
-    `/auth/wallets/${encodeURIComponent(wallet)}/primary`,
-  );
-  if (!body.user)
-    throw new ApiError(
-      500,
-      'bad_response',
-      'Could not set the primary wallet.',
-      true,
-    );
-  return toUser(body.user);
 }
 
 // Discovery -------------------------------------------------------------------
@@ -716,11 +548,6 @@ export async function listSessions(): Promise<Session[]> {
       current: true,
     },
   ];
-}
-
-/** Development only: sign straight in as the sample investor (offline UI). */
-export function sampleInvestor(): User {
-  return sampleUser();
 }
 
 export { ApiError };
