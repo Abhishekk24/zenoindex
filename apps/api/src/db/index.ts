@@ -12,7 +12,19 @@ export type Db = {
   close(): Promise<void>;
 };
 
-export async function createDb(url: string): Promise<Db> {
+/**
+ * node-postgres config. With `caCert` (PEM) the server certificate is verified against that CA —
+ * for managed DBs with a private CA (e.g. Vultr) whose cert must come from env, not a file.
+ * The URL's own ssl* params are dropped then, because they would override `ssl`.
+ */
+export function pgConfig(url: string, caCert?: string): pg.PoolConfig {
+  if (!caCert) return { connectionString: url };
+  const u = new URL(url);
+  for (const k of [...u.searchParams.keys()]) if (k.startsWith("ssl") || k === "uselibpqcompat") u.searchParams.delete(k);
+  return { connectionString: u.toString(), ssl: { ca: caCert.replace(/\\n/g, "\n"), rejectUnauthorized: true } };
+}
+
+export async function createDb(url: string, caCert?: string): Promise<Db> {
   // shortcut: `pglite:<dir>` runs an embedded file-backed Postgres for local runs without a server; use a real DATABASE_URL in production.
   if (url.startsWith("pglite:")) {
     const { PGlite } = await import("@electric-sql/pglite");
@@ -25,7 +37,7 @@ export async function createDb(url: string): Promise<Db> {
       close: () => pg.close(),
     };
   }
-  const pool = new pg.Pool({ connectionString: url, max: 10, statement_timeout: 15_000 });
+  const pool = new pg.Pool({ ...pgConfig(url, caCert), max: 10, statement_timeout: 15_000 });
   return {
     query: async (text, params) => ({ rows: (await pool.query(text, params)).rows }),
     exec: (sql) => pool.query(sql),

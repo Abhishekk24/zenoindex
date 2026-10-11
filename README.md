@@ -23,12 +23,17 @@ curl -H "x-api-key: pk_live_…" http://localhost:8787/api/v1/dtfs
 
 ## Deploy
 
-Any Node 22 host: `pnpm install --frozen-lockfile --prod && pnpm --filter @zenoindex/api start`.
+**CI/CD (same flow as IMPACTMAX):** `.github/workflows/production.yml` — on push to `main`: Vault → build `Dockerfile` → push `ghcr.io/ans-mishra/zenoindex-backend:prod` → SSH → `docker run --env-file .env` behind Traefik → waits for the container health check. Before the first run: create the Vault paths `zenoindex-backend/production/app` (the env keys below) and `…/infra` (GHCR_USERNAME, GHCR_TOKEN, SERVER_HOST, SERVER_USERNAME, SSH_PORT, REMOTE_SERVER_KEY), and set the repo variable `API_HOST`.
+
+**Manually:** `docker build -t zenoindex-backend . && docker run -p 8787:8787 --env-file .env zenoindex-backend`, or on any Node 22 host `pnpm install --frozen-lockfile --prod && pnpm --filter @zenoindex/api start`.
+
 Needs Postgres 13+. Migrations run on boot. Health check: `GET /health`.
 
 | Env | Required | |
 |---|---|---|
 | `DATABASE_URL` | ✓ | Postgres connection string. Managed DBs with their own CA (e.g. Vultr): download the CA cert from the provider and use `?sslmode=verify-full&sslrootcert=/path/to/ca.crt` — plain `sslmode=require` fails with `SELF_SIGNED_CERT_IN_CHAIN`. The user needs CONNECT on the database and CREATE on schema `public` (tables are created on boot). |
+| `DATABASE_CA_CERT` | | PEM CA cert of the DB server (private-CA managed Postgres, e.g. Vultr), `
+`-escaped on one line. Use instead of `sslrootcert` when the cert can't be a file (Docker/Vault). |
 | `PUBLIC_URL` | with seed | public https URL of this API; its host is the sign-in (SIWE) domain |
 | `NODE_ENV` | | `production` → `Secure` cookies |
 | `PORT` | | default 8787 |

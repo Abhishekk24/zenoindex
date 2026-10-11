@@ -30,7 +30,8 @@ function fail(msg: string): never {
 }
 const isAddr = (s: string) => /^0x[0-9a-fA-F]{40}$/.test(s);
 
-const db = await createDb(loadEnv().DATABASE_URL);
+const env = loadEnv();
+const db = await createDb(env.DATABASE_URL, env.DATABASE_CA_CERT);
 await migrate(db);
 try {
   switch (command) {

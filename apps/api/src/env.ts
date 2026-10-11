@@ -4,6 +4,8 @@ const sha256Hex = z.string().regex(/^[0-9a-f]{64}$/, "must be a lowercase sha256
 
 const schema = z.object({
   DATABASE_URL: z.string().min(1),
+  /** PEM CA certificate of the DB server (private-CA managed Postgres). `\n` escapes are accepted for one-line .env files. */
+  DATABASE_CA_CERT: z.string().includes("BEGIN CERTIFICATE").optional(),
   RPC_URL: z.url().default("https://rpc.mainnet.chain.robinhood.com"),
   PORT: z.coerce.number().int().positive().default(8787),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
