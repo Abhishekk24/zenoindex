@@ -28,7 +28,7 @@ Needs Postgres 13+. Migrations run on boot. Health check: `GET /health`.
 
 | Env | Required | |
 |---|---|---|
-| `DATABASE_URL` | ✓ | Postgres connection string |
+| `DATABASE_URL` | ✓ | Postgres connection string. Managed DBs with their own CA (e.g. Vultr): download the CA cert from the provider and use `?sslmode=verify-full&sslrootcert=/path/to/ca.crt` — plain `sslmode=require` fails with `SELF_SIGNED_CERT_IN_CHAIN`. The user needs CONNECT on the database and CREATE on schema `public` (tables are created on boot). |
 | `PUBLIC_URL` | with seed | public https URL of this API; its host is the sign-in (SIWE) domain |
 | `NODE_ENV` | | `production` → `Secure` cookies |
 | `PORT` | | default 8787 |
