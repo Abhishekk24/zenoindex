@@ -32,6 +32,16 @@ describe("API key", () => {
     expect(r.json.error).toMatchObject({ status: 401, code: "unauthorized", retryable: false });
   });
 
+  it("answers browser preflights without a key (Expo web)", async () => {
+    const { app } = makeApp(db, client);
+    const r = await app.request("/api/v1/auth/siwe/nonce", {
+      method: "OPTIONS",
+      headers: { origin: "http://localhost:8081", "access-control-request-method": "POST", "access-control-request-headers": "x-api-key,content-type" },
+    });
+    expect(r.status).toBe(204);
+    expect(r.headers.get("access-control-allow-headers")).toContain("x-api-key");
+  });
+
   it("rejects unknown keys", async () => {
     expect((await call("/auth/me", { key: "pk_live_nope" })).status).toBe(401);
   });

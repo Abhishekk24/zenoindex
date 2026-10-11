@@ -1,4 +1,5 @@
 import { Hono, type ErrorHandler } from "hono";
+import { cors } from "hono/cors";
 import type { AppEnv, Deps } from "./context";
 import { ApiError, unauthorized } from "./errors";
 import { authRoutes } from "./routes/auth";
@@ -25,6 +26,9 @@ export function createApp(deps: Deps) {
 
   const v1 = new Hono<AppEnv>();
   v1.onError(onError);
+
+  // Browser clients (Expo web): answer preflights before the API-key check. No cookies cross-origin — sessions travel as Bearer tokens.
+  v1.use("*", cors({ origin: "*", allowHeaders: ["x-api-key", "authorization", "content-type", "idempotency-key", "x-dtf-chain-id"] }));
 
   // Every request is made on behalf of a project, identified by its API key.
   v1.use("*", async (c, next) => {
