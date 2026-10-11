@@ -6,7 +6,11 @@
  * message — a signature only, no transaction. A new wallet gets a new account,
  * which then goes through terms and profile.
  */
-import { useAppKit, useAppKitState } from '@reown/appkit-react-native';
+import {
+  useAccount as useAppKitAccount,
+  useAppKit,
+  useAppKitState,
+} from '@reown/appkit-react-native';
 import { StatusBar } from 'expo-status-bar';
 import React, { useRef, useState } from 'react';
 import {
@@ -23,6 +27,7 @@ import { useAccount, useAccountEffect, useSignMessage } from 'wagmi';
 
 import { LightButton } from '../components/auth/LightButton';
 import { PrimaryButton } from '../components/auth/PrimaryButton';
+import { appKit } from '../config/wallet';
 import { useSession } from '../hooks/useSession';
 import * as api from '../lib/api';
 import { shortAddress } from '../lib/format';
@@ -42,8 +47,9 @@ function walletErrorMessage(e: unknown): string {
 export default function SignInScreen() {
   const insets = useSafeAreaInsets();
   const { setUser } = useSession();
-  const { open } = useAppKit();
+  const { open, disconnect } = useAppKit();
   const { isOpen: pickerOpen } = useAppKitState();
+  const appKitAccount = useAppKitAccount();
   const { address, isConnected } = useAccount();
   const { signMessageAsync } = useSignMessage();
   // Set when the user taps Continue: once a wallet connects, ask it to sign
@@ -57,6 +63,19 @@ export default function SignInScreen() {
     setBusy(true);
     setError(undefined);
     try {
+      // Reown email wallets can be a smart account, which exists only on some
+      // networks (not Robinhood Chain) and can't sign in or trade here. Use the
+      // wallet's own account (EOA) instead.
+      const active = appKitAccount.allAccounts.find(
+        a => a.address.toLowerCase() === wallet.toLowerCase(),
+      );
+      if (active?.type === 'smartAccount' && appKitAccount.chain) {
+        await appKit.switchAccountType('eip155', 'eoa', appKitAccount.chain);
+        setError(
+          'Switched your email wallet to its standard account. Tap Sign in again.',
+        );
+        return;
+      }
       const challenge = await api.requestWalletLoginChallenge(wallet);
       const signature = await withWalletOpen(() =>
         signMessageAsync({
@@ -72,8 +91,11 @@ export default function SignInScreen() {
     }
   };
 
-  const chooseWallet = () => {
+  const chooseWallet = async () => {
     setError(undefined);
+    // With a wallet still connected, open() shows that wallet's account view
+    // instead of the picker — disconnect first so another one can be chosen.
+    if (isConnected) await disconnect();
     signInOnConnect.current = true;
     open();
   };
