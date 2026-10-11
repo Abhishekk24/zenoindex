@@ -2,11 +2,12 @@ import type { Context } from "hono";
 import type { PublicClient } from "viem";
 import { z } from "zod";
 import type { Db } from "./db";
+import type { DiditConfig } from "./didit";
 import { badRequest, unauthorized } from "./errors";
 import type { KeyType, Project } from "./tenancy";
 import type { UserRow } from "./users";
 
-export type Deps = { db: Db; client: PublicClient; secureCookies: boolean };
+export type Deps = { db: Db; client: PublicClient; secureCookies: boolean; didit?: DiditConfig };
 export type AppEnv = { Variables: { project: Project; keyType: KeyType; user: UserRow | null; sessionToken: string | null } };
 export type Ctx = Context<AppEnv>;
 

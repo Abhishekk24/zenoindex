@@ -12,6 +12,11 @@ const schema = z.object({
   /** Public https URL of this API; used as the SIWE domain/uri of the seeded project. */
   PUBLIC_URL: z.url().optional(),
   // Optional first-boot seed: one project + its keys, given only as SHA-256 hashes so the raw keys never sit in deploy config.
+  // Didit KYC (optional: without key + workflow, starting KYC returns 503 "not set up yet").
+  DIDIT_API_KEY: z.string().min(1).optional(),
+  DIDIT_WORKFLOW_ID: z.string().min(1).optional(),
+  DIDIT_WEBHOOK_SECRET: z.string().min(1).optional(),
+  DIDIT_CALLBACK_URL: z.url().optional(),
   SEED_PROJECT_NAME: z.string().min(1).optional(),
   SEED_PUBLISHABLE_KEY_SHA256: sha256Hex.optional(),
   SEED_SECRET_KEY_SHA256: sha256Hex.optional(),

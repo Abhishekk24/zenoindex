@@ -4,6 +4,7 @@ import type { AppEnv, Deps } from "./context";
 import { ApiError, unauthorized } from "./errors";
 import { authRoutes } from "./routes/auth";
 import { dtfRoutes } from "./routes/dtfs";
+import { diditWebhook, kycRoutes } from "./routes/kyc";
 import { portfolioRoutes } from "./routes/portfolio";
 import { tradeRoutes } from "./routes/trade";
 import { resolveApiKey } from "./tenancy";
@@ -23,6 +24,7 @@ export function createApp(deps: Deps) {
   app.onError(onError);
   app.notFound((c) => c.json({ error: { status: 404, code: "not_found", message: "Route not found.", retryable: false } }, 404));
   app.get("/health", (c) => c.json({ ok: true }));
+  diditWebhook(app, deps);
 
   const v1 = new Hono<AppEnv>();
   v1.onError(onError);
@@ -57,6 +59,7 @@ export function createApp(deps: Deps) {
   dtfRoutes(v1, deps);
   tradeRoutes(v1, deps);
   portfolioRoutes(v1, deps);
+  kycRoutes(v1, deps);
 
   app.route("/api/v1", v1);
   return app;

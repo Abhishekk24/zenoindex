@@ -57,9 +57,4 @@ export function dtfRoutes(app: Hono<AppEnv>, { client }: Deps) {
       },
     });
   });
-
-  // shortcut: KYC isn't in v1; the basket page needs a 200 for any wallet. Replace with Didit (Phase 2).
-  app.get("/compliance/kyc/:wallet/status", (c) =>
-    c.json({ wallet: c.req.param("wallet").toLowerCase(), provider: null, status: "not_started", approved: false }),
-  );
 }

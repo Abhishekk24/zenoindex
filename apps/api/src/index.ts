@@ -29,5 +29,9 @@ if (env.SEED_PROJECT_NAME) {
 const client = createPublicClient({ chain: robinhood, transport: http(env.RPC_URL) });
 if ((await client.getChainId()) !== robinhood.id) throw new Error(`RPC_URL is not Robinhood mainnet (${robinhood.id})`);
 
-const app = createApp({ db, client, secureCookies: env.NODE_ENV === "production" });
+const didit =
+  env.DIDIT_API_KEY && env.DIDIT_WORKFLOW_ID
+    ? { apiKey: env.DIDIT_API_KEY, workflowId: env.DIDIT_WORKFLOW_ID, webhookSecret: env.DIDIT_WEBHOOK_SECRET, callbackUrl: env.DIDIT_CALLBACK_URL }
+    : undefined;
+const app = createApp({ db, client, secureCookies: env.NODE_ENV === "production", didit });
 serve({ fetch: app.fetch, port: env.PORT }, (info) => console.log(`zenoindex api listening on :${info.port}`));
