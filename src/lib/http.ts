@@ -4,7 +4,7 @@
  * - Every request carries the project's publishable key (`x-api-key`).
  * - Session: sign-in returns a token (also as a `dtf_session` cookie). Native
  *   cookie handling on device is inconsistent, so the token value is kept in
- *   SecureStore and sent as an explicit `Cookie` header.
+ *   SecureStore and sent as `Authorization: Bearer <token>`.
  * - Errors: the API answers `{ error: { status, code, message, retryable } }`.
  * - Writes: every POST carries a fresh `Idempotency-Key`.
  */
@@ -117,7 +117,8 @@ async function request<T>(path: string, init: ApiRequest = {}): Promise<T> {
     'x-api-key': API_KEY,
   };
   const cookie = await storedSession();
-  if (cookie) headers['cookie'] = `dtf_session=${cookie}`;
+  // Bearer, not Cookie: browsers (Expo web) refuse to let pages set a Cookie header.
+  if (cookie) headers['authorization'] = `Bearer ${cookie}`;
   if (init.chainId !== undefined)
     headers['x-dtf-chain-id'] = String(init.chainId);
   if (method === 'POST') headers['idempotency-key'] = uuid();
