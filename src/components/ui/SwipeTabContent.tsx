@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { StyleSheet } from 'react-native';
-import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { SlideInLeft, SlideInRight } from 'react-native-reanimated';
 
 /** How far (px) or how fast (px/s) a horizontal swipe must go to change tab. */
@@ -33,20 +33,19 @@ export function SwipeTabContent({
     setShown(index);
   }
 
-  const swipe = usePanGesture({
-    activeOffsetX: [-20, 20],
-    failOffsetY: [-12, 12],
-    runOnJS: true,
-    onDeactivate: event => {
-      const { translationX, velocityX } = event;
+  // Gesture-handler v2 builder API: Expo Go (SDK 57) ships the v2 native module.
+  const swipe = Gesture.Pan()
+    .activeOffsetX([-20, 20])
+    .failOffsetY([-12, 12])
+    .runOnJS(true)
+    .onEnd(({ translationX, velocityX }) => {
       const next =
         translationX < -SWIPE_DISTANCE || velocityX < -SWIPE_VELOCITY;
       const previous =
         translationX > SWIPE_DISTANCE || velocityX > SWIPE_VELOCITY;
       if (next && index < count - 1) onIndexChange(index + 1);
       else if (previous && index > 0) onIndexChange(index - 1);
-    },
-  });
+    });
 
   const entering = (direction > 0 ? SlideInRight : SlideInLeft).duration(240);
 
