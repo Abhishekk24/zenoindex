@@ -83,19 +83,20 @@ describe("KYC", () => {
     const call = make();
     await call("/api/v1/eligibility/kyc/start", { body: { wallet } });
     const now = Math.floor(Date.now() / 1000);
-    const event = { event_id: "ev-1", session_id: "sess-1", status: "Approved", vendor_data: userId, decision: { score: 1.0 } };
-    const hook = (payload: object, sig: string, ts = now) =>
-      call("/webhooks/didit", { raw: JSON.stringify(payload), auth: false, headers: { "x-signature-v2": sig, "x-timestamp": String(ts) } });
+    const event = { event_id: "ev-1", session_id: "sess-1", status: "Approved", vendor_data: userId, timestamp: now, decision: { score: 1.0 } };
+    // x-timestamp header is deliberately fresh in every call: only the signed body timestamp may count.
+    const hook = (payload: object, sig: string) =>
+      call("/webhooks/didit", { raw: JSON.stringify(payload), auth: false, headers: { "x-signature-v2": sig, "x-timestamp": String(now) } });
 
     expect((await hook(event, "00".repeat(32))).status).toBe(401);
-    expect((await hook(event, signPayload(event, "whsec"), now - 3600)).status).toBe(401);
+    const old = { ...event, timestamp: now - 3600 };
+    expect((await hook(old, signPayload(old, "whsec"))).status).toBe(401); // replayed old event, fresh header
     expect((await hook(event, signPayload(event, "whsec"))).status).toBe(200);
     expect((await db.query<{ kyc_status: string }>("select kyc_status from users")).rows[0]!.kyc_status).toBe("Approved");
 
-    // same event replayed with a different status is ignored
+    // a retried delivery of an already-applied event_id changes nothing
     const replay = { ...event, status: "Declined" };
-    await db.query("update users set kyc_last_event_id = 'ev-1'");
-    expect((await hook({ ...replay }, signPayload(replay, "whsec"))).status).toBe(200);
+    expect((await hook(replay, signPayload(replay, "whsec"))).status).toBe(200);
     expect((await db.query<{ kyc_status: string }>("select kyc_status from users")).rows[0]!.kyc_status).toBe("Approved");
   });
 });
@@ -115,7 +116,10 @@ describe("didit helpers", () => {
     const a = { b: 1.0, a: { z: 2, y: [3.0, "x"] } };
     const b = { a: { y: [3, "x"], z: 2 }, b: 1 };
     expect(signPayload(a, "s")).toBe(signPayload(b, "s"));
-    expect(verifyWebhook(a, signPayload(b, "s"), 1000, "s", 1000)).toBe(true);
-    expect(verifyWebhook(a, signPayload(b, "other"), 1000, "s", 1000)).toBe(false);
+    const ta = { ...a, timestamp: 1000 };
+    const tb = { ...b, timestamp: 1000 };
+    expect(verifyWebhook(ta, signPayload(tb, "s"), "s", 1000)).toBe(true);
+    expect(verifyWebhook(ta, signPayload(tb, "other"), "s", 1000)).toBe(false);
+    expect(verifyWebhook(ta, signPayload(tb, "s"), "s", 2000)).toBe(false);
   });
 });

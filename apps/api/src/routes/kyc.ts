@@ -68,24 +68,23 @@ export function kycRoutes(app: Hono<AppEnv>, { db, didit }: Deps) {
 export function diditWebhook(app: Hono<AppEnv>, { db, didit }: Deps) {
   app.post("/webhooks/didit", async (c) => {
     if (!didit?.webhookSecret) throw new ApiError(503, "kyc_unavailable", "Webhook not configured.", false);
-    let payload: { event_id?: string; session_id?: string; status?: string; vendor_data?: string };
+    let payload: { event_id?: string; session_id?: string; status?: string; vendor_data?: string; timestamp?: number };
     try {
       payload = JSON.parse(await c.req.text());
     } catch {
       throw new ApiError(400, "invalid_json", "Invalid JSON.");
     }
-    const ok = verifyWebhook(payload, c.req.header("x-signature-v2") ?? "", Number(c.req.header("x-timestamp")), didit.webhookSecret);
+    const ok = verifyWebhook(payload, c.req.header("x-signature-v2") ?? "", didit.webhookSecret);
     if (!ok) throw new ApiError(401, "bad_signature", "Bad signature.");
     if (!payload.session_id || !payload.status || !payload.vendor_data) return c.json({ ok: true });
 
-    const { rows } = await db.query<{ id: string; kyc_last_event_id: string | null }>(
-      "select id, kyc_last_event_id from users where id::text = $1 and kyc_session_id = $2",
-      [payload.vendor_data, payload.session_id],
+    // One atomic update: matches this user's session and skips an event already applied (Didit retries deliveries).
+    await db.query(
+      `update users set kyc_status = $3, kyc_updated_at = now(), kyc_last_event_id = $4,
+         kyc_approved_at = case when $3 = 'Approved' then coalesce(kyc_approved_at, now()) else null end
+       where id::text = $1 and kyc_session_id = $2 and ($4::text is null or kyc_last_event_id is distinct from $4)`,
+      [payload.vendor_data, payload.session_id, payload.status, payload.event_id ?? null],
     );
-    const user = rows[0];
-    if (user && (!payload.event_id || user.kyc_last_event_id !== payload.event_id)) {
-      await setStatus(db, user.id, payload.status, payload.event_id);
-    }
     return c.json({ ok: true });
   });
 }

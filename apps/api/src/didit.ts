@@ -61,8 +61,12 @@ export function signPayload(payload: unknown, secret: string) {
   return createHmac("sha256", secret).update(JSON.stringify(canonical(payload)), "utf8").digest("hex");
 }
 
-/** HMAC + 5-minute timestamp window (replay protection). */
-export function verifyWebhook(payload: unknown, signature: string, timestamp: number, secret: string, nowSec = Date.now() / 1000) {
+/**
+ * HMAC over the canonical body, then a 5-minute window on the body's SIGNED `timestamp`.
+ * Never the `X-Timestamp` header: it isn't covered by the HMAC, so a replay could freshen it.
+ */
+export function verifyWebhook(payload: { timestamp?: unknown }, signature: string, secret: string, nowSec = Date.now() / 1000) {
+  const timestamp = Number(payload.timestamp);
   if (!timestamp || Math.abs(nowSec - timestamp) > 300) return false;
   const a = Buffer.from(signature, "hex");
   const b = Buffer.from(signPayload(payload, secret), "hex");
