@@ -8,6 +8,8 @@
 import '@walletconnect/react-native-compat';
 
 import { createAppKit } from '@reown/appkit-react-native';
+import Constants from 'expo-constants';
+import * as Linking from 'expo-linking';
 import { WagmiAdapter } from '@reown/appkit-wagmi-react-native';
 import { mainnet } from 'viem/chains';
 
@@ -54,7 +56,11 @@ export const appKit = createAppKit({
     redirect: {
       // Wallets deep-link back here after approving; src/app/wc-return.tsx
       // returns the user to the screen that started the wallet flow.
-      native: 'zeno://wc-return',
+      // Expo Go can't receive zeno:// links; it gets exp://…/--/wc-return instead.
+      native:
+        Constants.appOwnership === 'expo'
+          ? Linking.createURL('wc-return')
+          : 'zeno://wc-return',
     },
   },
   adapters: [wagmiAdapter],

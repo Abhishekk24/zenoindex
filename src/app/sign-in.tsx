@@ -23,7 +23,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAccount, useAccountEffect, useSignMessage } from 'wagmi';
+import { useAccountEffect, useSignMessage } from 'wagmi';
 
 import { LightButton } from '../components/auth/LightButton';
 import { PrimaryButton } from '../components/auth/PrimaryButton';
@@ -49,8 +49,11 @@ export default function SignInScreen() {
   const { setUser } = useSession();
   const { open, disconnect } = useAppKit();
   const { isOpen: pickerOpen } = useAppKitState();
+  // AppKit's active address, not wagmi's: for Reown email wallets wagmi reports
+  // the session's first account — the smart account, which can't be used here —
+  // while AppKit resolves the wallet's own account (EOA).
   const appKitAccount = useAppKitAccount();
-  const { address, isConnected } = useAccount();
+  const { address, isConnected } = appKitAccount;
   const { signMessageAsync } = useSignMessage();
   // Set when the user taps Continue: once a wallet connects, ask it to sign
   // straight away rather than waiting for a second tap.
@@ -59,7 +62,8 @@ export default function SignInScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
 
-  const walletSignIn = async (wallet: string) => {
+  const walletSignIn = async (connected: string) => {
+    const wallet = appKitAccount.address ?? connected;
     setBusy(true);
     setError(undefined);
     try {

@@ -7,12 +7,8 @@
 import React, { useState } from 'react';
 import { Text, View } from 'react-native';
 import { encodeFunctionData, erc20Abi, parseUnits, type Hex } from 'viem';
-import {
-  useAccount,
-  useChainId,
-  useSendTransaction,
-  useSwitchChain,
-} from 'wagmi';
+import { useAccount } from '@reown/appkit-react-native';
+import { useChainId, useSendTransaction, useSwitchChain } from 'wagmi';
 
 import * as api from '../lib/api';
 import { erc20Allowance, waitForReceipt } from '../lib/chain';

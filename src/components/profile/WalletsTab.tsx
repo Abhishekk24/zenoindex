@@ -1,7 +1,6 @@
-import { useAppKit } from '@reown/appkit-react-native';
+import { useAccount, useAppKit } from '@reown/appkit-react-native';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { useAccount } from 'wagmi';
 
 import { robinhood } from '../../config/chains';
 import { shortAddress } from '../../lib/format';
