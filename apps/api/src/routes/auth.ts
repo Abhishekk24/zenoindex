@@ -1,6 +1,7 @@
 import type { Hono } from "hono";
 import { getAddress, recoverMessageAddress, type Hex } from "viem";
-import { createSiweMessage, generateSiweNonce, parseSiweMessage, validateSiweMessage } from "viem/siwe";
+import { randomBytes } from "node:crypto";
+import { createSiweMessage, parseSiweMessage, validateSiweMessage } from "viem/siwe";
 import { z } from "zod";
 import { address, parseBody, requireUser, type AppEnv, type Deps } from "../context";
 import { badRequest, unauthorized } from "../errors";
@@ -19,7 +20,8 @@ export function authRoutes(app: Hono<AppEnv>, { db, client, secureCookies }: Dep
     if (chainId !== undefined && chainId !== project.chainId) {
       throw badRequest("wrong_chain", `Switch your wallet to chain ${project.chainId} and try again.`);
     }
-    const nonce = generateSiweNonce();
+    // viem's generateSiweNonce slices a shared buffer (consecutive nonces overlap); use the CSPRNG.
+    const nonce = randomBytes(16).toString("hex");
     const issuedAt = new Date();
     const expirationTime = new Date(issuedAt.getTime() + NONCE_TTL_SECONDS * 1000);
     await db.query(
@@ -63,8 +65,12 @@ export function authRoutes(app: Hono<AppEnv>, { db, client, secureCookies }: Dep
     const valid =
       parsed.chainId === issued.chain_id &&
       validateSiweMessage({ message: parsed, domain: project.siweDomain, nonce: parsed.nonce, address: wallet });
-    if (!valid || !(await signatureMatches(client, wallet, message, signature as Hex))) {
-      throw unauthorized("Signature check failed. Please try again.");
+    if (!valid) throw unauthorized("That sign-in request is invalid. Please try again.");
+    if (!(await signatureMatches(client, wallet, message, signature as Hex))) {
+      // Typical cause: a smart-contract (smart account) wallet that doesn't exist on this chain.
+      throw unauthorized(
+        "Signature check failed. If you use a smart account (e.g. an email wallet's smart account), switch to its standard account and try again.",
+      );
     }
 
     const user = await upsertUserByWallet(db, project.id, wallet);
