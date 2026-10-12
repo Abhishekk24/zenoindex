@@ -236,12 +236,12 @@ jobs:
               --env-file .env \
               --restart unless-stopped \
               --label "traefik.enable=true" \
-              --label 'traefik.http.routers.zenoindex-api.rule=Host("${{ vars.API_HOST }}")' \
+              --label 'traefik.http.routers.zenoindex-api.rule=Host("api.zenoindex.com")' \
               --label "traefik.http.routers.zenoindex-api.entrypoints=websecure" \
               --label "traefik.http.routers.zenoindex-api.tls.certresolver=letsencrypt" \
               --label "traefik.http.services.zenoindex-api.loadbalancer.server.port=8787" \
               --label "traefik.http.routers.zenoindex-api.middlewares=zenoindex-api-headers" \
-              --label 'traefik.http.routers.zenoindex-api-http.rule=Host("${{ vars.API_HOST }}")' \
+              --label 'traefik.http.routers.zenoindex-api-http.rule=Host("api.zenoindex.com")' \
               --label "traefik.http.routers.zenoindex-api-http.entrypoints=web" \
               --label "traefik.http.routers.zenoindex-api-http.middlewares=zenoindex-api-redirect@docker" \
               --label "traefik.http.middlewares.zenoindex-api-redirect.redirectscheme.scheme=https" \
