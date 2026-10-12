@@ -219,6 +219,8 @@ jobs:
 
             mkdir -p zenoindex-backend-prod
             cd zenoindex-backend-prod || exit 1
+            chmod 600 .env
+            trap 'rm -f .env' EXIT
 
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
 
