@@ -11,7 +11,13 @@ import { useAccount } from '@reown/appkit-react-native';
 import { useChainId, useSendTransaction, useSwitchChain } from 'wagmi';
 
 import * as api from '../lib/api';
-import { erc20Allowance, waitForReceipt } from '../lib/chain';
+import {
+  blockNumber,
+  erc20Allowance,
+  findVaultTx,
+  pollUntil,
+  waitForReceipt,
+} from '../lib/chain';
 import { compare, isDecimal, isPositive } from '../lib/decimal';
 import { formatBps, formatDecimal, shortAddress } from '../lib/format';
 import type { Dtf, Operation, TradePreview, TxDraft } from '../lib/types';
@@ -39,6 +45,9 @@ const SIDES = [
 
 type Step =
   'idle' | 'approving' | 'signing' | 'broadcast' | 'confirming' | 'done';
+
+/** How long to wait for a signature, from the wallet or seen on-chain. */
+const WALLET_TIMEOUT_MS = 5 * 60_000;
 
 const STEP_LABEL: Record<Exclude<Step, 'idle' | 'done'>, string> = {
   approving: 'Approving spend…',
@@ -143,51 +152,85 @@ export function TradePanel({
   /**
    * The invest draft calls the vault's `deposit`, which pulls USDG via
    * transferFrom — so the vault needs an ERC-20 allowance first.
+   *
+   * The allowance is also watched on-chain: the wallet's reply can be lost
+   * while Zeno is in the background, even though the approval went through.
    */
   async function approveSpend(spender: string, amountRaw: bigint) {
-    const allowance = await erc20Allowance(
-      dtf.chainId,
-      dtf.baseAssetId,
-      signer!,
-      spender,
-    );
-    if (allowance >= amountRaw) return;
+    const allowance = () =>
+      erc20Allowance(dtf.chainId, dtf.baseAssetId, signer!, spender);
+    if ((await allowance()) >= amountRaw) return;
     const data = encodeFunctionData({
       abi: erc20Abi,
       functionName: 'approve',
       args: [spender as Hex, amountRaw],
     });
-    const txHash = await withWalletOpen(() =>
-      sendTransactionAsync({
-        account: signer as Hex,
-        chainId: dtf.chainId,
-        to: dtf.baseAssetId as Hex,
-        data,
-        value: 0n,
-      }),
-    );
-    const receipt = await waitForReceipt(dtf.chainId, txHash);
-    if (receipt.status !== 'success') {
-      throw new Error('The spend approval transaction failed on-chain.');
+    const watch = new AbortController();
+    try {
+      await Promise.race([
+        withWalletOpen(() =>
+          sendTransactionAsync({
+            account: signer as Hex,
+            chainId: dtf.chainId,
+            to: dtf.baseAssetId as Hex,
+            data,
+            value: 0n,
+          }),
+        ).then(async txHash => {
+          const receipt = await waitForReceipt(dtf.chainId, txHash);
+          if (receipt.status !== 'success') {
+            throw new Error('The spend approval transaction failed on-chain.');
+          }
+        }),
+        pollUntil(
+          async () => ((await allowance()) >= amountRaw ? true : null),
+          {
+            signal: watch.signal,
+            timeoutMs: WALLET_TIMEOUT_MS,
+            timeout: 'No answer from your wallet for the spend approval.',
+          },
+        ),
+      ]);
+    } finally {
+      watch.abort();
     }
   }
 
   /** Signs, broadcasts and settles one prepared transaction. */
   async function sendDraft(draft: TxDraft) {
     const chainId = draft.transaction.chainId;
+    const to = draft.transaction.to;
     setStep('signing');
-    const txHash = await withWalletOpen(() =>
-      sendTransactionAsync({
-        account: signer as Hex,
-        chainId,
-        to: draft.transaction.to as Hex,
-        data: draft.transaction.data,
-        value: BigInt(draft.transaction.value || '0'),
-        ...(draft.transaction.gas
-          ? { gas: BigInt(draft.transaction.gas) }
-          : {}),
-      }),
-    );
+    // Watched on-chain as well as answered by the wallet, so a lost reply
+    // can't leave the app waiting on a transaction that already landed (and
+    // tempt a second, duplicate deposit).
+    const fromBlock = await blockNumber(chainId);
+    const watch = new AbortController();
+    let txHash: string;
+    try {
+      txHash = await Promise.race([
+        withWalletOpen(() =>
+          sendTransactionAsync({
+            account: signer as Hex,
+            chainId,
+            to: to as Hex,
+            data: draft.transaction.data,
+            value: BigInt(draft.transaction.value || '0'),
+            ...(draft.transaction.gas
+              ? { gas: BigInt(draft.transaction.gas) }
+              : {}),
+          }),
+        ),
+        pollUntil(() => findVaultTx(chainId, to, signer!, fromBlock), {
+          signal: watch.signal,
+          timeoutMs: WALLET_TIMEOUT_MS,
+          timeout:
+            'No answer from your wallet. If you signed, check your wallet’s activity before trying again so you don’t pay twice.',
+        }),
+      ]);
+    } finally {
+      watch.abort();
+    }
 
     setStep('broadcast');
     setOperation(await api.submitOperation(draft.requestId, txHash));
