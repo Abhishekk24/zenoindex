@@ -133,7 +133,10 @@ export function TradePanel({
     try {
       await switchChainAsync({ chainId });
     } catch {
-      throw new Error(`Switch your wallet to chain ${chainId} and try again.`);
+      // Reown email wallets can't reach Robinhood Chain (see config/wallet.ts).
+      throw new Error(
+        'This wallet can’t use Robinhood Chain. Email and Google wallets can’t trade yet — sign in with an external wallet such as MetaMask to invest.',
+      );
     }
   }
 
