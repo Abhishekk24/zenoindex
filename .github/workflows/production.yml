@@ -17,8 +17,8 @@ env:
   IMAGE: ghcr.io/ans-mishra/zenoindex-backend:prod
   CONTAINER: zenoindex-backend-prod
   HOST_PORT: "9082"
-  VAULT_APP_URL: https://mgt.cyreneai.com/v1/zenoindex-backend/data/production/app
-  VAULT_INFRA_URL: https://mgt.cyreneai.com/v1/zenoindex-backend/data/production/infra
+  VAULT_APP_URL: https://mgt.cyreneai.com/v1/ZENOINDEX-BACKEND/production/app
+  VAULT_INFRA_URL: https://mgt.cyreneai.com/v1/ZENOINDEX-BACKEND/production/infra
 
 jobs:
   build-and-push:
