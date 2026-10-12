@@ -1,6 +1,6 @@
 import { BlurView } from 'expo-blur';
 import React from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 /** Frosted tab bar: the content scrolls underneath it, blurred. */
 export function TabBarBackground() {
@@ -9,8 +9,7 @@ export function TabBarBackground() {
       <BlurView
         tint="dark"
         intensity={50}
-        // Android only blurs with an explicit method (iOS blurs natively).
-        blurMethod={Platform.OS === 'android' ? 'dimezisBlurView' : undefined}
+        // shortcut: iOS-only blur; Android shows the tint (its blur needs a `blurTarget` wrapping the screens), add it if Android blur is wanted.
         style={StyleSheet.absoluteFill}
       />
       <View style={styles.tint} />

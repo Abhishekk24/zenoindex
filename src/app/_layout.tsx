@@ -20,7 +20,7 @@ import { ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { LogBox, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { WagmiProvider } from 'wagmi';
 
@@ -32,6 +32,9 @@ import { fonts } from '../theme/tokens';
 
 // Hold the splash screen until the fonts are ready.
 SplashScreen.preventAutoHideAsync();
+
+// WalletConnect logs lookups of a pairing it already closed (after switching wallets) as errors; nothing fails.
+LogBox.ignoreLogs(['Record was recently deleted']);
 
 const queryClient = new QueryClient();
 

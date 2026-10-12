@@ -33,15 +33,17 @@ const robinhoodNetwork = {
   caipNetworkId,
 };
 
-// Ethereum mainnet is the default network, as in IMPACTMAX: email (embedded)
-// wallets connect on a network they support out of the box. Sign-in is a
-// plain signature (no network switch); trades switch to Robinhood themselves.
+// Robinhood is the default network. On React Native the email wallet is
+// Reown's web wallet, and it approves only the network it connects on (with
+// Ethereum as default it never got 4663, so trades failed). IMPACTMAX can
+// default to Ethereum because on web the email wallet switches networks.
+// Ethereum stays listed for external wallets that can't add Robinhood.
 const ethereumNetwork = {
   ...mainnet,
   chainNamespace: 'eip155' as const,
   caipNetworkId: `eip155:${mainnet.id}` as const,
 };
-const networks = [ethereumNetwork, robinhoodNetwork] as const;
+const networks = [robinhoodNetwork, ethereumNetwork] as const;
 
 const wagmiAdapter = new WagmiAdapter({ projectId, networks });
 
@@ -66,7 +68,7 @@ export const appKit = createAppKit({
   adapters: [wagmiAdapter],
   networks: [...networks],
   storage: appKitStorage,
-  defaultNetwork: ethereumNetwork,
+  defaultNetwork: robinhoodNetwork,
   features: {
     // Email = Reown embedded wallet; external wallets stay listed below it.
     socials: ['email'],

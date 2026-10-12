@@ -14,7 +14,7 @@ import {
 } from '@reown/appkit-react-native';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Image,
   ImageBackground,
@@ -74,6 +74,7 @@ export default function SignInScreen() {
   // Set when the user starts a sign-in: once a wallet connects, ask it to sign
   // straight away rather than waiting for a second tap.
   const signInOnConnect = useRef(false);
+  const signInAfterSwitch = useRef(false);
 
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
@@ -94,11 +95,11 @@ export default function SignInScreen() {
       const active = appKitAccount.allAccounts.find(
         a => a.address.toLowerCase() === wallet.toLowerCase(),
       );
+      // The switch is local (no wallet round trip); the effect below signs
+      // in as soon as AppKit reports the EOA, so the user taps only once.
       if (active?.type === 'smartAccount' && appKitAccount.chain) {
+        signInAfterSwitch.current = true;
         await appKit.switchAccountType('eip155', 'eoa', appKitAccount.chain);
-        setError(
-          'Switched your email wallet to its standard account. Tap Sign in again.',
-        );
         return;
       }
       const challenge = await api.requestWalletLoginChallenge(wallet);
@@ -147,6 +148,13 @@ export default function SignInScreen() {
       setConnecting(false);
     }
   };
+
+  useEffect(() => {
+    if (!signInAfterSwitch.current || !address) return;
+    signInAfterSwitch.current = false;
+    void walletSignIn(address);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per account switch
+  }, [address]);
 
   useAccountEffect({
     onConnect({ address: connected }) {
