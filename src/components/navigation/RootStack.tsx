@@ -5,6 +5,8 @@
  *   terms     → terms
  *   profile   → complete-profile
  *   ready     → (tabs): Explore · Portfolio · Profile, search, basket/[id]
+ *
+ * legal/[doc] and wc-return are open at every stage.
  */
 import { Stack } from 'expo-router';
 import React from 'react';
@@ -56,6 +58,16 @@ export function RootStack() {
           options={{ title: '', headerBackTitle: 'Back' }}
         />
       </Stack.Protected>
+      {/* Terms / Privacy reader: opened from sign-in and terms, so not tied
+          to a stage. After the guarded screens so it is never the fallback. */}
+      <Stack.Screen
+        name="legal/[doc]"
+        options={{
+          headerShown: false,
+          presentation: 'modal',
+          animation: 'slide_from_bottom',
+        }}
+      />
       {/* Wallet deep-link return: reachable at every stage (wallet sign-in
           happens while signed out). Must stay LAST: when a route is guarded,
           Expo Router falls back to the first allowed screen, and this one

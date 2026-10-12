@@ -1,4 +1,6 @@
 /** Icons (24px grid). Tab icons fill in when their tab is active. */
+export { ChevronRightIcon } from './ChevronRightIcon';
+export { DocumentIcon } from './DocumentIcon';
 export { ExploreIcon } from './ExploreIcon';
 export { GoogleIcon } from './GoogleIcon';
 export { ManagerIcon } from './ManagerIcon';

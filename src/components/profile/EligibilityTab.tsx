@@ -1,9 +1,9 @@
-import * as WebBrowser from 'expo-web-browser';
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useLoad } from '../../hooks/useLoad';
 import * as api from '../../lib/api';
+import { openInAppBrowser } from '../../lib/browser';
 import { formatDate } from '../../lib/format';
 import type { KycStatus, User } from '../../lib/types';
 import { colors, fonts, radius, space } from '../../theme/tokens';
@@ -53,7 +53,7 @@ export function EligibilityTab({
     try {
       const session = await api.startKyc(wallet);
       if (session.url) {
-        await WebBrowser.openBrowserAsync(session.url);
+        await openInAppBrowser(session.url);
       } else {
         setKycError('The provider returned no verification link.');
       }

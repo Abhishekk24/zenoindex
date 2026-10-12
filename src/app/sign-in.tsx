@@ -1,16 +1,18 @@
 /**
- * Sign in with a wallet (design: sign-in mockup).
+ * Sign in with email, Google or a wallet (design: sign-in mockup).
  *
- * Reown AppKit offers an email wallet (Reown embedded wallet) or any external
- * wallet. Once connected, the wallet signs the server's Sign-In with Ethereum
- * message — a signature only, no transaction. A new wallet gets a new account,
- * which then goes through terms and profile.
+ * Email and Google go through Reown's embedded wallet, finished in the in-app
+ * browser (lib/socialLogin.ts); Connect wallet opens AppKit's wallet picker. Once
+ * connected, the wallet signs the server's Sign-In with Ethereum message — a
+ * signature only, no transaction. A new wallet gets a new account, which then
+ * goes through terms and profile.
  */
 import {
   useAccount as useAppKitAccount,
   useAppKit,
   useAppKitState,
 } from '@reown/appkit-react-native';
+import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useRef, useState } from 'react';
 import {
@@ -20,6 +22,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,15 +30,27 @@ import { useAccountEffect, useSignMessage } from 'wagmi';
 
 import { LightButton } from '../components/auth/LightButton';
 import { PrimaryButton } from '../components/auth/PrimaryButton';
+import { GoogleIcon } from '../components/icons';
 import { appKit } from '../config/wallet';
+import { useKeyboardHeight } from '../hooks/useKeyboardHeight';
 import { useSession } from '../hooks/useSession';
 import * as api from '../lib/api';
 import { shortAddress } from '../lib/format';
+import {
+  connectWithSocial,
+  SocialLoginCancelled,
+  type SocialProvider,
+} from '../lib/socialLogin';
 import { withWalletOpen } from '../lib/walletLink';
 import { colors, fonts } from '../theme/tokens';
 
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 // Colours specific to the sign-in design.
 const CARD_BG = '#000000';
+const INPUT_BG = '#08150f';
+const INPUT_BORDER = 'rgba(92, 199, 150, 0.28)';
+const DIVIDER = 'rgba(92, 199, 150, 0.22)';
 
 /** Turns wallet/viem errors into something short for the user. */
 function walletErrorMessage(e: unknown): string {
@@ -47,6 +62,7 @@ function walletErrorMessage(e: unknown): string {
 export default function SignInScreen() {
   const insets = useSafeAreaInsets();
   const { setUser } = useSession();
+  const keyboardHeight = useKeyboardHeight();
   const { open, disconnect } = useAppKit();
   const { isOpen: pickerOpen } = useAppKitState();
   // AppKit's active address, not wagmi's: for Reown email wallets wagmi reports
@@ -55,12 +71,17 @@ export default function SignInScreen() {
   const appKitAccount = useAppKitAccount();
   const { address, isConnected } = appKitAccount;
   const { signMessageAsync } = useSignMessage();
-  // Set when the user taps Continue: once a wallet connects, ask it to sign
+  // Set when the user starts a sign-in: once a wallet connects, ask it to sign
   // straight away rather than waiting for a second tap.
   const signInOnConnect = useRef(false);
 
+  const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
+  // Email/Google login is open in the browser.
+  const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string>();
+
+  const validEmail = EMAIL.test(email.trim());
 
   const walletSignIn = async (connected: string) => {
     const wallet = appKitAccount.address ?? connected;
@@ -104,6 +125,29 @@ export default function SignInScreen() {
     open();
   };
 
+  /**
+   * Email or Google via Reown's embedded wallet, finished in the in-app
+   * browser. Reown asks for the email there; it can't be handed it.
+   */
+  const socialSignIn = async (provider: SocialProvider) => {
+    setError(undefined);
+    if (isConnected) await disconnect();
+    signInOnConnect.current = true;
+    setConnecting(true);
+    try {
+      await connectWithSocial(provider);
+    } catch (e) {
+      signInOnConnect.current = false;
+      setError(
+        e instanceof SocialLoginCancelled
+          ? e.message
+          : 'Sign-in could not start. Please try again.',
+      );
+    } finally {
+      setConnecting(false);
+    }
+  };
+
   useAccountEffect({
     onConnect({ address: connected }) {
       if (!signInOnConnect.current) return;
@@ -130,60 +174,114 @@ export default function SignInScreen() {
         style={styles.fill}
         contentContainerStyle={[
           styles.scroll,
-          { paddingBottom: insets.bottom + 10 },
+          {
+            paddingBottom:
+              keyboardHeight > 0 ? keyboardHeight + 10 : insets.bottom + 10,
+          },
         ]}
+        keyboardShouldPersistTaps="handled"
         bounces={false}
       >
         <View style={styles.card}>
           <Text style={styles.title}>Sign in</Text>
           <Text style={styles.subtitle}>
-            Continue with your email or a wallet — signing in creates your
-            account.
+            No account needed — signing in creates one.
           </Text>
 
-          <View style={styles.actions}>
-            {isConnected && address ? (
-              <>
-                <PrimaryButton
-                  label={
-                    busy
-                      ? 'Check your wallet to sign…'
-                      : `Sign in with ${shortAddress(address)}`
-                  }
-                  onPress={() => walletSignIn(address)}
-                  disabled={busy}
-                  busy={busy}
-                />
-                <Pressable
-                  onPress={chooseWallet}
-                  disabled={busy}
-                  accessibilityRole="button"
-                  style={styles.linkButton}
-                >
-                  <Text style={styles.link}>
-                    Use a different email or wallet
-                  </Text>
-                </Pressable>
-              </>
-            ) : (
-              <LightButton
+          {isConnected && address ? (
+            <View style={styles.connected}>
+              <PrimaryButton
                 label={
                   busy
                     ? 'Check your wallet to sign…'
-                    : pickerOpen
-                      ? 'Choose email or wallet…'
-                      : 'Continue with email or wallet'
+                    : `Sign in with ${shortAddress(address)}`
                 }
+                onPress={() => walletSignIn(address)}
+                disabled={busy}
+                busy={busy}
+              />
+              <Pressable
                 onPress={chooseWallet}
                 disabled={busy}
+                accessibilityRole="button"
+                style={styles.linkButton}
+              >
+                <Text style={styles.link}>Use a different email or wallet</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.label}>EMAIL ADDRESS</Text>
+              <TextInput
+                value={email}
+                onChangeText={setEmail}
+                placeholder="you@example.com"
+                placeholderTextColor={colors.dim}
+                selectionColor={colors.green}
+                autoCapitalize="none"
+                autoComplete="email"
+                keyboardType="email-address"
+                textContentType="emailAddress"
+                returnKeyType="send"
+                onSubmitEditing={() =>
+                  validEmail && !connecting && socialSignIn('email')
+                }
+                style={styles.input}
               />
-            )}
-          </View>
+              <PrimaryButton
+                label={busy ? 'Check your wallet to sign…' : 'Send code'}
+                onPress={() => socialSignIn('email')}
+                disabled={!validEmail || busy || connecting || pickerOpen}
+              />
+
+              <View style={styles.dividerRow}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>OR CONTINUE WITH</Text>
+                <View style={styles.dividerLine} />
+              </View>
+
+              <LightButton
+                label="Continue with Google"
+                icon={<GoogleIcon />}
+                onPress={() => socialSignIn('google')}
+                disabled={busy || connecting || pickerOpen}
+              />
+              <LightButton
+                label={pickerOpen ? 'Choose a wallet…' : 'Connect wallet'}
+                onPress={chooseWallet}
+                disabled={busy || connecting}
+              />
+            </>
+          )}
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
           <Text style={styles.footer}>
-            By continuing you agree to the Terms{'\n'}and Privacy Policy.
+            By continuing you agree to the{' '}
+            <Text
+              style={styles.footerLink}
+              onPress={() =>
+                router.push({
+                  pathname: '/legal/[doc]',
+                  params: { doc: 'terms' },
+                })
+              }
+            >
+              Terms
+            </Text>
+            {'\n'}and{' '}
+            <Text
+              style={styles.footerLink}
+              onPress={() =>
+                router.push({
+                  pathname: '/legal/[doc]',
+                  params: { doc: 'privacy' },
+                })
+              }
+            >
+              Privacy Policy
+            </Text>
+            .
           </Text>
         </View>
       </ScrollView>
@@ -220,7 +318,40 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginTop: 6,
   },
-  actions: { marginTop: 24, gap: 4 },
+  connected: { marginTop: 12 },
+  label: {
+    fontFamily: fonts.medium,
+    fontSize: 12,
+    letterSpacing: 0.4,
+    color: colors.muted,
+    marginTop: 22,
+    marginBottom: 8,
+  },
+  input: {
+    fontFamily: fonts.regular,
+    fontSize: 15,
+    color: colors.text,
+    backgroundColor: INPUT_BG,
+    borderWidth: 1,
+    borderColor: INPUT_BORDER,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    height: 48,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 30,
+    marginBottom: 6,
+  },
+  dividerLine: { flex: 1, height: 1, backgroundColor: DIVIDER },
+  dividerText: {
+    fontFamily: fonts.medium,
+    fontSize: 11,
+    letterSpacing: 0.6,
+    color: colors.muted,
+  },
   linkButton: { paddingVertical: 10, alignSelf: 'center' },
   link: { fontFamily: fonts.medium, fontSize: 13, color: colors.green },
   error: {
@@ -237,5 +368,10 @@ const styles = StyleSheet.create({
     color: colors.muted,
     textAlign: 'center',
     marginTop: 28,
+  },
+  footerLink: {
+    fontFamily: fonts.medium,
+    color: colors.text,
+    textDecorationLine: 'underline',
   },
 });
