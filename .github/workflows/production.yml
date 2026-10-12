@@ -147,7 +147,7 @@ jobs:
                       # One line per key: multi-line values (e.g. DATABASE_CA_CERT PEM) are stored with \n escapes.
                       f.write(f"{key}={str(value).replace(chr(10), chr(92) + 'n')}\n")
 
-          os.chmod(".env", 0o600)
+          os.chmod(".env", 0o644)
           print("✅ App secrets loaded and .env written")
           EOF
 
