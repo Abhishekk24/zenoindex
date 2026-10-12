@@ -113,7 +113,8 @@ export function tradeRoutes(app: Hono<AppEnv>, { db, client }: Deps) {
     if (step.kind === "swap") {
       if (vault.adminLocked || snap.protocol.isEmergency) throw conflict("not_tradable", "Selling is paused for this basket right now.");
       const mint = mintOf(snap, step.leg.assetId);
-      const path = mint && (await swapPath(db, project.chainId, mint));
+      // Every listed asset has a direct pool to USDG on the adapter; swap_paths only overrides that with multi-hop routes.
+      const path = mint && ((await swapPath(db, project.chainId, mint)) ?? [mint, snap.protocol.usdg]);
       if (!mint || !path) {
         throw conflict("no_swap_route", "This asset can't be swapped to USDG yet. Finish the sale in kind instead.");
       }
