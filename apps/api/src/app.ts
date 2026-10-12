@@ -2,6 +2,7 @@ import { Hono, type ErrorHandler } from "hono";
 import { cors } from "hono/cors";
 import type { AppEnv, Deps } from "./context";
 import { ApiError, unauthorized } from "./errors";
+import { openapi, swaggerHtml } from "./openapi";
 import { authRoutes } from "./routes/auth";
 import { dtfRoutes } from "./routes/dtfs";
 import { diditWebhook, kycRoutes } from "./routes/kyc";
@@ -24,6 +25,9 @@ export function createApp(deps: Deps) {
   app.onError(onError);
   app.notFound((c) => c.json({ error: { status: 404, code: "not_found", message: "Route not found.", retryable: false } }, 404));
   app.get("/health", (c) => c.json({ ok: true }));
+  // Public API docs (no key): the spec documents routes only, never data.
+  app.get("/openapi.json", (c) => c.json(openapi));
+  app.get("/docs", (c) => c.html(swaggerHtml));
   diditWebhook(app, deps);
 
   const v1 = new Hono<AppEnv>();
