@@ -3,6 +3,8 @@
  * actions (strategy filter, manager filter, search).
  *
  * Off Explore, the filter buttons go to Explore with that filter open.
+ * Profile passes `onEdit` instead: its only action is the user icon, which
+ * opens Edit profile.
  */
 import { router } from 'expo-router';
 import React from 'react';
@@ -35,6 +37,7 @@ export function AppHeader({
   managerActive,
   onStrategy,
   onManager,
+  onEdit,
 }: {
   title: string;
   /** Show the three round action buttons. */
@@ -45,6 +48,8 @@ export function AppHeader({
   managerActive?: boolean;
   onStrategy?: () => void;
   onManager?: () => void;
+  /** Profile: show only the user icon, opening Edit profile. */
+  onEdit?: () => void;
 }) {
   const insets = useSafeAreaInsets();
   // Clear the status bar even if the safe-area inset reports 0 (seen on some
@@ -62,7 +67,14 @@ export function AppHeader({
       />
       <View style={styles.titleRow}>
         <Text style={styles.title}>{title}</Text>
-        {actions && (
+        {onEdit ? (
+          <IconButton
+            icon={<ManagerIcon color={colors.text} />}
+            onPress={onEdit}
+            accessibilityLabel="Edit profile"
+          />
+        ) : null}
+        {actions && !onEdit && (
           <View style={styles.actions}>
             {filters && (
               <>

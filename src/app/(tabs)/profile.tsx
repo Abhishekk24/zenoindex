@@ -2,6 +2,7 @@
  * Account, linked wallets, eligibility and security (design: Profile mockups;
  * web: /profile, auth-profile-panel.tsx). Pull down to refresh.
  */
+import { router } from 'expo-router';
 import React, { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -40,7 +41,7 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.root}>
-      <AppHeader title="Profile" />
+      <AppHeader title="Profile" onEdit={() => router.push('/edit-profile')} />
       <View style={styles.tabs}>
         <UnderlineTabs options={TABS} value={tab} onChange={setTab} />
       </View>

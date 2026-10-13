@@ -5,8 +5,8 @@
  * funds itself.
  */
 import { router } from 'expo-router';
-import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import { encodeFunctionData, erc20Abi, parseUnits, type Hex } from 'viem';
 import { useAccount } from '@reown/appkit-react-native';
 import { useChainId, useSendTransaction, useSwitchChain } from 'wagmi';
@@ -32,7 +32,7 @@ import {
   shortAddress,
 } from '../lib/format';
 import type { Dtf, Operation, TradePreview, TxDraft } from '../lib/types';
-import { withWalletOpen } from '../lib/walletLink';
+import { openConnectedWallet, withWalletOpen } from '../lib/walletLink';
 import { colors, fonts, space, type } from '../theme/tokens';
 import {
   Badge,
@@ -62,6 +62,21 @@ type Step =
 
 /** How long to wait for a signature, from the wallet or seen on-chain. */
 const WALLET_TIMEOUT_MS = 5 * 60_000;
+
+/**
+ * While a signature is pending, ask whether the user is still on it once they
+ * are back in Zeno, or after this long if the wallet never took them away.
+ */
+const WALLET_PROMPT_AFTER_MS = 15_000;
+
+/** The user stopped waiting for a wallet request (Cancel). */
+class WalletWaitCancelled extends Error {
+  constructor() {
+    super(
+      'Cancelled. If you already signed in your wallet, check its activity before trying again so you don’t pay twice.',
+    );
+  }
+}
 
 /** Where each step sits in the checklist (broadcast is part of signing). */
 const STEP_RANK: Record<Step, number> = {
@@ -105,6 +120,10 @@ export function TradePanel({
   const [busy, setBusy] = useState(false);
   const [step, setStep] = useState<Step>('idle');
   const [operation, setOperation] = useState<Operation>();
+  // A wallet request is pending; `walletPrompt` shows Open wallet / Cancel.
+  const pendingWallet = useRef<{ cancel: () => void } | null>(null);
+  const [awaitingWallet, setAwaitingWallet] = useState(false);
+  const [walletPrompt, setWalletPrompt] = useState(false);
   /** Redeem only: which of its several transactions is being signed. */
   const [leg, setLeg] = useState(0);
   const [details, setDetails] = useState(false);
@@ -200,6 +219,59 @@ export function TradePanel({
   }
 
   /**
+   * Waits for a wallet request (and its on-chain watch) unless the user taps
+   * Cancel first. Cancel stops waiting here only: a request already in the
+   * wallet stays there, hence the "check before trying again" message.
+   */
+  function untilWalletAnswers<T>(work: Promise<T>): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const pending = {
+        cancel: () => {
+          finish();
+          reject(new WalletWaitCancelled());
+        },
+      };
+      const finish = () => {
+        if (pendingWallet.current !== pending) return;
+        pendingWallet.current = null;
+        setAwaitingWallet(false);
+        setWalletPrompt(false);
+      };
+      pendingWallet.current = pending;
+      setAwaitingWallet(true);
+      work.then(
+        value => {
+          finish();
+          resolve(value);
+        },
+        e => {
+          finish();
+          reject(e);
+        },
+      );
+    });
+  }
+
+  // Coming back to Zeno (or a long wait) without an answer: offer a way out
+  // instead of an endless spinner.
+  useEffect(() => {
+    if (!awaitingWallet) return;
+    let wasAway = AppState.currentState !== 'active';
+    const timer = setTimeout(
+      () => setWalletPrompt(true),
+      WALLET_PROMPT_AFTER_MS,
+    );
+    const sub = AppState.addEventListener('change', state => {
+      if (state !== 'active') wasAway = true;
+      else if (wasAway) setWalletPrompt(true);
+    });
+    return () => {
+      clearTimeout(timer);
+      sub.remove();
+    };
+  }, [awaitingWallet]);
+
+  /**
    * The invest draft calls the vault's `deposit`, which pulls USDG via
    * transferFrom — so the vault needs an ERC-20 allowance first.
    *
@@ -217,30 +289,34 @@ export function TradePanel({
     });
     const watch = new AbortController();
     try {
-      await Promise.race([
-        withWalletOpen(() =>
-          sendTransactionAsync({
-            account: signer as Hex,
-            chainId: dtf.chainId,
-            to: dtf.baseAssetId as Hex,
-            data,
-            value: 0n,
+      await untilWalletAnswers(
+        Promise.race([
+          withWalletOpen(() =>
+            sendTransactionAsync({
+              account: signer as Hex,
+              chainId: dtf.chainId,
+              to: dtf.baseAssetId as Hex,
+              data,
+              value: 0n,
+            }),
+          ).then(async txHash => {
+            const receipt = await waitForReceipt(dtf.chainId, txHash);
+            if (receipt.status !== 'success') {
+              throw new Error(
+                'The spend approval transaction failed on-chain.',
+              );
+            }
           }),
-        ).then(async txHash => {
-          const receipt = await waitForReceipt(dtf.chainId, txHash);
-          if (receipt.status !== 'success') {
-            throw new Error('The spend approval transaction failed on-chain.');
-          }
-        }),
-        pollUntil(
-          async () => ((await allowance()) >= amountRaw ? true : null),
-          {
-            signal: watch.signal,
-            timeoutMs: WALLET_TIMEOUT_MS,
-            timeout: 'No answer from your wallet for the spend approval.',
-          },
-        ),
-      ]);
+          pollUntil(
+            async () => ((await allowance()) >= amountRaw ? true : null),
+            {
+              signal: watch.signal,
+              timeoutMs: WALLET_TIMEOUT_MS,
+              timeout: 'No answer from your wallet for the spend approval.',
+            },
+          ),
+        ]),
+      );
     } finally {
       watch.abort();
     }
@@ -259,26 +335,28 @@ export function TradePanel({
     const watch = new AbortController();
     let txHash: string;
     try {
-      txHash = await Promise.race([
-        withWalletOpen(() =>
-          sendTransactionAsync({
-            account: signer as Hex,
-            chainId,
-            to: to as Hex,
-            data: draft.transaction.data,
-            value: BigInt(draft.transaction.value || '0'),
-            ...(draft.transaction.gas
-              ? { gas: BigInt(draft.transaction.gas) }
-              : {}),
+      txHash = await untilWalletAnswers(
+        Promise.race([
+          withWalletOpen(() =>
+            sendTransactionAsync({
+              account: signer as Hex,
+              chainId,
+              to: to as Hex,
+              data: draft.transaction.data,
+              value: BigInt(draft.transaction.value || '0'),
+              ...(draft.transaction.gas
+                ? { gas: BigInt(draft.transaction.gas) }
+                : {}),
+            }),
+          ),
+          pollUntil(() => findVaultTx(chainId, to, signer!, fromBlock), {
+            signal: watch.signal,
+            timeoutMs: WALLET_TIMEOUT_MS,
+            timeout:
+              'No answer from your wallet. If you signed, check your wallet’s activity before trying again so you don’t pay twice.',
           }),
-        ),
-        pollUntil(() => findVaultTx(chainId, to, signer!, fromBlock), {
-          signal: watch.signal,
-          timeoutMs: WALLET_TIMEOUT_MS,
-          timeout:
-            'No answer from your wallet. If you signed, check your wallet’s activity before trying again so you don’t pay twice.',
-        }),
-      ]);
+        ]),
+      );
     } finally {
       watch.abort();
     }
@@ -560,6 +638,25 @@ export function TradePanel({
           <TradeProgress steps={progress} />
         </View>
       )}
+
+      {walletPrompt ? (
+        <View style={{ gap: space.sm }} accessibilityLiveRegion="polite">
+          <Label accent>Waiting for your wallet</Label>
+          <Body muted>
+            Approve the request in your wallet to continue, or cancel it here.
+          </Body>
+          <Button
+            label="Open wallet"
+            variant="outline"
+            onPress={() => void openConnectedWallet()}
+          />
+          <Button
+            label="Cancel"
+            variant="ghost"
+            onPress={() => pendingWallet.current?.cancel()}
+          />
+        </View>
+      ) : null}
 
       {step === 'done' && operation && (
         <View style={{ gap: space.sm }}>
