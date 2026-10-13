@@ -33,9 +33,12 @@ const robinhoodNetwork = {
   caipNetworkId,
 };
 
-// Ethereum mainnet is the default network, as in IMPACTMAX: email (embedded)
-// wallets connect on a network they support out of the box. Sign-in is a
-// plain signature (no network switch); trades switch to Robinhood themselves.
+// Ethereum is the default network. On React Native the email wallet is Reown's
+// web wallet (web-wallet.walletconnect.org), whose built-in chain list has no
+// Robinhood Chain: a session with 4663 as default can't even sign in. Sign-in
+// is a chain-agnostic signature, so it runs on Ethereum; trades switch to
+// Robinhood, which only external wallets can do (see TradePanel).
+// shortcut: email wallets can't trade until Reown's web wallet lists chain 4663, or we move to an embedded wallet that takes custom chains.
 const ethereumNetwork = {
   ...mainnet,
   chainNamespace: 'eip155' as const,
