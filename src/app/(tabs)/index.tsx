@@ -24,11 +24,39 @@ import {
 import { useLoad } from '../../hooks/useLoad';
 import * as api from '../../lib/api';
 import { assetMap, isPermissioned, strategyOf } from '../../lib/basket';
+import { compare } from '../../lib/decimal';
+import type { Dtf } from '../../lib/types';
 import { humanize, shortAddress } from '../../lib/format';
 import { colors, fonts, space } from '../../theme/tokens';
 
 type Access = 'all' | 'open' | 'permissioned';
 type Panel = 'strategy' | 'manager' | null;
+type Sort = 'listed' | 'aum' | 'nav' | 'fee' | 'name';
+
+const SORTS: { value: Sort; label: string }[] = [
+  { value: 'listed', label: 'Listed' },
+  { value: 'aum', label: 'Largest AUM' },
+  { value: 'nav', label: 'NAV / share' },
+  { value: 'fee', label: 'Lowest fee' },
+  { value: 'name', label: 'Name' },
+];
+
+/** Orders baskets for the chosen sort; 'listed' keeps the API's order. */
+function sortBaskets(dtfs: Dtf[], sort: Sort): Dtf[] {
+  if (sort === 'listed') return dtfs;
+  return [...dtfs].sort((a, b) => {
+    switch (sort) {
+      case 'aum':
+        return compare(b.aum, a.aum);
+      case 'nav':
+        return compare(b.sharePrice, a.sharePrice);
+      case 'fee':
+        return a.fees.managementBps - b.fees.managementBps;
+      default:
+        return a.name.localeCompare(b.name);
+    }
+  });
+}
 
 const ACCESS = [
   { value: 'all', label: 'All' },
@@ -53,6 +81,7 @@ export default function ExploreScreen() {
   const [manager, setManager] = useState<string>();
   const [strategy, setStrategy] = useState<string>();
   const [panel, setPanel] = useState<Panel>(asPanel(params.panel));
+  const [sort, setSort] = useState<Sort>('listed');
 
   // Arriving from another screen's filter button: open that panel. Tracked
   // during render (not in an effect) so it applies on the same frame.
@@ -75,7 +104,7 @@ export default function ExploreScreen() {
   );
 
   const visible = useMemo(() => {
-    return dtfs.filter(dtf => {
+    const shown = dtfs.filter(dtf => {
       const permissioned = isPermissioned(dtf, assets);
       if (access === 'open' && permissioned) return false;
       if (access === 'permissioned' && !permissioned) return false;
@@ -83,7 +112,8 @@ export default function ExploreScreen() {
       if (strategy && strategyOf(dtf) !== strategy) return false;
       return true;
     });
-  }, [dtfs, assets, access, manager, strategy]);
+    return sortBaskets(shown, sort);
+  }, [dtfs, assets, access, manager, strategy, sort]);
 
   const filtered = Boolean(manager || strategy);
   const clear = () => {
@@ -132,6 +162,16 @@ export default function ExploreScreen() {
           ))}
         </ChipRow>
       )}
+      <ChipRow>
+        {SORTS.map(s => (
+          <Chip
+            key={s.value}
+            label={s.label}
+            selected={sort === s.value}
+            onPress={() => setSort(s.value)}
+          />
+        ))}
+      </ChipRow>
       {filtered && (
         <Pressable
           onPress={clear}

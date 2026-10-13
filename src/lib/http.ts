@@ -60,6 +60,13 @@ export async function clearSession(): Promise<void> {
   await saveSession(null);
 }
 
+let onSessionExpired: (() => void) | undefined;
+
+/** Called when a signed-in request gets a 401 (expired or revoked session); the session provider signs the user out. */
+export function setSessionExpiredHandler(handler: () => void): void {
+  onSessionExpired = handler;
+}
+
 /** True when a session cookie is already held (skips the SecureStore read after boot). */
 export function hasSession(): boolean {
   return Boolean(sessionCookie);
@@ -177,7 +184,11 @@ async function request<T>(path: string, init: ApiRequest = {}): Promise<T> {
       message?: string;
       retryable?: boolean;
     };
-    if (response.status === 401) await saveSession(null);
+    if (response.status === 401) {
+      await saveSession(null);
+      // Only a request that carried a session can mean "it expired" (not e.g. a rejected sign-in signature).
+      if (cookie) onSessionExpired?.();
+    }
     throw new ApiError(
       error.status ?? response.status,
       error.code ?? 'request_failed',

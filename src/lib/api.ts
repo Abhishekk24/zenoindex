@@ -12,7 +12,7 @@ import {
   toUser,
   toWalletPortfolio,
 } from './adapters';
-import { add, div, fromRaw, mul, mulBps, sub } from './decimal';
+import { add, compare, div, fromRaw, mul, mulBps, sub } from './decimal';
 import { robinhood } from '../config/chains';
 import { ApiError, api, clearSession, setSessionToken } from './http';
 import type {
@@ -401,18 +401,60 @@ export async function getPortfolio(
 
   // Cost basis and activity come from the wallet's indexed transactions.
   const activity = await walletActivity(wallet, dtfs);
-  const costBasis: Record<string, string> = {};
-  for (const tx of activity) {
-    if (tx.action !== 'invest' || !tx.amountRaw) continue;
+  const costBasis = costBasisOf(activity, dtfs, portfolio.positions);
+  return { portfolio, costBasis, activity, source };
+}
+
+/**
+ * What the wallet paid for the shares it still holds, per basket (average
+ * cost). Invests add their cost and shares; a redeem removes the same
+ * fraction of the cost as of the shares it burned. If redeems are missing
+ * from the indexed history, the cost is scaled down to the shares actually
+ * held, so a sold position never counts against the current one.
+ */
+export function costBasisOf(
+  activity: readonly WalletTransaction[],
+  dtfs: readonly Dtf[],
+  positions: WalletPortfolio['positions'],
+): Record<string, string> {
+  const tracked = new Map<string, { cost: string; shares: string | null }>();
+  const oldestFirst = [...activity]
+    .filter(tx => tx.status === 'confirmed')
+    .sort((a, b) => Date.parse(a.occurredAt) - Date.parse(b.occurredAt));
+
+  for (const tx of oldestFirst) {
     const dtf = dtfs.find(d => d.id === tx.dtfId);
     if (!dtf) continue;
-    const paid = fromRaw(tx.amountRaw, dtf.baseAssetDecimals);
-    costBasis[tx.dtfId] = costBasis[tx.dtfId]
-      ? add(costBasis[tx.dtfId]!, paid)
-      : paid;
+    const t = tracked.get(tx.dtfId) ?? { cost: '0', shares: '0' };
+    const moved = tx.shareAmountRaw
+      ? fromRaw(tx.shareAmountRaw, dtf.shareDecimals)
+      : null;
+    if (tx.action === 'invest') {
+      if (!tx.amountRaw) continue;
+      t.cost = add(t.cost, fromRaw(tx.amountRaw, dtf.baseAssetDecimals));
+      // Without the minted amount the share count is unknown from here on.
+      t.shares = moved && t.shares !== null ? add(t.shares, moved) : null;
+    } else if (moved && t.shares !== null && compare(t.shares, '0') > 0) {
+      const burned = compare(moved, t.shares) > 0 ? t.shares : moved;
+      t.cost = sub(t.cost, mul(t.cost, div(burned, t.shares)));
+      t.shares = sub(t.shares, burned);
+    }
+    tracked.set(tx.dtfId, t);
   }
 
-  return { portfolio, costBasis, activity, source };
+  const result: Record<string, string> = {};
+  for (const [dtfId, t] of tracked) {
+    const dtf = dtfs.find(d => d.id === dtfId)!;
+    const position = positions.find(p => p.dtfId === dtfId);
+    if (!position) continue;
+    const held = fromRaw(position.shares, dtf.shareDecimals);
+    let cost = t.cost;
+    if (t.shares !== null && compare(held, t.shares) < 0) {
+      cost = compare(t.shares, '0') > 0 ? mul(cost, div(held, t.shares)) : '0';
+    }
+    if (compare(cost, '0') > 0) result[dtfId] = cost;
+  }
+  return result;
 }
 
 /** Fetch each DTF's transactions and keep the wallet's, newest first. */

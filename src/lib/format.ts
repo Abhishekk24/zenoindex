@@ -91,6 +91,17 @@ export function formatDate(iso: string): string {
   } ${date.getUTCFullYear()}`;
 }
 
+/** ISO timestamp -> "just now", "5 min ago", "3 h ago", or the date. */
+export function formatAgo(iso: string, now = Date.now()): string {
+  const time = new Date(iso).getTime();
+  if (Number.isNaN(time)) return '—';
+  const minutes = Math.floor((now - time) / 60_000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 24 * 60) return `${Math.floor(minutes / 60)} h ago`;
+  return formatDate(iso);
+}
+
 /** "market-cap-weighted" -> "Market cap weighted". */
 export function humanize(value: string): string {
   const text = value.replace(/[-_]/g, ' ');

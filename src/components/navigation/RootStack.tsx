@@ -4,7 +4,8 @@
  *   signedOut → sign-in (email code or wallet)
  *   terms     → terms
  *   profile   → complete-profile
- *   ready     → (tabs): Explore · Portfolio · Profile, search, basket/[id]
+ *   ready     → (tabs): Explore · Portfolio · Profile, search, basket/[id],
+ *               position/[id]
  *
  * legal/[doc] and wc-return are open at every stage.
  */
@@ -55,6 +56,10 @@ export function RootStack() {
         />
         <Stack.Screen
           name="basket/[id]"
+          options={{ title: '', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="position/[id]"
           options={{ title: '', headerBackTitle: 'Back' }}
         />
       </Stack.Protected>

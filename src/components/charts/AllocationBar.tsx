@@ -10,10 +10,15 @@ export type Slice = {
   label: string;
   detail?: string;
   bps: number;
+  /** Current on-chain weight, shown beside the target when known. */
+  actualBps?: number | null;
 };
 
 /** A stacked bar of weights with a legend underneath. */
 export function AllocationBar({ slices }: { slices: Slice[] }) {
+  const showActual = slices.some(
+    s => s.actualBps !== undefined && s.actualBps !== null,
+  );
   return (
     <View style={styles.wrap}>
       <View style={styles.bar}>
@@ -27,6 +32,13 @@ export function AllocationBar({ slices }: { slices: Slice[] }) {
           />
         ))}
       </View>
+      {showActual ? (
+        <View style={styles.legendRow}>
+          <Text style={[styles.head, styles.fill]}>Asset</Text>
+          <Text style={[styles.head, styles.col]}>Target</Text>
+          <Text style={[styles.head, styles.col]}>Actual</Text>
+        </View>
+      ) : null}
       {slices.map((slice, i) => (
         <View key={slice.key} style={styles.legendRow}>
           <View
@@ -41,7 +53,16 @@ export function AllocationBar({ slices }: { slices: Slice[] }) {
               <Text style={styles.detail}> {slice.detail}</Text>
             ) : null}
           </Text>
-          <Mono size={12}>{formatBps(slice.bps)}</Mono>
+          <View style={showActual && styles.col}>
+            <Mono size={12}>{formatBps(slice.bps)}</Mono>
+          </View>
+          {showActual ? (
+            <View style={styles.col}>
+              <Mono size={12} color={colors.muted}>
+                {formatBps(slice.actualBps)}
+              </Mono>
+            </View>
+          ) : null}
         </View>
       ))}
     </View>
@@ -61,4 +82,7 @@ const styles = StyleSheet.create({
   legendLabel: { ...type.small, color: colors.text, flex: 1 },
   detail: { color: colors.muted },
   swatch: { width: 10, height: 10, borderRadius: 3 },
+  head: { ...type.label, color: colors.dim },
+  fill: { flex: 1 },
+  col: { width: 58, alignItems: 'flex-end', textAlign: 'right' },
 });

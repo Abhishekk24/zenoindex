@@ -1,15 +1,24 @@
 /** One basket: stats, NAV chart, allocation, fees, holdings, activity, trade (web: /dtfs/[id]). */
 import { useLocalSearchParams } from 'expo-router';
-import React from 'react';
+import React, { useState } from 'react';
 
 import { BasketActivity } from '../../components/basket/BasketActivity';
+import { BasketCorporateActions } from '../../components/basket/BasketCorporateActions';
 import { BasketHeader } from '../../components/basket/BasketHeader';
 import { BasketHoldings } from '../../components/basket/BasketHoldings';
+import { BasketPosition } from '../../components/basket/BasketPosition';
 import { BasketStats } from '../../components/basket/BasketStats';
 import { AllocationBar } from '../../components/charts/AllocationBar';
 import { NavChart } from '../../components/charts/NavChart';
 import { TradePanel } from '../../components/TradePanel';
-import { Card, Empty, LoadState, Row, Screen } from '../../components/ui';
+import {
+  Card,
+  Empty,
+  LinkText,
+  LoadState,
+  Row,
+  Screen,
+} from '../../components/ui';
 import { useLoad } from '../../hooks/useLoad';
 import { useUser } from '../../hooks/useUser';
 import * as api from '../../lib/api';
@@ -20,12 +29,14 @@ import {
   strategyOf,
   symbolOf,
 } from '../../lib/basket';
+import { chainName, explorerAddressUrl } from '../../lib/chain';
 import {
   formatBps,
   formatDecimal,
   humanize,
   shortAddress,
 } from '../../lib/format';
+import { primaryWallet } from '../../lib/user';
 
 export default function BasketDetailScreen() {
   const params = useLocalSearchParams<{ id: string; side?: string }>();
@@ -36,11 +47,7 @@ export default function BasketDetailScreen() {
       ? params.side
       : undefined;
   const user = useUser();
-  const wallet =
-    user.wallets.find(w => w.primary)?.address ??
-    user.walletAddress ??
-    user.wallets[0]?.address ??
-    null;
+  const wallet = primaryWallet(user);
   const { data, error, loading, reload } = useLoad(
     async () => {
       const [dtf, assets, eligibility] = await Promise.all([
@@ -52,11 +59,21 @@ export default function BasketDetailScreen() {
     },
     `${id}#${wallet ?? 'none'}`,
   );
+  // Bumped on refresh and after a trade so the position re-reads the chain.
+  const [version, setVersion] = useState(0);
+  const refresh = () => {
+    setVersion(v => v + 1);
+    reload();
+  };
 
   if (!data) return <LoadState error={error} onRetry={reload} />;
   const { dtf, assets, eligibility } = data;
   const permissioned = isPermissioned(dtf, assets);
   const baseSymbol = symbolOf(dtf.baseAssetId, assets);
+  // Actual weights come from the indexed holdings, when available.
+  const actual = new Map(
+    dtf.holdings.map(h => [h.assetId.toLowerCase(), h.actualWeightBps]),
+  );
 
   const notice =
     user.wallets.length === 0
@@ -66,9 +83,12 @@ export default function BasketDetailScreen() {
         : undefined;
 
   return (
-    <Screen onRefresh={reload} refreshing={loading}>
+    <Screen onRefresh={refresh} refreshing={loading}>
       <BasketHeader dtf={dtf} permissioned={permissioned} />
       <BasketStats dtf={dtf} baseSymbol={baseSymbol} />
+      {wallet ? (
+        <BasketPosition dtf={dtf} wallet={wallet} version={version} />
+      ) : null}
 
       <Card title="NAV performance">
         {dtf.readModels.performance === 'unavailable' ? (
@@ -88,6 +108,7 @@ export default function BasketDetailScreen() {
             label: symbolOf(w.assetId, assets),
             detail: assets.get(w.assetId)?.name,
             bps: w.weightBps,
+            actualBps: actual.get(w.assetId.toLowerCase()) ?? undefined,
           }))}
         />
       </Card>
@@ -97,7 +118,8 @@ export default function BasketDetailScreen() {
         baseSymbol={baseSymbol}
         initialSide={side}
         notice={notice}
-        onConfirmed={reload}
+        priceStale={dtf.priceStale}
+        onConfirmed={refresh}
         disabledReason={
           isComingSoon(dtf)
             ? 'This basket opens for investment once the manager publishes it.'
@@ -132,12 +154,26 @@ export default function BasketDetailScreen() {
           />
         ) : null}
         <Row label="Base asset" value={baseSymbol} />
+        <Row label="Network" value={chainName(dtf.chainId)} mono={false} />
+        {dtf.priceSource ? (
+          <Row label="Price source" value={dtf.priceSource} mono={false} />
+        ) : null}
         {dtf.contractAddress ? (
-          <Row label="Contract" value={shortAddress(dtf.contractAddress)} />
+          <Row
+            label="Contract"
+            value={
+              <LinkText
+                mono
+                label={shortAddress(dtf.contractAddress)}
+                url={explorerAddressUrl(dtf.chainId, dtf.contractAddress)}
+              />
+            }
+          />
         ) : null}
       </Card>
 
       <BasketHoldings dtf={dtf} assets={assets} />
+      <BasketCorporateActions dtf={dtf} assets={assets} />
       <BasketActivity dtf={dtf} assets={assets} />
     </Screen>
   );
