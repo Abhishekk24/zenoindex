@@ -1,0 +1,895 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Zeno Investor Fields</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a reference sheet. Each screen is a row: phone mockup on the left, its field checklist on the right. */
+:root {
+  --bg: #f3f2ee; --panel: #ffffff; --fg: #1c1d1b; --muted: #676a64; --line: #dcdad3;
+  --accent: #8a6f2a;
+  --ok: #1f7a4f; --ok-bg: #e3f2ea;
+  --pend: #94600c; --pend-bg: #fbf0d9;
+  --new: #c2412f; --new-bg: #fbe5e1;
+  --f-body: "IBM Plex Sans", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --f-app: "Space Grotesk", system-ui, sans-serif;
+  /* the app is dark-only, so the phone palette is fixed */
+  --a-bg: #050706; --a-s1: #0c0f0e; --a-s2: #141817; --a-line: rgba(255,255,255,.08); --a-line2: rgba(255,255,255,.16);
+  --a-text: #f4f5f2; --a-text2: #d7dbd8; --a-muted: #a3aaa5; --a-dim: #7d847f;
+  --a-gold: #cdb679; --a-gold-soft: rgba(205,182,121,.12); --a-green: #5cc796; --a-green-soft: rgba(92,199,150,.1);
+  --a-green-line: rgba(92,199,150,.35); --a-pgreen: #2f7d58; --a-red: #e5484d; --a-danger: #f0a0a0;
+  --mark-new: #ff7a66; --mark-pend: #f2b544;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #121311; --panel: #1a1b19; --fg: #ecebe6; --muted: #9b9d96; --line: #2d2e2b; --accent: #d4bb7c;
+  --ok: #6fd4a2; --ok-bg: rgba(111,212,162,.12); --pend: #f2bf5e; --pend-bg: rgba(242,191,94,.12);
+  --new: #ff8b78; --new-bg: rgba(255,139,120,.12); color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #121311; --panel: #1a1b19; --fg: #ecebe6; --muted: #9b9d96; --line: #2d2e2b; --accent: #d4bb7c;
+  --ok: #6fd4a2; --ok-bg: rgba(111,212,162,.12); --pend: #f2bf5e; --pend-bg: rgba(242,191,94,.12);
+  --new: #ff8b78; --new-bg: rgba(255,139,120,.12); color-scheme: dark; }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font: 15px/1.55 var(--f-body); }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 40px 20px 80px; }
+h1, h2, h3 { text-wrap: balance; margin: 0; }
+h1 { font: 600 34px/1.15 var(--f-body); letter-spacing: -.01em; }
+.lede { color: var(--muted); max-width: 68ch; margin: 12px 0 0; }
+.eyebrow { font: 500 11px/1 var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+.legend { display: flex; flex-wrap: wrap; gap: 10px 22px; margin-top: 22px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 8px; }
+.sw { width: 26px; height: 16px; border-radius: 4px; display: inline-block; }
+.sw.ok { background: var(--ok-bg); border: 1px solid var(--ok); }
+.sw.pend { border: 1.5px dashed var(--mark-pend); }
+.sw.new { border: 1.5px dashed var(--mark-new); }
+
+.totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-top: 28px; }
+.total { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+.total b { display: block; font: 600 28px/1.1 var(--f-mono); font-variant-numeric: tabular-nums; }
+.total small { color: var(--muted); font-size: 13px; }
+.total.ok b { color: var(--ok); } .total.pend b { color: var(--pend); } .total.new b { color: var(--new); }
+
+.toolbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding: 14px 0; margin-top: 28px; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.toolbar label { font-size: 13px; color: var(--muted); margin-right: 4px; }
+.fbtn { font: 500 13px var(--f-body); background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; cursor: pointer; }
+.fbtn[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.fbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.toc { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: 13px; }
+.toc a { color: var(--muted); text-decoration: none; } .toc a:hover { color: var(--accent); }
+
+.group-h { margin-top: 56px; padding-bottom: 10px; border-bottom: 2px solid var(--fg); display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.group-h h2 { font: 600 22px var(--f-body); }
+.group-h p { margin: 0; color: var(--muted); font-size: 13px; }
+
+.screen { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 32px; padding: 32px 0; border-bottom: 1px solid var(--line); align-items: start; }
+.screen.nophone { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 860px) { .screen { grid-template-columns: minmax(0, 1fr); } .phone { margin: 0 auto; } }
+.meta h3 { font: 600 19px var(--f-body); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.route { font: 400 12px var(--f-mono); color: var(--muted); }
+.pill { font: 500 11px/1 var(--f-mono); padding: 4px 8px; border-radius: 4px; letter-spacing: .04em; white-space: nowrap; }
+.pill.ok { color: var(--ok); background: var(--ok-bg); } .pill.pend { color: var(--pend); background: var(--pend-bg); } .pill.new { color: var(--new); background: var(--new-bg); }
+.meta p.note { color: var(--muted); font-size: 14px; margin: 8px 0 0; max-width: 70ch; }
+.tbl-wrap { overflow-x: auto; margin-top: 16px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; font: 500 11px var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding: 8px 10px; border-bottom: 1px solid var(--line); }
+td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+td.f { font-weight: 500; }
+td.src { font: 12px var(--f-mono); color: var(--muted); word-break: break-word; }
+td.ex { font: 13px var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.n { color: var(--muted); font-size: 13px; }
+tr[hidden] { display: none; }
+
+/* ---------- phone ---------- */
+.phone { width: 340px; max-width: 100%; background: var(--a-bg); border: 9px solid #222624; border-radius: 40px; overflow: hidden; font-family: var(--f-app); color: var(--a-text); box-shadow: 0 1px 0 #3a3f3c inset, 0 18px 40px -20px rgba(0,0,0,.45); position: relative; }
+.cap { font: 500 11px var(--f-mono); color: var(--muted); text-align: center; margin-top: 10px; }
+.sb { display: flex; justify-content: space-between; padding: 12px 22px 4px; font-size: 12px; font-weight: 600; color: var(--a-text); }
+.ah { display: flex; align-items: center; gap: 10px; padding: 10px 16px 0; }
+.logo { width: 26px; height: 26px; border-radius: 7px; background: var(--a-gold); color: #17140c; font-weight: 700; font-size: 14px; display: grid; place-items: center; }
+.ah .t { flex: 1; font-size: 19px; font-weight: 500; }
+.ib { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--a-line2); display: grid; place-items: center; color: var(--a-muted); font-size: 13px; }
+.ib.on { border-color: var(--a-gold); color: var(--a-gold); }
+.back { padding: 10px 16px 0; color: var(--a-muted); font-size: 14px; }
+.pc { padding: 14px 14px 18px; display: flex; flex-direction: column; gap: 14px; }
+.utabs { display: flex; gap: 18px; border-bottom: 1px solid var(--a-line); padding: 0 4px; font-size: 13px; color: var(--a-muted); overflow: hidden; white-space: nowrap; }
+.utabs span { padding-bottom: 9px; }
+.utabs .on { color: var(--a-text); border-bottom: 2px solid var(--a-gold); }
+.card { background: var(--a-s1); border: 1px solid var(--a-line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px; position: relative; }
+.card.band { border-top: 2px solid var(--a-gold); }
+.ct { font-size: 15px; font-weight: 500; }
+.lbl { font-size: 10px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--a-muted); }
+.row { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 13px; }
+.row .k { color: var(--a-muted); } .row .v { font-family: var(--f-mono); font-size: 12px; color: var(--a-text); text-align: right; }
+.mono { font-family: var(--f-mono); }
+.muted { color: var(--a-muted); } .dim { color: var(--a-dim); } .gold { color: var(--a-gold); } .up { color: var(--a-green); } .down { color: var(--a-red); }
+.small { font-size: 12px; }
+.badge { display: inline-block; font-size: 11px; border: 1px solid var(--a-line2); border-radius: 6px; padding: 2px 8px; color: var(--a-text2); }
+.badge.g { color: var(--a-green); border-color: var(--a-green-line); background: var(--a-green-soft); }
+.badge.y { color: var(--a-gold); border-color: rgba(205,182,121,.32); background: var(--a-gold-soft); }
+.badge.r { color: var(--a-red); border-color: rgba(229,72,77,.4); }
+.btn { text-align: center; padding: 12px; border-radius: 10px; font-size: 14px; font-weight: 500; background: var(--a-gold); color: #17140c; }
+.btn.o { background: transparent; border: 1px solid var(--a-line2); color: var(--a-text); }
+.btn.g { background: var(--a-pgreen); color: var(--a-text); }
+.sbtn { padding: 7px 14px; border-radius: 8px; font-size: 12px; border: 1px solid var(--a-line2); }
+.sbtn.p { background: var(--a-pgreen); border-color: var(--a-pgreen); }
+.field { border-bottom: 1px solid var(--a-line2); padding: 8px 2px; display: flex; justify-content: space-between; font-size: 15px; }
+.seg { display: flex; background: var(--a-s2); border-radius: 10px; padding: 3px; font-size: 13px; }
+.seg span { flex: 1; text-align: center; padding: 7px; border-radius: 8px; color: var(--a-muted); }
+.seg .on { background: var(--a-s1); color: var(--a-text); border: 1px solid var(--a-line2); }
+.av { display: flex; } .av i { width: 26px; height: 26px; border-radius: 50%; background: var(--a-gold); color: #17140c; font: 600 9px var(--f-app); display: grid; place-items: center; border: 1.5px solid var(--a-s1); font-style: normal; }
+.av i + i { margin-left: -8px; }
+.stats3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; border-top: 1px solid var(--a-line); padding-top: 12px; }
+.stats3 .lbl { font-size: 9px; } .stats3 b { display: block; font-weight: 400; font-size: 14px; margin-top: 4px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 10px; }
+.grid2 b { display: block; font: 400 18px var(--f-mono); margin-top: 4px; }
+.alloc { display: flex; height: 9px; gap: 2px; border-radius: 5px; overflow: hidden; }
+.leg { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.leg i { width: 9px; height: 9px; border-radius: 3px; }
+.leg span { flex: 1; } .leg em { font-style: normal; color: var(--a-muted); }
+.hr { height: 1px; background: var(--a-line); }
+.irow { padding: 13px 2px; border-bottom: 1px solid var(--a-line); display: flex; align-items: center; gap: 10px; }
+.irow > div { flex: 1; } .irow .k { font-size: 12px; color: var(--a-muted); } .irow .v { font-size: 14px; margin-top: 3px; }
+.tabbar { display: flex; justify-content: space-around; border-top: 1px solid var(--a-line); padding: 10px 0 16px; font-size: 11px; color: var(--a-dim); background: rgba(12,15,14,.9); }
+.tabbar .on { color: var(--a-gold); }
+.tabbar span::before { content: ""; display: block; width: 18px; height: 18px; margin: 0 auto 4px; border-radius: 5px; border: 1.5px solid currentColor; }
+.chip { font-size: 12px; border: 1px solid var(--a-line2); border-radius: 999px; padding: 5px 11px; color: var(--a-text2); white-space: nowrap; }
+.chip.on { border-color: var(--a-gold); color: var(--a-gold); }
+.chips { display: flex; gap: 6px; overflow: hidden; }
+.steps { display: flex; flex-direction: column; gap: 0; }
+.step { display: flex; gap: 12px; font-size: 13px; padding-bottom: 14px; position: relative; }
+.step i { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--a-line2); flex: none; margin-top: 1px; }
+.step.done i { background: var(--a-green); border-color: var(--a-green); }
+.step.now i { border-color: var(--a-gold); box-shadow: 0 0 0 3px var(--a-gold-soft); }
+.step:not(:last-child)::before { content: ""; position: absolute; left: 8.5px; top: 21px; bottom: 2px; width: 1px; background: var(--a-line2); }
+.toggle { width: 34px; height: 20px; border-radius: 10px; background: var(--a-pgreen); position: relative; flex: none; }
+.toggle::after { content: ""; position: absolute; right: 3px; top: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; }
+.toggle.off { background: var(--a-s2); border: 1px solid var(--a-line2); } .toggle.off::after { left: 3px; right: auto; background: var(--a-muted); }
+.stripes { position: absolute; inset: 0 0 auto auto; width: 60%; height: 80px; background: repeating-linear-gradient(115deg, rgba(205,182,121,.13) 0 2px, transparent 2px 9px); mask: linear-gradient(to bottom, #000, transparent); pointer-events: none; }
+svg.spark { display: block; width: 100%; }
+
+/* markers for fields that are missing or waiting on backend data */
+.N, .P { position: relative; outline-offset: 3px; border-radius: 6px; }
+.N { outline: 1.5px dashed var(--mark-new); }
+.P { outline: 1.5px dashed var(--mark-pend); }
+.N::after, .P::after { position: absolute; top: -8px; right: 2px; font: 600 8px/1 var(--f-mono); letter-spacing: .06em; padding: 2px 4px; border-radius: 3px; color: #111; z-index: 2; }
+.N::after { content: "NEW"; background: var(--mark-new); }
+.P::after { content: "DATA"; background: var(--mark-pend); }
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">ZenoIndex mobile · investor app · audited 13 Oct 2026</div>
+  <h1>Investor field reference</h1>
+  <p class="lede">Every field an investor should see, screen by screen, checked against what the Expo app in <code>zenoIndex-mobile-app/src</code> renders today. All numbers in the mockups are simulated. Dashed outlines on the phones mark what still needs work.</p>
+  <div class="legend">
+    <span><i class="sw ok"></i>Built: shown in the app today</span>
+    <span><i class="sw pend"></i>Waiting on data: UI exists, but the API returns "unavailable" or a stub, so the app shows an indexing or "—" state</span>
+    <span><i class="sw new"></i>Needs UI: not in the app yet</span>
+  </div>
+  <div class="totals" id="totals"></div>
+
+  <div class="toolbar" role="group" aria-label="Filter fields">
+    <label>Show fields:</label>
+    <button class="fbtn" data-f="all" aria-pressed="true">All</button>
+    <button class="fbtn" data-f="ok" aria-pressed="false">Built</button>
+    <button class="fbtn" data-f="pend" aria-pressed="false">Waiting on data</button>
+    <button class="fbtn" data-f="new" aria-pressed="false">Needs UI</button>
+  </div>
+  <nav class="toc" id="toc"></nav>
+
+  <!-- ================= ONBOARDING ================= -->
+  <div class="group-h"><h2>Onboarding</h2><p>Sign in, terms, profile</p></div>
+
+  <section class="screen" id="signin">
+    <div><div class="phone">
+      <div class="sb"><span>9:41</span><span>●●● 5G</span></div>
+      <div class="pc" style="padding-top:40px">
+        <div class="logo" style="width:40px;height:40px;font-size:20px">Z</div>
+        <div style="font-size:28px;font-weight:500">Sign in</div>
+        <div class="muted small">Use your email, Google or a wallet to continue.</div>
+        <div><div class="lbl">Email address</div><div class="field"><span>maya.chen@example.com</span></div></div>
+        <div class="btn">Send code</div>
+        <div class="card" style="padding:12px"><div class="lbl">6-digit code</div><div class="mono" style="font-size:22px;letter-spacing:.4em">48 2 9 _ _</div><div class="small muted">Resend in 0:42</div></div>
+        <div class="small N" style="color:var(--a-danger);padding:6px">This code expired. Send a new one. · 3 tries left</div>
+        <div class="lbl" style="text-align:center">or continue with</div>
+        <div class="btn o P">Continue with Google</div>
+        <div class="btn o">Connect wallet</div>
+        <div class="small dim" style="text-align:center">By continuing you agree to the <span class="gold">Terms</span> and <span class="gold">Privacy Policy</span></div>
+      </div>
+    </div><div class="cap">/sign-in</div></div>
+    <div class="meta" data-s="signin"></div>
+  </section>
+
+  <section class="screen" id="terms">
+    <div><div class="phone">
+      <div class="sb"><span>9:41</span><span>●●● 5G</span></div>
+      <div class="pc">
+        <div class="lbl gold">Step 1 of 2</div>
+        <div style="font-size:26px;font-weight:500">Review and accept</div>
+        <div class="card"><div class="row"><div><div>Terms of Service</div><div class="small muted">How Zeno baskets work, fees, risks</div></div><span class="gold small">Read</span></div></div>
+        <div class="card"><div class="row"><div><div>Privacy Policy</div><div class="small muted">What we store and why</div></div><span class="gold small">Read</span></div></div>
+        <div class="small"><span class="gold">☑</span> I accept the Terms of Service</div>
+        <div class="small"><span class="gold">☑</span> I accept the Privacy Policy</div>
+        <div class="btn">Accept and continue</div>
+        <div class="hr"></div>
+        <div class="lbl gold">Step 2 of 2</div>
+        <div><div class="lbl">First name</div><div class="field">Maya</div></div>
+        <div><div class="lbl">Last name</div><div class="field">Chen</div></div>
+        <div class="N"><div class="lbl">Country</div><div class="field"><span>🇸🇬 Singapore</span><span class="muted">▾</span></div></div>
+        <div class="btn">Save and continue</div>
+      </div>
+    </div><div class="cap">/terms → /complete-profile</div></div>
+    <div class="meta" data-s="terms"></div>
+  </section>
+
+  <!-- ================= DISCOVER ================= -->
+  <div class="group-h"><h2>Discover</h2><p>Explore tab, search</p></div>
+
+  <section class="screen" id="explore">
+    <div><div class="phone">
+      <div class="sb"><span>9:41</span><span>●●● 5G</span></div>
+      <div class="ah"><div class="logo">Z</div><div class="t">Explore baskets</div><div class="ib on">≡</div><div class="ib">◎</div><div class="ib">⌕</div></div>
+      <div class="pc">
+        <div class="utabs"><span class="on">All</span><span>Open</span><span>Permissioned</span></div>
+        <div class="chips"><span class="chip on">Market-cap weighted</span><span class="chip">Standard</span><span class="chip">Volatility</span></div>
+        <div class="chips N" style="padding:4px"><span class="chip">Sort: AUM ▾</span><span class="chip">Return</span><span class="chip">Newest</span><span class="chip">Fee</span></div>
+        <div class="card" style="overflow:hidden">
+          <div class="stripes"></div>
+          <div style="font-size:18px;font-weight:500">Magnificent 7 Index</div>
+          <div class="small muted">ZMAG7 · <span class="N" style="padding:0 3px">Zeno Capital ✓</span> <span class="dim">0x7a3f…c91e</span></div>
+          <div class="row" style="margin-top:8px">
+            <div class="av"><i>AA</i><i>MS</i><i>NV</i><i>GO</i><i>+3</i></div>
+            <span class="muted small" style="flex:1;margin-left:6px">7 constituents</span>
+            <span class="badge g">Active</span>
+          </div>
+          <div class="N" style="padding:4px"><svg class="spark" height="34" data-spark="1.0,1.01,1.0,1.02,1.03,1.025,1.04,1.05,1.06,1.055,1.07,1.084" data-c="#5cc796"></svg><div class="row small"><span class="muted">30d</span><span class="up mono">+3.18%</span></div></div>
+          <div class="stats3"><div><span class="lbl">NAV / share</span><b>1.0842</b></div><div><span class="lbl">AUM</span><b>248,310</b></div><div><span class="lbl">Mgmt fee</span><b>0.50%</b></div></div>
+        </div>
+        <div class="card">
+          <div style="font-size:18px;font-weight:500">US Treasury Yield</div>
+          <div class="small muted">ZTBL · 0x19be…0a42</div>
+          <div class="row" style="margin-top:8px"><div class="av"><i>US</i><i>BI</i></div><span class="muted small" style="flex:1;margin-left:6px">2 constituents</span><span class="badge">Coming soon</span></div>
+          <div class="stats3"><div><span class="lbl">NAV / share</span><b>1.0000</b></div><div><span class="lbl">AUM</span><b>0</b></div><div><span class="lbl">Mgmt fee</span><b>0.15%</b></div></div>
+        </div>
+      </div>
+      <div class="tabbar"><span class="on">Explore</span><span>Portfolio</span><span>Profile</span></div>
+    </div><div class="cap">/(tabs)/index</div></div>
+    <div class="meta" data-s="explore"></div>
+  </section>
+
+  <section class="screen" id="search">
+    <div><div class="phone">
+      <div class="sb"><span>9:41</span><span>●●● 5G</span></div>
+      <div class="ah"><div class="logo">Z</div><div class="t">Search</div></div>
+      <div class="pc">
+        <div class="field"><span>⌕ &nbsp;mag</span><span class="muted">✕</span></div>
+        <div class="card" style="padding:12px 14px;gap:4px"><div class="row"><span style="font-size:15px">Magnificent 7 Index</span><span class="N mono small" style="padding:0 3px">1.0842 <span class="up">+0.62%</span></span></div><div class="small muted">ZMAG7 · 0x7a3f…c91e</div></div>
+        <div class="card" style="padding:12px 14px;gap:4px"><div class="row"><span style="font-size:15px">Magnetar Energy</span><span class="N mono small" style="padding:0 3px">0.9731 <span class="down">−1.10%</span></span></div><div class="small muted">ZMAG · Helio Partners</div></div>
+        <div class="N" style="padding:6px"><div class="lbl">Recent searches</div><div class="chips" style="margin-top:8px"><span class="chip">treasury</span><span class="chip">AI</span><span class="chip">NVDA</span></div></div>
+      </div>
+    </div><div class="cap">/search</div></div>
+    <div class="meta" data-s="search"></div>
+  </section>
+
+  <!-- ================= BASKET ================= -->
+  <div class="group-h"><h2>Basket detail</h2><p>One long scroll, shown in three parts</p></div>
+
+  <section class="screen" id="basket1">
+    <div><div class="phone">
+      <div class="sb"><span>9:41</span><span>●●● 5G</span></div>
+      <div class="back">‹ Explore</div>
+      <div class="pc">
+        <div style="display:flex;flex-direction:column;gap:8px;position:relative">
+          <div class="stripes" style="width:100%;height:110px"></div>
+          <div style="display:flex;gap:6px"><span class="badge g">Active</span><span class="badge">Open</span></div>
+          <div style="font-size:26px;font-weight:500;line-height:1.15">Magnificent 7 Index</div>
+          <div class="mono gold">ZMAG7</div>
+          <div class="row" style="justify-content:flex-start"><span class="lbl">Manager</span><span class="mono small">0x7a3f…c91e</span></div>
+          <div class="small muted N" style="padding:4px">Equal-weight basket of the seven largest US tech stocks, tokenized on Robinhood Chain. Rebalances when any weight drifts more than 2%.</div>
+          <div class="small dim N" style="padding:4px">Priced 2 min ago · Chainlink · Robinhood Chain · Since 4 Aug 2026</div>
+        </div>
+        <div class="card">
+          <div class="grid2">
+            <div class="P"><span class="lbl">NAV / share</span><b>1.0842</b><span class="small up">+0.62% today</span></div>
+            <div><span class="lbl">AUM · USDG</span><b>248,310</b></div>
+            <div class="P"><span class="lbl">Since inception</span><b class="up">+8.42%</b><span class="small muted">from 4 Aug 2026</span></div>
+            <div><span class="lbl">Total supply</span><b>229,027</b><span class="small muted">ZMAG7</span></div>
+          </div>
+        </div>
+        <div class="card N" style="padding:12px"><div class="row"><span class="lbl">Your position</span><span class="gold small">View ›</span></div><div class="row"><span class="mono" style="font-size:18px">$1,626.30</span><span class="up small mono">+$126.30 · +8.42%</span></div><div class="small muted">1,500.00 ZMAG7</div></div>
+        <div class="card P">
+          <div class="ct">NAV performance</div>
+          <div class="seg N" style="font-size:11px"><span>1D</span><span>1W</span><span class="on">1M</span><span>3M</span><span>1Y</span><span>All</span></div>
+          <svg class="spark" height="120" data-spark="1.0,1.004,0.998,1.01,1.018,1.012,1.026,1.03,1.022,1.04,1.052,1.046,1.058,1.07,1.064,1.078,1.084" data-c="#5cc796" data-fill="1"></svg>
+          <div class="row small dim"><span>4 Aug</span><span>13 Oct</span></div>
+          <div class="row small muted mono"><span>Low 0.9980</span><span>High 1.0842</span></div>
+        </div>
+      </div>
+    </div><div class="cap">/basket/[id] · part 1</div></div>
+    <div class="meta" data-s="basket1"></div>
+  </section>
+
+  <section class="screen" id="basket2">
+    <div><div class="phone">
+      <div class="sb"><span>9:41</span><span>●●● 5G</span></div>
+      <div class="pc">
+        <div class="card">
+          <div class="ct">Target allocation</div>
+          <div class="alloc"><i style="flex:1;background:#cdb679"></i><i style="flex:1;background:#5cc796"></i><i style="flex:1;background:#8fb3d9"></i><i style="flex:1;background:#d98f8f"></i><i style="flex:1;background:#b39ddb"></i><i style="flex:1;background:#e3cf98"></i><i style="flex:1;background:#7d847f"></i></div>
+          <div class="leg"><i style="background:#cdb679"></i><span>AAPL <em>Apple Inc.</em></span><span class="mono" style="flex:none">14.29%</span><span class="mono small N" style="flex:none;padding:0 3px">14.71% ▲</span></div>
+          <div class="leg"><i style="background:#5cc796"></i><span>MSFT <em>Microsoft</em></span><span class="mono" style="flex:none">14.29%</span><span class="mono small dim" style="flex:none">14.10%</span></div>
+          <div class="leg"><i style="background:#8fb3d9"></i><span>NVDA <em>NVIDIA</em></span><span class="mono" style="flex:none">14.29%</span><span class="mono small dim" style="flex:none">15.02%</span></div>
+          <div class="leg dim"><i style="background:#d98f8f"></i><span>+ 4 more</span></div>
+        </div>
+        <div class="card band">
+          <div class="ct">Invest or redeem</div>
+          <div class="seg"><span class="on">Invest</span><span>Redeem</span></div>
+          <div><div class="lbl">You pay (USDG)</div><div class="field"><span class="mono">500.00</span><span class="gold small N" style="padding:0 4px">MAX</span></div></div>
+          <div class="row small N" style="padding:3px"><span class="muted">Available</span><span class="mono">2,140.55 USDG</span></div>
+          <div class="small muted">Minimum investment 25 USDG</div>
+          <div class="row small N" style="padding:3px"><span class="muted">Max slippage</span><span class="mono gold">0.5% ›</span></div>
+          <div class="btn">Review</div>
+          <div class="hr"></div>
+          <div class="lbl gold">Preview</div>
+          <div class="row"><span class="k">You pay</span><span class="v">500.0000 USDG</span></div>
+          <div class="row"><span class="k">Entry fee</span><span class="v">1.5000 (0.30%)</span></div>
+          <div class="row"><span class="k">Quoted NAV / share</span><span class="v">1.084210</span></div>
+          <div class="row"><span class="k">Expected shares</span><span class="v">459.7172 ZMAG7</span></div>
+          <div class="row N" style="padding:2px"><span class="k">Network fee</span><span class="v">≈ $0.04</span></div>
+          <div class="hr"></div>
+          <div class="lbl">Transaction draft</div>
+          <div class="row"><span class="k">To</span><span class="v">0x4c21…9e0d</span></div>
+          <div class="row"><span class="k">Chain</span><span class="v">46630 <span class="N" style="padding:0 3px;color:var(--a-text2)">Robinhood Testnet</span></span></div>
+          <div class="row"><span class="k">Gas limit</span><span class="v">412,000</span></div>
+          <div class="btn g">Sign and send</div>
+          <div class="small dim">The final amounts are set by the quote when you sign. Prices can move before then.</div>
+        </div>
+      </div>
+    </div><div class="cap">/basket/[id] · part 2</div></div>
+    <div class="meta" data-s="basket2"></div>
+  </section>
+
+  <section class="screen" id="basket3">
+    <div><div class="phone">
+      <div class="sb"><span>9:41</span><span>●●● 5G</span></div>
+      <div class="pc">
+        <div class="card">
+          <div class="ct">Fees &amp; terms</div>
+          <div class="row"><span class="k">Entry fee</span><span class="v">0.30%</span></div>
+          <div class="row"><span class="k">Exit fee</span><span class="v">0.30%</span></div>
+          <div class="row"><span class="k">Management fee</span><span class="v">0.50% / yr</span></div>
+          <div class="row"><span class="k">Minimum investment</span><span class="v">25 USDG</span></div>
+          <div class="row"><span class="k">Rebalance policy</span><span class="v" style="font-family:var(--f-app)">Market cap weighted</span></div>
+          <div class="row"><span class="k">Drift threshold</span><span class="v">2.00%</span></div>
+          <div class="row"><span class="k">Base asset</span><span class="v">USDG</span></div>
+          <div class="row"><span class="k">Contract</span><span class="v">0x4c21…9e0d <span class="gold N" style="padding:0 3px">⧉ ↗</span></span></div>
+          <div class="row N" style="padding:2px"><span class="k">Inception</span><span class="v">4 Aug 2026</span></div>
+          <div class="row N" style="padding:2px"><span class="k">Price source</span><span class="v">Chainlink</span></div>
+        </div>
+        <div class="card N">
+          <div class="ct">Documents</div>
+          <div class="row"><span>Factsheet</span><span class="gold small">PDF ↗</span></div>
+          <div class="row"><span>Methodology</span><span class="gold small">↗</span></div>
+          <div class="row"><span>Risk disclosure</span><span class="gold small">↗</span></div>
+        </div>
+        <div class="card P">
+          <div class="ct">Holdings</div>
+          <div class="row"><span style="font-size:15px;font-weight:600">AAPL</span><span class="v">162.4180</span></div>
+          <div class="row small muted"><span>Target 14.29%</span><span class="N" style="padding:0 3px">$36,527</span><span>Actual 14.71%</span></div>
+          <div class="hr"></div>
+          <div class="row"><span style="font-size:15px;font-weight:600">NVDA</span><span class="v">198.0021</span></div>
+          <div class="row small muted"><span>Target 14.29%</span><span>Actual 15.02%</span></div>
+        </div>
+        <div class="card N">
+          <div class="ct">Corporate actions</div>
+          <div class="row small"><span>NVDA · Dividend $0.01/sh</span><span class="badge y">Announced</span></div>
+          <div class="row small muted"><span>Effective 21 Oct 2026</span></div>
+        </div>
+        <div class="card P">
+          <div class="ct">Recent activity</div>
+          <div class="row"><span class="badge g">Invest</span><span class="small muted">12 Oct 2026</span></div>
+          <div class="row"><span class="mono small muted">0x91d0…44ab</span><span class="mono small">1,200.00 USDG <span class="gold N" style="padding:0 2px">↗</span></span></div>
+          <div class="hr"></div>
+          <div class="row"><span class="badge">Rebalance</span><span class="small muted">11 Oct 2026</span></div>
+          <div class="row"><span class="mono small muted">0x7a3f…c91e</span><span class="mono small">—</span></div>
+        </div>
+      </div>
+    </div><div class="cap">/basket/[id] · part 3</div></div>
+    <div class="meta" data-s="basket3"></div>
+  </section>
+
+  <section class="screen" id="txflow">
+    <div><div class="phone">
+      <div class="sb"><span>9:41</span><span>●●● 5G</span></div>
+      <div class="pc" style="padding-top:30px">
+        <div class="N" style="display:flex;flex-direction:column;gap:14px;padding:10px">
+          <div style="width:40px;height:4px;border-radius:2px;background:var(--a-line2);align-self:center"></div>
+          <div style="font-size:20px;font-weight:500">Investing 500 USDG</div>
+          <div class="small muted">Magnificent 7 Index · ZMAG7</div>
+          <div class="steps">
+            <div class="step done"><i></i><div>Approve USDG spend<div class="small muted">Confirmed · 0x2be1…c0f4</div></div></div>
+            <div class="step done"><i></i><div>Sign in your wallet</div></div>
+            <div class="step now"><i></i><div>Confirming on-chain…<div class="small muted">Usually under 30 seconds</div></div></div>
+            <div class="step"><i></i><div class="muted">Shares in your wallet</div></div>
+          </div>
+          <div class="small muted">Redeem shows "Step 2 of 4" here, one row per swap and claim.</div>
+          <div class="btn o">View on explorer ↗</div>
+        </div>
+        <div class="card band" style="margin-top:6px">
+          <span class="badge g" style="align-self:flex-start">Confirmed</span>
+          <div class="small muted">Tx 0x8f3a…21d7</div>
+          <div class="N" style="display:flex;flex-direction:column;gap:8px;padding:6px">
+            <div class="row"><span class="k">Shares received</span><span class="v">459.7172 ZMAG7</span></div>
+            <div class="row"><span class="k">Executed NAV</span><span class="v">1.084190</span></div>
+            <div class="row"><span class="k">Fee paid</span><span class="v">1.50 USDG</span></div>
+            <div class="btn">Go to portfolio</div>
+          </div>
+        </div>
+      </div>
+    </div><div class="cap">Transaction progress + receipt</div></div>
+    <div class="meta" data-s="txflow"></div>
+  </section>
+
+  <!-- ================= PORTFOLIO ================= -->
+  <div class="group-h"><h2>Portfolio</h2><p>Summary and three tabs</p></div>
+
+  <section class="screen" id="portfolio">
+    <div><div class="phone">
+      <div class="sb"><span>9:41</span><span>●●● 5G</span></div>
+      <div class="ah"><div class="logo">Z</div><div class="t">Portfolio</div></div>
+      <div class="pc">
+        <div class="card" style="overflow:hidden">
+          <div class="P small up" style="text-align:right;padding:2px">▲ +7.14% since entry</div>
+          <div class="row" style="align-items:flex-end"><div class="P" style="padding:2px"><div class="small muted">Cost Basis</div><div>$3,250.00</div></div><div class="P" style="text-align:right;padding:2px"><div class="small muted">Unrealized PNL</div><div>+$232.16</div></div></div>
+          <div class="hr"></div>
+          <div class="row"><span class="lbl">Market value</span><span class="small muted">3 Baskets</span></div>
+          <div style="font-size:30px">$3,482.16</div>
+          <div class="row small N" style="padding:3px"><span class="muted">Today</span><span class="up mono">+$21.40 · +0.62%</span></div>
+          <div class="row small N" style="padding:3px"><span class="muted">Cash (USDG)</span><span class="mono">2,140.55</span></div>
+        </div>
+        <div class="small muted" style="margin-top:-6px">Live on-chain balances; account valuations are still indexing.</div>
+        <div class="card N" style="padding:12px"><div class="seg" style="font-size:11px"><span>1W</span><span class="on">1M</span><span>3M</span><span>All</span></div><svg class="spark" height="70" data-spark="3250,3262,3240,3290,3310,3302,3350,3380,3410,3398,3440,3482" data-c="#5cc796" data-fill="1"></svg></div>
+        <div class="utabs"><span class="on">Basket Allocation</span><span>Holdings</span><span>Activities</span></div>
+        <div class="alloc" style="height:10px"><i style="flex:47;background:#4e559c;border-radius:5px"></i><i style="flex:33;background:#3d8a62;border-radius:5px"></i><i style="flex:20;background:#cdb679;border-radius:5px"></i></div>
+        <div class="irow"><div><div class="v" style="margin:0">● Magnificent 7 Index</div><div class="k">$1,626.30</div></div><b style="font-weight:600">46.7%</b></div>
+        <div class="irow"><div><div class="v" style="margin:0">● AI Infrastructure</div><div class="k">$1,150.42</div></div><b style="font-weight:600">33.0%</b></div>
+        <div class="irow" style="border:0"><div><div class="v" style="margin:0">● Clean Energy 10</div><div class="k">$705.44</div></div><b style="font-weight:600">20.3%</b></div>
+      </div>
+      <div class="tabbar"><span>Explore</span><span class="on">Portfolio</span><span>Profile</span></div>
+    </div><div class="cap">/(tabs)/portfolio · Allocation</div></div>
+    <div class="meta" data-s="portfolio"></div>
+  </section>
+
+  <section class="screen" id="holdings">
+    <div><div class="phone">
+      <div class="sb"><span>9:41</span><span>●●● 5G</span></div>
+      <div class="pc">
+        <div class="utabs"><span>Basket Allocation</span><span class="on">Holdings</span><span>Activities</span></div>
+        <div class="irow" style="flex-direction:column;align-items:stretch">
+          <div class="row"><div><div style="font-size:15px">Magnificent 7 Index</div><div class="small muted">ZMAG7 • 1,500.0000 shares • NAV 1.0842</div></div><span class="P small up" style="padding:2px">▲ 126.30</span></div>
+          <div class="row small N" style="padding:3px"><span class="muted">Avg entry NAV 1.0000</span><span class="up mono">+8.42%</span></div>
+          <div class="row" style="margin-top:8px"><span>1,626.30</span><span style="display:flex;gap:6px"><span class="sbtn">Redeem</span><span class="sbtn p">Invest</span></span></div>
+        </div>
+        <div class="irow" style="flex-direction:column;align-items:stretch">
+          <div class="row"><div><div style="font-size:15px">AI Infrastructure</div><div class="small muted">ZAIX • 1,182.2100 shares • NAV 0.9731</div></div><span class="P small down" style="padding:2px">▼ 49.58</span></div>
+          <div class="row" style="margin-top:8px"><span>1,150.42</span><span style="display:flex;gap:6px"><span class="sbtn">Redeem</span><span class="sbtn p">Invest</span></span></div>
+        </div>
+        <div class="utabs" style="margin-top:8px"><span>Basket Allocation</span><span>Holdings</span><span class="on">Activities</span></div>
+        <div class="chips N" style="padding:4px"><span class="chip on">All</span><span class="chip">Invest</span><span class="chip">Redeem</span><span class="chip">Pending</span></div>
+        <div class="irow" style="flex-direction:column;align-items:stretch;gap:6px">
+          <div class="row"><span class="badge g">Invest</span><span class="small muted">12 Oct 2026</span></div>
+          <div class="row"><span>Magnificent 7 Index</span><b style="font-weight:600">$500.00</b></div>
+          <div class="row small N" style="padding:3px"><span class="muted">+459.7172 ZMAG7</span><span class="up">Confirmed ›</span></div>
+        </div>
+        <div class="irow" style="flex-direction:column;align-items:stretch;gap:6px;border:0">
+          <div class="row"><span class="badge">Redeem</span><span class="small muted">9 Oct 2026</span></div>
+          <div class="row"><span>Clean Energy 10</span><b style="font-weight:600">$120.00</b></div>
+          <div class="row small N" style="padding:3px"><span class="muted">−118.0000 ZCE10</span><span class="gold">Step 2 of 4 ›</span></div>
+        </div>
+      </div>
+      <div class="tabbar"><span>Explore</span><span class="on">Portfolio</span><span>Profile</span></div>
+    </div><div class="cap">/(tabs)/portfolio · Holdings + Activities</div></div>
+    <div class="meta" data-s="holdings"></div>
+  </section>
+
+  <!-- ================= PROFILE ================= -->
+  <div class="group-h"><h2>Profile</h2><p>Account, wallets, eligibility, security</p></div>
+
+  <section class="screen" id="account">
+    <div><div class="phone">
+      <div class="sb"><span>9:41</span><span>●●● 5G</span></div>
+      <div class="ah"><div class="logo">Z</div><div class="t">Profile</div><div class="ib N">⚙</div></div>
+      <div class="pc">
+        <div class="utabs"><span class="on">Account</span><span>Wallets</span><span>Eligibility</span><span>Security</span></div>
+        <div>
+          <div class="irow"><div><div class="k">Name</div><div class="v">Maya Chen</div></div><span class="gold small N" style="padding:2px 4px">Edit</span></div>
+          <div class="irow"><div><div class="k">Sign-in methods</div><div class="v">Email · Wallet</div></div></div>
+          <div class="irow"><div><div class="k">Country</div><div class="v">SG</div></div></div>
+          <div class="irow"><div><div class="k">Member since</div><div class="v">2 Oct 2026</div></div></div>
+          <div class="irow" style="border:0"><div><div class="k">Email</div><div class="v">maya.chen@example.com <span class="badge g">Verified</span></div></div></div>
+        </div>
+        <div style="text-align:center;color:var(--a-red);padding:12px">⇥ Sign out</div>
+        <div class="tabbar" style="margin:0 -14px -18px"><span>Explore</span><span>Portfolio</span><span class="on">Profile</span></div>
+      </div>
+    </div><div class="cap">/(tabs)/profile · Account</div></div>
+    <div class="meta" data-s="account"></div>
+  </section>
+
+  <section class="screen" id="wallets">
+    <div><div class="phone">
+      <div class="sb"><span>9:41</span><span>●●● 5G</span></div>
+      <div class="pc">
+        <div class="utabs"><span>Account</span><span class="on">Wallets</span><span>Eligibility</span><span>Security</span></div>
+        <div class="card band">
+          <div class="ct">Your wallet</div>
+          <div class="small muted">This wallet holds your basket shares and signs your transactions.</div>
+          <div class="row"><span class="mono">0x3E9a…b71C <span class="gold N" style="padding:0 3px">⧉ ↗</span></span><span class="badge y">Signed in</span></div>
+          <div class="small muted">Robinhood Chain Testnet</div>
+          <div class="N" style="padding:6px;display:flex;flex-direction:column;gap:6px"><div class="row"><span class="k">USDG</span><span class="v">2,140.55</span></div><div class="row"><span class="k">ETH (gas)</span><span class="v">0.0124</span></div></div>
+          <div class="btn o">Manage connected wallet</div>
+        </div>
+        <div class="utabs" style="margin-top:8px"><span>Account</span><span>Wallets</span><span class="on">Eligibility</span><span>Security</span></div>
+        <div class="small muted"><b style="color:var(--a-text)">Open baskets</b> need only a linked wallet. <b style="color:var(--a-text)">Permissioned baskets</b> also need identity verification for the wallet that will hold the shares.</div>
+        <div class="irow"><div><div class="k">Verification</div><div class="v">PENDING</div></div><span class="chip gold">Continue</span></div>
+        <div class="irow N"><div><div class="k">Wallet being verified</div><div class="v mono">0x3E9a…b71C</div></div></div>
+        <div class="irow"><div><div class="k">Provider</div><div class="v">didit</div></div></div>
+        <div class="irow"><div><div class="k">Verified</div><div class="v">-</div></div></div>
+        <div class="irow" style="border:0"><div><div class="k">Permissioned basket</div><div class="v">NOT YET</div></div></div>
+      </div>
+    </div><div class="cap">/(tabs)/profile · Wallets + Eligibility</div></div>
+    <div class="meta" data-s="wallets"></div>
+  </section>
+
+  <section class="screen nophone" id="security">
+    <div class="meta" data-s="security"></div>
+  </section>
+
+  <!-- ================= NEW SCREENS ================= -->
+  <div class="group-h"><h2>New screens to design</h2><p>Nothing exists for these yet</p></div>
+
+  <section class="screen" id="position">
+    <div><div class="phone">
+      <div class="sb"><span>9:41</span><span>●●● 5G</span></div>
+      <div class="back">‹ Portfolio</div>
+      <div class="pc">
+        <div><div class="mono gold small">ZMAG7</div><div style="font-size:24px;font-weight:500">Magnificent 7 Index</div></div>
+        <div class="card"><div class="lbl">Current value</div><div style="font-size:30px">$1,626.30</div><div class="up small mono">▲ +$126.30 · +8.42% all time</div>
+          <svg class="spark" height="70" data-spark="1500,1506,1497,1515,1527,1518,1539,1545,1533,1560,1578,1569,1587,1605,1596,1617,1626" data-c="#5cc796" data-fill="1"></svg></div>
+        <div class="card">
+          <div class="row"><span class="k">Shares held</span><span class="v">1,500.0000</span></div>
+          <div class="row"><span class="k">Avg entry NAV</span><span class="v">1.0000</span></div>
+          <div class="row"><span class="k">Current NAV</span><span class="v">1.0842</span></div>
+          <div class="row"><span class="k">Cost basis</span><span class="v">$1,500.00</span></div>
+          <div class="row"><span class="k">Fees paid</span><span class="v">$4.50</span></div>
+          <div class="row"><span class="k">% of portfolio</span><span class="v">46.7%</span></div>
+          <div class="row"><span class="k">First invested</span><span class="v">4 Aug 2026</span></div>
+        </div>
+        <div class="card"><div class="ct">Your transactions</div>
+          <div class="row small"><span><span class="badge g">Invest</span> 12 Oct</span><span class="mono">$500.00</span></div>
+          <div class="row small"><span><span class="badge g">Invest</span> 4 Aug</span><span class="mono">$1,000.00</span></div></div>
+        <div style="display:flex;gap:8px"><div class="btn o" style="flex:1">Redeem</div><div class="btn g" style="flex:1">Invest more</div></div>
+      </div>
+    </div><div class="cap">NEW · /position/[id]</div></div>
+    <div class="meta" data-s="position"></div>
+  </section>
+
+  <section class="screen" id="txdetail">
+    <div><div class="phone">
+      <div class="sb"><span>9:41</span><span>●●● 5G</span></div>
+      <div class="back">‹ Activity</div>
+      <div class="pc">
+        <div><span class="badge g">Invest</span> <span class="badge g">Confirmed</span></div>
+        <div style="font-size:26px">$500.00 <span class="muted" style="font-size:15px">USDG</span></div>
+        <div class="small muted">Magnificent 7 Index · ZMAG7</div>
+        <div class="card">
+          <div class="row"><span class="k">Shares received</span><span class="v">459.7172</span></div>
+          <div class="row"><span class="k">NAV at execution</span><span class="v">1.084190</span></div>
+          <div class="row"><span class="k">Entry fee</span><span class="v">1.50 (0.30%)</span></div>
+          <div class="row"><span class="k">Network fee</span><span class="v">0.000021 ETH</span></div>
+        </div>
+        <div class="card"><div class="ct">Status</div>
+          <div class="steps">
+            <div class="step done"><i></i><div>Prepared<div class="small muted">12 Oct, 14:02:11</div></div></div>
+            <div class="step done"><i></i><div>Submitted<div class="small muted">12 Oct, 14:02:40</div></div></div>
+            <div class="step done"><i></i><div>Confirmed<div class="small muted">12 Oct, 14:02:58</div></div></div>
+          </div></div>
+        <div class="card">
+          <div class="row"><span class="k">Tx hash</span><span class="v">0x8f3a…21d7 <span class="gold">⧉ ↗</span></span></div>
+          <div class="row"><span class="k">Wallet</span><span class="v">0x3E9a…b71C</span></div>
+          <div class="row"><span class="k">Network</span><span class="v">Robinhood Testnet</span></div>
+          <div class="row"><span class="k">Reference</span><span class="v">op_7f2c91</span></div>
+        </div>
+      </div>
+    </div><div class="cap">NEW · /activity/[id]</div></div>
+    <div class="meta" data-s="txdetail"></div>
+  </section>
+
+  <section class="screen" id="notifs">
+    <div><div class="phone">
+      <div class="sb"><span>9:41</span><span>●●● 5G</span></div>
+      <div class="ah"><div class="logo">Z</div><div class="t">Notifications</div></div>
+      <div class="pc">
+        <div class="irow"><div><div class="v" style="margin:0">Investment confirmed</div><div class="k">459.72 ZMAG7 added · 2 min ago</div></div><i style="width:8px;height:8px;border-radius:50%;background:var(--a-gold)"></i></div>
+        <div class="irow"><div><div class="v" style="margin:0">Magnificent 7 rebalanced</div><div class="k">NVDA trimmed to target · 1 day ago</div></div></div>
+        <div class="irow"><div><div class="v" style="margin:0">Verification approved</div><div class="k">Permissioned baskets are now open to you · 3 days ago</div></div></div>
+        <div class="irow"><div><div class="v" style="margin:0">US Treasury Yield is live</div><div class="k">A basket you watched opened · 5 days ago</div></div></div>
+        <div class="irow" style="border:0"><div><div class="v" style="margin:0;color:var(--a-danger)">Redemption failed</div><div class="k">Transaction reverted. Tap to retry · 6 days ago</div></div></div>
+        <div class="hr"></div>
+        <div class="lbl">Settings · More</div>
+        <div class="irow"><div><div class="v" style="margin:0">Push notifications</div></div><span class="toggle"></span></div>
+        <div class="irow"><div><div class="v" style="margin:0">Price alerts</div></div><span class="toggle off"></span></div>
+        <div class="irow"><div><div class="v" style="margin:0">Terms · Privacy · Risk disclosure</div></div><span class="muted">›</span></div>
+        <div class="irow"><div><div class="v" style="margin:0">Help &amp; support</div></div><span class="muted">›</span></div>
+        <div class="irow"><div><div class="v" style="margin:0;color:var(--a-red)">Delete account</div></div></div>
+        <div class="small dim" style="text-align:center">ZenoIndex 1.0.0 (42)</div>
+      </div>
+    </div><div class="cap">NEW · /notifications + /settings</div></div>
+    <div class="meta" data-s="notifs"></div>
+  </section>
+
+  <section class="screen nophone" id="states">
+    <div class="meta" data-s="states"></div>
+  </section>
+</div>
+
+<script>
+// status: ok = built, pend = UI built but data unavailable, new = needs UI
+const S = {
+signin: { name: "Sign in", route: "app/sign-in.tsx", note: "Email code, Google and wallet sign-in all live on one screen.", f: [
+  ["Email address input", "user input", "ok", "maya.chen@example.com"],
+  ["Send code / 6-digit code entry", "POST auth/otp/request, otp/verify", "ok", "482 9__"],
+  ["Resend code with cooldown", "client timer", "ok", "Resend in 0:42"],
+  ["Connect wallet (sign-in with wallet)", "auth/wallet/challenge → verify", "ok", ""],
+  ["Continue with Google", "OAuth", "pend", "", "Button is there; backend callback is web-only, needs a mobile deep link"],
+  ["Terms and Privacy links", "content/legal.ts", "ok", ""],
+  ["Expired code, wrong code, locked out messages", "API error code", "new", "3 tries left", "Show a specific message for each, not one generic error"],
+]},
+terms: { name: "Terms and profile", route: "app/terms.tsx · app/complete-profile.tsx", f: [
+  ["Step indicator", "client", "ok", "Step 1 of 2"],
+  ["Terms of Service + summary, Read link", "content/legal.ts", "ok", ""],
+  ["Privacy Policy + summary, Read link", "content/legal.ts", "ok", ""],
+  ["Accept checkboxes and Accept and continue", "POST auth/accept-terms", "ok", ""],
+  ["Sign out escape hatch", "POST auth/logout", "ok", ""],
+  ["First name, Last name", "POST auth/profile", "ok", "Maya Chen"],
+  ["Country", "POST auth/profile", "ok", "SG", "Today a 2-letter text box"],
+  ["Country picker with search and flags", "client list", "new", "🇸🇬 Singapore", "Replace the free-text 2-letter code"],
+]},
+explore: { name: "Explore", route: "app/(tabs)/index.tsx · explore/BasketCard.tsx", note: "The home tab. One card per basket.", f: [
+  ["Basket name", "dtf.name", "ok", "Magnificent 7 Index"],
+  ["Symbol", "dtf.symbol", "ok", "ZMAG7"],
+  ["Manager address (short)", "dtf.manager", "ok", "0x7a3f…c91e"],
+  ["Constituent avatars + count", "dtf.weights → asset.symbol", "ok", "AA MS NV +3 · 7"],
+  ["Status: Active / Coming soon", "dtf.lifecycle", "ok", "Active"],
+  ["NAV / share", "dtf.sharePrice", "ok", "1.0842"],
+  ["AUM", "dtf.aum", "ok", "248,310"],
+  ["Management fee", "dtf.fees.managementBps", "ok", "0.50%"],
+  ["Access tabs: All / Open / Permissioned", "asset.underlyingTransferPolicy", "ok", ""],
+  ["Strategy and manager filter chips", "dtf.strategy.type, dtf.manager", "ok", ""],
+  ["Pull to refresh, empty and no-match states", "client", "ok", ""],
+  ["Manager display name + verified mark", "not in API", "new", "Zeno Capital ✓", "API only has an address. Needs a manager profile field"],
+  ["Real token logos instead of initials", "asset logo URL", "new", "", "API has no logo field yet"],
+  ["Return % on card (24h or 30d)", "performanceDeltas", "new", "+3.18%", "List endpoint does not return deltas yet"],
+  ["Sparkline on card", "performance", "new", "", ""],
+  ["Sort: AUM, return, newest, fee", "client", "new", "", ""],
+]},
+search: { name: "Search", route: "app/search.tsx", f: [
+  ["Search box (name, symbol, manager)", "client filter over /v1/dtfs", "ok", "mag"],
+  ["Result: name", "dtf.name", "ok", "Magnificent 7 Index"],
+  ["Result: symbol · manager", "dtf.symbol, dtf.manager", "ok", "ZMAG7 · 0x7a3f…c91e"],
+  ["No-results and error states", "client", "ok", ""],
+  ["NAV and day change on each result", "dtf.sharePrice, deltas", "new", "1.0842 +0.62%"],
+  ["Recent searches", "local storage", "new", "treasury, AI"],
+]},
+basket1: { name: "Basket: header, stats, chart", route: "app/basket/[id].tsx · basket/BasketHeader, BasketStats · charts/NavChart", f: [
+  ["Status badge (Active / Coming soon)", "dtf.lifecycle", "ok", "Active"],
+  ["Access badge (Open / Permissioned)", "asset transfer policy", "ok", "Open"],
+  ["Name, symbol", "dtf.name, dtf.symbol", "ok", "ZMAG7"],
+  ["Manager", "dtf.manager", "ok", "0x7a3f…c91e"],
+  ["NAV / share", "dtf.sharePrice", "ok", "1.0842"],
+  ["Today's change", "performanceDeltas[latest]", "pend", "+0.62%", "readModels unavailable (BUG-2)"],
+  ["AUM in base asset", "dtf.aum", "ok", "248,310 USDG"],
+  ["Since inception %", "performanceDeltas[inception]", "pend", "+8.42%", "BUG-2"],
+  ["Total supply", "dtf.totalSupplyRaw", "ok", "229,027"],
+  ["NAV chart with dates, low, high", "dtf.performance", "pend", "", "Shows \"Pricing is still indexing\" today (BUG-2)"],
+  ["Chart period selector 1D…All", "performance (filtered)", "new", "1M", ""],
+  ["Short description / strategy summary", "not in API", "new", "", "Needs a description field on the DTF"],
+  ["Price freshness line: as of, source, stale warning", "dtf.asOf, priceSource, priceStale", "new", "Priced 2 min ago · Chainlink", "Already in the API, not shown. Warn when priceStale = true"],
+  ["Inception date", "first performance point / not in API", "new", "4 Aug 2026"],
+  ["Your position card (when you hold it)", "portfolio position", "new", "$1,626.30", "Links to the new Position screen"],
+]},
+basket2: { name: "Basket: allocation and trade", route: "charts/AllocationBar · TradePanel.tsx", note: "The trade panel already runs the full prepare → approve → sign → submit → confirm loop.", f: [
+  ["Allocation bar + legend: symbol, name, target %", "dtf.weights, assets", "ok", "AAPL 14.29%"],
+  ["Actual weight / drift next to target", "holdings.actualWeightBps", "new", "14.71% ▲", "Data exists in holdings (pending BUG-2)"],
+  ["Invest / Redeem switch", "client", "ok", ""],
+  ["Amount input (USDG or shares)", "user input", "ok", "500.00"],
+  ["Minimum investment hint, red when below", "dtf.minInvestment", "ok", "25 USDG"],
+  ["Notice: link wallet / verification needed", "user.wallets, kyc", "ok", ""],
+  ["Preview: You pay", "prepare response", "ok", "500.0000 USDG"],
+  ["Preview: Entry or exit fee (amount + %)", "prepare response", "ok", "1.5000 (0.30%)"],
+  ["Preview: Quoted NAV / share", "prepare response", "ok", "1.084210"],
+  ["Preview: Expected shares / You receive", "prepare response", "ok", "459.7172 ZMAG7"],
+  ["Transaction draft: To, Chain, Gas limit", "draft.transaction", "ok", "", "Consider hiding behind a \"Details\" toggle; most investors won't read it"],
+  ["Progress text on the button", "client step", "ok", "Confirming on-chain…"],
+  ["Wallet balance + MAX button", "ERC-20 balanceOf / share balance", "new", "2,140.55 USDG"],
+  ["Max slippage setting", "client → prepare", "new", "0.5%", "Web app has it"],
+  ["Network fee estimate in $", "gas × gas price", "new", "≈ $0.04", "Web app has it"],
+  ["Chain name instead of numeric ID", "/v1/chains", "new", "Robinhood Testnet"],
+]},
+basket3: { name: "Basket: terms, holdings, activity", route: "basket/[id].tsx · BasketHoldings · BasketActivity", f: [
+  ["Entry fee, Exit fee", "dtf.fees", "ok", "0.30% / 0.30%"],
+  ["Management fee / yr", "dtf.fees.managementBps", "ok", "0.50% / yr"],
+  ["Minimum investment", "dtf.minInvestment", "ok", "25 USDG"],
+  ["Rebalance policy, Drift threshold", "dtf.strategy", "ok", "2.00%"],
+  ["Base asset", "dtf.baseAssetId", "ok", "USDG"],
+  ["Contract address (short)", "dtf.contractAddress", "ok", "0x4c21…9e0d"],
+  ["Copy + open in explorer for contract", "chain explorer URL", "new", "⧉ ↗"],
+  ["Inception date, price source", "priceSource / not in API", "new", "Chainlink"],
+  ["Documents: factsheet, methodology, risk disclosure", "not in API", "new", "", "Needs document links per DTF"],
+  ["Holdings: symbol, quantity, target %, actual %", "readModels.holdings", "pend", "AAPL 162.4180", "BUG-2"],
+  ["Holdings: $ value per constituent", "quantity × price", "new", "$36,527"],
+  ["Recent activity: type, date, wallet, amount", "readModels.recentTransactions", "pend", "Invest 1,200 USDG", "BUG-2"],
+  ["Tap activity row → explorer", "txHash", "new", "↗"],
+  ["Corporate actions: type, effective date, status", "dtf.corporateActions", "new", "Dividend · Announced", "In the API and types, never rendered"],
+]},
+txflow: { name: "Transaction progress", route: "TradePanel.tsx (inline today)", note: "Today progress is button text, and success is a badge plus a short tx hash. Proposal: a bottom sheet with steps, then a receipt.", f: [
+  ["Confirmed / status badge", "operation.status", "ok", "Confirmed"],
+  ["Short tx hash", "operation.txHash", "ok", "0x8f3a…21d7"],
+  ["Step list: approve, sign, confirming, done", "client step", "new", ""],
+  ["Redeem multi-step counter", "draft.finalStep", "new", "Step 2 of 4"],
+  ["View on explorer button", "txHash + explorer URL", "new", ""],
+  ["Receipt: shares received, executed NAV, fee paid", "operation / tx receipt", "new", "459.7172 ZMAG7"],
+  ["Failed state with reason and Retry", "operation failed", "new", "", "Today the error is a red line of text"],
+  ["Go to portfolio button", "client", "new", ""],
+]},
+portfolio: { name: "Portfolio summary + allocation", route: "app/(tabs)/portfolio.tsx · PortfolioSummary · AllocationTab", note: "Positions come from on-chain balances as a fallback while the API portfolio is a stub (BUG-1).", f: [
+  ["Market value", "positions × sharePrice", "ok", "$3,482.16"],
+  ["Basket count", "positions.length", "ok", "3 Baskets"],
+  ["Cost basis", "wallet transactions", "pend", "$3,250.00", "Shows — until the API has wallet invest history"],
+  ["Unrealized PnL", "value − cost", "pend", "+$232.16"],
+  ["% change since entry", "pnl / cost", "pend", "+7.14%"],
+  ["\"Live on-chain balances\" note", "source = chain", "ok", ""],
+  ["Allocation bar", "value / total", "ok", ""],
+  ["Allocation row: basket name, value, %", "position", "ok", "$1,626.30 · 46.7%"],
+  ["Day change $ and %", "performanceDeltas", "new", "+$21.40 · +0.62%"],
+  ["Cash (USDG) balance", "ERC-20 balanceOf", "new", "2,140.55"],
+  ["Portfolio value chart", "needs history endpoint", "new", "", "Backend needs per-wallet value history"],
+  ["No wallet / no positions empty states", "client", "ok", ""],
+]},
+holdings: { name: "Portfolio: holdings + activities", route: "portfolio/HoldingsTab · ActivitiesTab", f: [
+  ["Basket name", "dtf.name", "ok", "Magnificent 7 Index"],
+  ["Symbol · shares · NAV", "position.shares, dtf.sharePrice", "ok", "1,500.0000 shares"],
+  ["PnL per position", "value − costBasis", "pend", "▲ 126.30"],
+  ["Market value per position", "position.value", "ok", "1,626.30", "Shown without $ here, unlike the summary. Pick one"],
+  ["Redeem / Invest buttons", "→ /basket/[id]?side=", "ok", ""],
+  ["Return % and avg entry NAV", "cost basis", "new", "+8.42% · 1.0000"],
+  ["Tap row → Position detail", "", "new", ""],
+  ["Activity: type, date, basket, amount", "wallet transactions", "ok", "Invest · $500.00"],
+  ["Activity: shares in or out", "tx.shareAmountRaw", "new", "+459.7172 ZMAG7", "In the API, not shown"],
+  ["Activity: status (pending, failed, step n of m)", "tx.status / operation", "new", "Confirmed"],
+  ["Activity filters", "client", "new", "All · Invest · Redeem · Pending"],
+  ["Tap activity → Transaction detail", "", "new", ""],
+]},
+account: { name: "Profile: account", route: "profile/AccountTab.tsx", f: [
+  ["Name", "user.firstName + lastName", "ok", "Maya Chen"],
+  ["Sign-in methods", "user.email, user.wallets", "ok", "Email · Wallet"],
+  ["Country", "user.country", "ok", "SG"],
+  ["Member since", "user.createdAt", "ok", "2 Oct 2026"],
+  ["Email + Verified badge", "user.email", "ok", ""],
+  ["Sign out", "POST auth/logout", "ok", ""],
+  ["Edit name / country", "POST auth/profile", "new", ""],
+  ["Settings entry point (gear)", "", "new", "", "Leads to the new Settings screen"],
+]},
+wallets: { name: "Profile: wallets + eligibility", route: "profile/WalletsTab · EligibilityTab", f: [
+  ["Wallet address (short)", "user.wallets", "ok", "0x3E9a…b71C"],
+  ["Signed-in badge", "wallet.primary", "ok", ""],
+  ["Network name", "config/chains", "ok", "Robinhood Chain Testnet"],
+  ["Wrong-wallet warning", "connected vs linked", "ok", ""],
+  ["Connect / Manage wallet", "Reown AppKit", "ok", ""],
+  ["Copy address, open in explorer", "", "new", "⧉ ↗"],
+  ["USDG and gas token balance", "balanceOf / getBalance", "new", "2,140.55 USDG"],
+  ["Set primary / remove wallet", "auth wallet endpoints", "new", "", "In the P0 plan (P0-2), not built"],
+  ["Open vs permissioned explainer", "static", "ok", ""],
+  ["Verification status + action button", "compliance/kyc/:wallet/status", "ok", "PENDING · Continue"],
+  ["Provider", "eligibility.provider", "ok", "didit"],
+  ["Verified date", "eligibility.verifiedAt", "ok", "-"],
+  ["Permissioned basket access", "eligibility.permissionedAccess", "ok", "NOT YET"],
+  ["Which wallet is being verified", "wallet", "new", "0x3E9a…b71C"],
+  ["Rejection reason / expiry date", "kyc rawStatus", "new", "", ""],
+]},
+security: { name: "Profile: security", route: "profile/SecurityTab.tsx", note: "No mockup: the screen is simple and mostly placeholders today.", f: [
+  ["Two-factor status (On / Off)", "user.twoFactorEnabled", "ok", "Off"],
+  ["Set up / Turn off 2FA", "no API", "pend", "", "Shows \"Coming soon\""],
+  ["Sign-in methods: Email code, Google", "static", "ok", "On · Coming soon"],
+  ["Active sessions: device, last active, Current", "no API", "pend", "iPhone 15 · Current", "Plan says no sessions API yet"],
+  ["Revoke a session", "no API", "new", ""],
+]},
+position: { name: "Position detail", route: "new · /position/[id]", note: "Tapping a holding today jumps straight to the basket page. Investors expect a page about their own stake first.", f: [
+  ["Basket name + symbol", "dtf", "new", "Magnificent 7 Index"],
+  ["Current value + all-time PnL $ and %", "position, cost basis", "new", "$1,626.30 · +8.42%"],
+  ["Value chart of this position", "history", "new", ""],
+  ["Shares held", "position.shares", "new", "1,500.0000"],
+  ["Avg entry NAV, current NAV", "cost basis, sharePrice", "new", "1.0000 → 1.0842"],
+  ["Cost basis, fees paid", "wallet transactions", "new", "$1,500.00 · $4.50"],
+  ["% of portfolio", "value / total", "new", "46.7%"],
+  ["First invested date", "wallet transactions", "new", "4 Aug 2026"],
+  ["Your transactions in this basket", "wallet transactions", "new", ""],
+  ["Redeem / Invest more", "→ trade", "new", ""],
+]},
+txdetail: { name: "Transaction detail", route: "new · /activity/[id]", f: [
+  ["Type + status badges", "operation.action, status", "new", "Invest · Confirmed"],
+  ["Amount paid / received", "tx.amountRaw", "new", "$500.00 USDG"],
+  ["Basket", "tx.dtfId", "new", "ZMAG7"],
+  ["Shares received / burned", "tx.shareAmountRaw", "new", "459.7172"],
+  ["NAV at execution, entry or exit fee", "quote / receipt", "new", "1.084190 · 1.50"],
+  ["Network fee", "tx receipt", "new", "0.000021 ETH"],
+  ["Timeline: prepared, submitted, confirmed / failed", "operation timestamps", "new", "14:02:11 → 14:02:58"],
+  ["Tx hash with copy + explorer", "operation.txHash", "new", "0x8f3a…21d7"],
+  ["Wallet, network, reference id", "operation", "new", "op_7f2c91"],
+]},
+notifs: { name: "Notifications and settings", route: "new · /notifications · /settings", f: [
+  ["Investment / redemption confirmed or failed", "operations", "new", ""],
+  ["Basket rebalanced", "rebalance events", "new", ""],
+  ["Corporate action announced", "corporateActions", "new", ""],
+  ["Verification approved / rejected", "kyc status", "new", ""],
+  ["Watched basket went live", "lifecycle change", "new", "", "Also needs a Watch / favourite action on baskets"],
+  ["Push notification and price alert toggles", "push service", "new", ""],
+  ["Legal documents (Terms, Privacy, Risk)", "app/legal/[doc].tsx exists", "pend", "", "Screen exists; needs an entry point after onboarding"],
+  ["Help and support contact", "", "new", ""],
+  ["Delete account", "API needed", "new", "", "Required by App Store and Play Store"],
+  ["App version and build", "expo-application", "new", "1.0.0 (42)"],
+]},
+states: { name: "App-wide states", route: "components/ui · lib/http.ts", note: "Not one screen; every designer handoff should include these variants.", f: [
+  ["Loading (LoadState) and retry on error", "useLoad", "ok", ""],
+  ["\"Still indexing\" empty cards", "readModels unavailable", "ok", ""],
+  ["Coming soon basket: trade disabled with reason", "lifecycle", "ok", ""],
+  ["Wrong network prompt with a Switch button", "wagmi chainId", "pend", "", "Today a line of text in the preview"],
+  ["Offline banner", "@react-native-community/netinfo (installed)", "new", ""],
+  ["Session expired → back to sign-in with message", "401 from /auth/me", "new", ""],
+  ["Stale price warning on basket and trade", "dtf.priceStale", "new", ""],
+  ["Skeleton loaders for lists (only Search has one)", "", "new", ""],
+  ["Force-update screen", "/v1/config", "new", ""],
+]},
+};
+
+const LABEL = { ok: "Built", pend: "Waiting on data", new: "Needs UI" };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const totals = { ok: 0, pend: 0, new: 0 };
+document.querySelectorAll(".meta[data-s]").forEach(el => {
+  const s = S[el.dataset.s]; if (!s) return;
+  const c = { ok: 0, pend: 0, new: 0 };
+  s.f.forEach(r => { c[r[2]]++; totals[r[2]]++; });
+  const overall = c.new === s.f.length ? '<span class="pill new">New screen</span>' : "";
+  el.innerHTML = `<h3>${esc(s.name)} ${overall}</h3><div class="route">${esc(s.route)}</div>` +
+    (s.note ? `<p class="note">${esc(s.note)}</p>` : "") +
+    `<div class="route" style="margin-top:8px">${c.ok} built · ${c.pend} waiting on data · ${c.new} need UI</div>` +
+    `<div class="tbl-wrap"><table><thead><tr><th>Field</th><th>Status</th><th>Source</th><th>Example</th><th>Note</th></tr></thead><tbody>` +
+    s.f.map(r => `<tr data-st="${r[2]}"><td class="f">${esc(r[0])}</td><td><span class="pill ${r[2]}">${LABEL[r[2]]}</span></td><td class="src">${esc(r[1])}</td><td class="ex">${esc(r[3] || "")}</td><td class="n">${esc(r[4] || "")}</td></tr>`).join("") +
+    `</tbody></table></div>`;
+});
+const all = totals.ok + totals.pend + totals.new;
+document.getElementById("totals").innerHTML =
+  `<div class="total"><b>${all}</b><small>fields across ${Object.keys(S).length} screens</small></div>` +
+  `<div class="total ok"><b>${totals.ok}</b><small>Built</small></div>` +
+  `<div class="total pend"><b>${totals.pend}</b><small>Waiting on data</small></div>` +
+  `<div class="total new"><b>${totals.new}</b><small>Need UI</small></div>`;
+document.getElementById("toc").innerHTML = Object.entries(S).map(([k, v]) => `<a href="#${k}">${esc(v.name)}</a>`).join("");
+
+document.querySelectorAll(".fbtn").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll(".fbtn").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  const f = b.dataset.f;
+  document.querySelectorAll("tr[data-st]").forEach(tr => { tr.hidden = f !== "all" && tr.dataset.st !== f; });
+}));
+
+// sparklines from data-spark values
+document.querySelectorAll("svg[data-spark]").forEach(svg => {
+  const v = svg.dataset.spark.split(",").map(Number), w = 300, h = +svg.getAttribute("height"), p = 4;
+  const min = Math.min(...v), max = Math.max(...v), span = max - min || 1;
+  const pts = v.map((y, i) => [(i / (v.length - 1)) * w, p + (1 - (y - min) / span) * (h - 2 * p)]);
+  const d = pts.map((q, i) => (i ? "L" : "M") + q[0].toFixed(1) + "," + q[1].toFixed(1)).join(" ");
+  const c = svg.dataset.c, id = "g" + Math.random().toString(36).slice(2, 7);
+  svg.setAttribute("viewBox", `0 0 ${w} ${h}`); svg.setAttribute("preserveAspectRatio", "none");
+  svg.innerHTML = (svg.dataset.fill ? `<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c}" stop-opacity=".28"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></linearGradient></defs><path d="${d} L${w},${h} L0,${h} Z" fill="url(#${id})"/>` : "") +
+    `<path d="${d}" fill="none" stroke="${c}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>` +
+    `<circle cx="${pts.at(-1)[0]}" cy="${pts.at(-1)[1]}" r="3" fill="${c}"/>`;
+});
+</script>
+
+</body></html>

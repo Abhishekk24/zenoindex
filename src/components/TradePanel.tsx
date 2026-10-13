@@ -4,8 +4,9 @@
  * submitted, awaited on-chain and confirmed server-side. The app never moves
  * funds itself.
  */
+import { router } from 'expo-router';
 import React, { useState } from 'react';
-import { Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { encodeFunctionData, erc20Abi, parseUnits, type Hex } from 'viem';
 import { useAccount } from '@reown/appkit-react-native';
 import { useChainId, useSendTransaction, useSwitchChain } from 'wagmi';
@@ -13,16 +14,26 @@ import { useChainId, useSendTransaction, useSwitchChain } from 'wagmi';
 import * as api from '../lib/api';
 import {
   blockNumber,
+  chainName,
   erc20Allowance,
+  erc20BalanceOf,
+  estimateNetworkFee,
+  explorerTxUrl,
   findVaultTx,
+  nativeSymbol,
   pollUntil,
   waitForReceipt,
 } from '../lib/chain';
-import { compare, isDecimal, isPositive } from '../lib/decimal';
-import { formatBps, formatDecimal, shortAddress } from '../lib/format';
+import { compare, fromRaw, isDecimal, isPositive } from '../lib/decimal';
+import {
+  formatBps,
+  formatDecimal,
+  formatRaw,
+  shortAddress,
+} from '../lib/format';
 import type { Dtf, Operation, TradePreview, TxDraft } from '../lib/types';
 import { withWalletOpen } from '../lib/walletLink';
-import { colors, space, type } from '../theme/tokens';
+import { colors, fonts, space, type } from '../theme/tokens';
 import {
   Badge,
   Body,
@@ -31,9 +42,12 @@ import {
   Divider,
   Field,
   Label,
+  LinkText,
   Row,
   Segmented,
 } from './ui';
+import { TradeProgress, type ProgressStep } from './trade/TradeProgress';
+import { useLoad } from '../hooks/useLoad';
 import { useUser } from '../hooks/useUser';
 
 type Side = TradePreview['side'];
@@ -49,11 +63,14 @@ type Step =
 /** How long to wait for a signature, from the wallet or seen on-chain. */
 const WALLET_TIMEOUT_MS = 5 * 60_000;
 
-const STEP_LABEL: Record<Exclude<Step, 'idle' | 'done'>, string> = {
-  approving: 'Approving spend…',
-  signing: 'Confirm in your wallet…',
-  broadcast: 'Broadcasting…',
-  confirming: 'Confirming on-chain…',
+/** Where each step sits in the checklist (broadcast is part of signing). */
+const STEP_RANK: Record<Step, number> = {
+  idle: -1,
+  approving: 0,
+  signing: 1,
+  broadcast: 1,
+  confirming: 2,
+  done: 3,
 };
 
 export function TradePanel({
@@ -62,6 +79,7 @@ export function TradePanel({
   initialSide = 'invest',
   disabledReason,
   notice,
+  priceStale,
   onConfirmed,
 }: {
   dtf: Dtf;
@@ -71,6 +89,8 @@ export function TradePanel({
   disabledReason?: string;
   /** Shown above the form, e.g. eligibility or wallet still needed. */
   notice?: string;
+  /** The basket's price feed is stale, so quotes may be off. */
+  priceStale?: boolean;
   /** Reload detail/portfolio data after a confirmed operation. */
   onConfirmed?: () => void;
 }) {
@@ -85,6 +105,11 @@ export function TradePanel({
   const [busy, setBusy] = useState(false);
   const [step, setStep] = useState<Step>('idle');
   const [operation, setOperation] = useState<Operation>();
+  /** Redeem only: which of its several transactions is being signed. */
+  const [leg, setLeg] = useState(0);
+  const [details, setDetails] = useState(false);
+  /** Bumped after a trade so the balance re-reads. */
+  const [balanceVersion, setBalanceVersion] = useState(0);
   // A preview (or its error) is only valid for the inputs it was made from,
   // so it is kept with them and hidden as soon as either input changes.
   const [result, setResult] = useState<{
@@ -111,6 +136,31 @@ export function TradePanel({
   const wrongChain =
     preview !== undefined &&
     walletChainId !== preview.draft.transaction.chainId;
+
+  // What the user can spend: base asset to invest, shares to redeem.
+  const balanceToken =
+    side === 'invest' ? dtf.baseAssetId : dtf.contractAddress;
+  const balanceDecimals =
+    side === 'invest' ? dtf.baseAssetDecimals : dtf.shareDecimals;
+  const { data: balanceRaw } = useLoad(
+    async () =>
+      signer && linked && balanceToken
+        ? (await erc20BalanceOf(dtf.chainId, balanceToken, signer)).toString()
+        : null,
+    `${side}#${signer ?? 'none'}#${linked}#${balanceVersion}`,
+  );
+  const balance = balanceRaw ? fromRaw(balanceRaw, balanceDecimals) : null;
+  const overBalance = valid && balance !== null && compare(amount, balance) > 0;
+
+  const gas = preview?.draft.transaction.gas;
+  const feeChainId = preview?.draft.transaction.chainId ?? dtf.chainId;
+  const { data: feeWei } = useLoad(
+    async () =>
+      gas
+        ? (await estimateNetworkFee(feeChainId, BigInt(gas))).toString()
+        : null,
+    `fee#${preview?.draft.requestId ?? 'none'}`,
+  );
 
   const review = async () => {
     if (!signer || !linked) {
@@ -200,6 +250,7 @@ export function TradePanel({
   async function sendDraft(draft: TxDraft) {
     const chainId = draft.transaction.chainId;
     const to = draft.transaction.to;
+    setLeg(n => n + 1);
     setStep('signing');
     // Watched on-chain as well as answered by the wallet, so a lost reply
     // can't leave the app waiting on a transaction that already landed (and
@@ -256,6 +307,7 @@ export function TradePanel({
     let draft = preview.draft;
     setBusy(true);
     setOperation(undefined);
+    setLeg(0);
     try {
       setStep('signing');
       await ensureChain(draft.transaction.chainId);
@@ -280,6 +332,7 @@ export function TradePanel({
         await sendDraft(draft);
       }
       setStep('done');
+      setBalanceVersion(v => v + 1);
       onConfirmed?.();
     } catch (e) {
       setOperation(undefined);
@@ -293,10 +346,43 @@ export function TradePanel({
     }
   };
 
-  const explorerNote =
+  const txUrl =
     operation?.txHash && operation.txHash.length > 10
-      ? `Tx ${shortAddress(operation.txHash)}`
+      ? explorerTxUrl(dtf.chainId, operation.txHash)
       : null;
+  const inFlow = busy && step !== 'idle';
+  const progress: ProgressStep[] = [
+    ...(side === 'invest'
+      ? [{ key: 'approving' as const, label: `Approve ${baseSymbol} spend` }]
+      : []),
+    {
+      key: 'signing' as const,
+      label:
+        side === 'redeem' && leg > 1
+          ? `Sign transaction ${leg}`
+          : 'Sign in your wallet',
+    },
+    { key: 'confirming' as const, label: 'Confirm on-chain' },
+  ].map(({ key, label }) => ({
+    key,
+    label,
+    state:
+      STEP_RANK[step] > STEP_RANK[key]
+        ? 'done'
+        : STEP_RANK[step] === STEP_RANK[key]
+          ? 'now'
+          : 'todo',
+    hint:
+      key === 'confirming'
+        ? 'Usually under a minute.'
+        : 'Open your wallet if it didn’t come up, then come back here.',
+  }));
+
+  const newTrade = () => {
+    setAmount('');
+    setOperation(undefined);
+    setStep('idle');
+  };
 
   return (
     <Card title="Invest or redeem" banded>
@@ -306,6 +392,12 @@ export function TradePanel({
         <>
           <Segmented options={SIDES} value={side} onChange={setSide} />
           {notice ? <Badge label={notice} tone="gold" /> : null}
+          {priceStale ? (
+            <Badge
+              label="Price may be out of date — amounts can differ"
+              tone="danger"
+            />
+          ) : null}
           {!isConnected || !linked ? (
             <Body muted>
               Connect and link a wallet (Profile → Wallets) to invest.
@@ -324,6 +416,26 @@ export function TradePanel({
             placeholder="0.00"
             keyboardType="decimal-pad"
           />
+          {balance !== null ? (
+            <View style={styles.line}>
+              <Text
+                style={[
+                  type.small,
+                  { color: overBalance ? colors.danger : colors.muted },
+                ]}
+              >
+                Available {formatDecimal(balance, 4)} {unit}
+              </Text>
+              <Pressable
+                onPress={() => setAmount(balance)}
+                accessibilityRole="button"
+                accessibilityLabel={`Use the full ${unit} balance`}
+                hitSlop={8}
+              >
+                <Text style={styles.max}>MAX</Text>
+              </Pressable>
+            </View>
+          ) : null}
           {side === 'invest' && dtf.minInvestment ? (
             <Text
               style={[
@@ -337,7 +449,7 @@ export function TradePanel({
           <Button
             label="Review"
             onPress={review}
-            disabled={!valid || belowMinimum || !linked}
+            disabled={!valid || belowMinimum || overBalance || !linked}
             loading={busy && step === 'idle'}
           />
           {error ? (
@@ -346,7 +458,7 @@ export function TradePanel({
         </>
       )}
 
-      {preview && !operation && step !== 'done' && (
+      {preview && !inFlow && step !== 'done' && (
         <View style={{ gap: space.sm }}>
           <Divider />
           <Label accent>Preview</Label>
@@ -370,26 +482,67 @@ export function TradePanel({
               side === 'invest' ? dtf.symbol : baseSymbol
             }`}
           />
-          <Divider />
-          <Label>Transaction draft</Label>
-          <Row label="To" value={shortAddress(preview.draft.transaction.to)} />
           <Row
-            label="Chain"
-            value={String(preview.draft.transaction.chainId)}
+            label="Network fee"
+            value={
+              feeWei
+                ? `≈ ${formatRaw(feeWei, 18, 6)} ${nativeSymbol(feeChainId)}`
+                : '—'
+            }
           />
-          <Row label="Gas limit" value={preview.draft.transaction.gas ?? '—'} />
+          <Pressable
+            onPress={() => setDetails(d => !d)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: details }}
+            hitSlop={8}
+          >
+            <Text style={styles.toggle}>
+              Transaction details {details ? '▴' : '▾'}
+            </Text>
+          </Pressable>
+          {details ? (
+            <>
+              <Row
+                label="To"
+                value={shortAddress(preview.draft.transaction.to)}
+              />
+              <Row
+                label="Network"
+                value={chainName(preview.draft.transaction.chainId)}
+                mono={false}
+              />
+              <Row
+                label="Gas limit"
+                value={preview.draft.transaction.gas ?? '—'}
+              />
+            </>
+          ) : null}
           {wrongChain ? (
-            <Body muted>
-              Your wallet is on chain {walletChainId}; switch to{' '}
-              {preview.draft.transaction.chainId} when signing.
-            </Body>
+            <>
+              <Body muted>
+                Your wallet is on another network. Switch to{' '}
+                {chainName(preview.draft.transaction.chainId)} to sign.
+              </Body>
+              <Button
+                label={`Switch to ${chainName(preview.draft.transaction.chainId)}`}
+                variant="outline"
+                onPress={() =>
+                  ensureChain(preview.draft.transaction.chainId).catch(e =>
+                    setResult({
+                      inputs,
+                      preview,
+                      error:
+                        e instanceof Error
+                          ? e.message
+                          : 'Could not switch network.',
+                    }),
+                  )
+                }
+              />
+            </>
           ) : null}
           <Button
-            label={
-              busy
-                ? (STEP_LABEL[step as keyof typeof STEP_LABEL] ?? 'Working…')
-                : 'Sign and send'
-            }
+            label="Sign and send"
             variant="green"
             onPress={confirmTrade}
             loading={busy}
@@ -398,6 +551,13 @@ export function TradePanel({
             The final amounts are set by the quote when you sign. Prices can
             move before then.
           </Text>
+        </View>
+      )}
+
+      {inFlow && (
+        <View style={{ gap: space.md }}>
+          <Divider />
+          <TradeProgress steps={progress} />
         </View>
       )}
 
@@ -410,13 +570,54 @@ export function TradePanel({
             }
             tone={operation.status === 'confirmed' ? 'green' : 'gold'}
           />
-          {explorerNote ? (
-            <Text style={[type.small, { color: colors.muted }]}>
-              {explorerNote}
-            </Text>
+          {preview ? (
+            <>
+              <Row
+                label={side === 'invest' ? 'You paid' : 'Shares redeemed'}
+                value={`${formatDecimal(preview.pay, 4)} ${unit}`}
+              />
+              <Row
+                label={
+                  side === 'invest'
+                    ? 'Shares (estimated)'
+                    : 'You receive (est.)'
+                }
+                value={`${formatDecimal(preview.receive, 4)} ${
+                  side === 'invest' ? dtf.symbol : baseSymbol
+                }`}
+              />
+            </>
           ) : null}
+          {operation.txHash ? (
+            <Row
+              label="Transaction"
+              value={
+                <LinkText
+                  mono
+                  label={shortAddress(operation.txHash)}
+                  url={txUrl}
+                />
+              }
+            />
+          ) : null}
+          <Button
+            label="Go to portfolio"
+            variant="outline"
+            onPress={() => router.navigate('/portfolio')}
+          />
+          <Button label="New trade" variant="ghost" onPress={newTrade} />
         </View>
       )}
     </Card>
   );
 }
+
+const styles = StyleSheet.create({
+  line: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  max: { fontFamily: fonts.semibold, fontSize: 12, color: colors.gold },
+  toggle: { ...type.small, color: colors.gold },
+});

@@ -24,6 +24,7 @@ import { useLoad } from '../../hooks/useLoad';
 import { useUser } from '../../hooks/useUser';
 import { sum } from '../../lib/decimal';
 import { loadPortfolio } from '../../lib/portfolio';
+import { primaryWallet } from '../../lib/user';
 import { colors, fonts, space } from '../../theme/tokens';
 
 type Tab = 'allocation' | 'holdings' | 'activities';
@@ -37,10 +38,7 @@ const TABS = [
 export default function PortfolioScreen() {
   const user = useUser();
   const [tab, setTab] = useState<Tab>('allocation');
-  const wallet =
-    user.wallets.find(w => w.primary)?.address ??
-    user.walletAddress ??
-    user.wallets[0]?.address;
+  const wallet = primaryWallet(user);
 
   const { data, error, loading, reload } = useLoad(
     async () => (wallet ? loadPortfolio(wallet) : null),
@@ -76,7 +74,7 @@ export default function PortfolioScreen() {
     );
   }
 
-  const { portfolio, costBasis, activity, dtfs, source } = data;
+  const { portfolio, costBasis, activity, dtfs, source, cash } = data;
   const positions = portfolio.positions;
 
   if (positions.length === 0) {
@@ -111,6 +109,7 @@ export default function PortfolioScreen() {
           cost={cost}
           hasCost={hasCost}
           baskets={positions.length}
+          cash={cash}
         />
         {source === 'chain' ? (
           <Text style={styles.note}>

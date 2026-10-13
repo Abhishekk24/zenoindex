@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { compare, ratioBps, sub } from '../../lib/decimal';
-import { formatSignedBps } from '../../lib/format';
+import { formatDecimal, formatSignedBps } from '../../lib/format';
 import { signedUsd, usd } from '../../lib/money';
 import { colors, fonts, radius, space } from '../../theme/tokens';
 import { Stripes } from '../ui';
@@ -17,11 +17,14 @@ export function PortfolioSummary({
   cost,
   hasCost,
   baskets,
+  cash,
 }: {
   marketValue: string;
   cost: string;
   hasCost: boolean;
   baskets: number;
+  /** Uninvested stablecoin in the wallet, when it could be read. */
+  cash?: { amount: string; symbol: string } | null;
 }) {
   const pnl = sub(marketValue, cost);
   const up = compare(pnl, '0') >= 0;
@@ -58,6 +61,12 @@ export function PortfolioSummary({
         </Text>
       </View>
       <Text style={styles.marketValue}>{usd(marketValue)}</Text>
+      {cash ? (
+        <View style={styles.cash}>
+          <Text style={styles.label}>Cash ({cash.symbol})</Text>
+          <Text style={styles.cashValue}>{formatDecimal(cash.amount)}</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -93,6 +102,12 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     color: colors.muted,
   },
+  cash: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: space.md,
+  },
+  cashValue: { fontFamily: fonts.regular, fontSize: 13, color: colors.text },
   marketValue: {
     fontFamily: fonts.regular,
     fontSize: 30,

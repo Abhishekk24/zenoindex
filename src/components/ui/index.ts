@@ -10,6 +10,7 @@ export { Empty } from './Empty';
 export { Field } from './Field';
 export { IconButton } from './IconButton';
 export { Label } from './Label';
+export { LinkText } from './LinkText';
 export { LoadState } from './LoadState';
 export { Mono } from './Mono';
 export { Row } from './Row';

@@ -8,12 +8,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
 import * as api from './api';
+import { setSessionExpiredHandler } from './http';
 import { SessionContext, type SessionValue, stageOf } from './sessionContext';
 import type { User } from './types';
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [booted, setBooted] = useState(false);
+
+  // An expired session anywhere in the app returns the user to sign-in.
+  useEffect(() => setSessionExpiredHandler(() => setUser(null)), []);
 
   useEffect(() => {
     let live = true;

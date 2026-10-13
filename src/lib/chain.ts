@@ -60,6 +60,43 @@ export function explorerTxUrl(chainId: number, txHash: string): string | null {
   return base ? `${base.replace(/\/$/, '')}/tx/${txHash}` : null;
 }
 
+/** Explorer URL for an address or contract, when the chain publishes one. */
+export function explorerAddressUrl(
+  chainId: number,
+  address: string,
+): string | null {
+  const base = chains.get(chainId)?.blockExplorers?.default.url;
+  return base ? `${base.replace(/\/$/, '')}/address/${address}` : null;
+}
+
+/** A chain's display name: 4663 → "Robinhood Chain". */
+export function chainName(chainId: number): string {
+  return chains.get(chainId)?.name ?? `Chain ${chainId}`;
+}
+
+/** The chain's gas token symbol, e.g. "ETH". */
+export function nativeSymbol(chainId: number): string {
+  return chains.get(chainId)?.nativeCurrency.symbol ?? 'ETH';
+}
+
+/** Native (gas token) balance in wei. */
+export async function nativeBalance(
+  chainId: number,
+  owner: string,
+): Promise<bigint> {
+  return (await publicClientOf(chainId)).getBalance({
+    address: owner as Hex,
+  });
+}
+
+/** Estimated network fee in wei for `gas` units at the current gas price. */
+export async function estimateNetworkFee(
+  chainId: number,
+  gas: bigint,
+): Promise<bigint> {
+  return gas * (await (await publicClientOf(chainId)).getGasPrice());
+}
+
 export async function publicClientOf(chainId: number): Promise<PublicClient> {
   await loadChains();
   const cached = clients.get(chainId);

@@ -1,16 +1,20 @@
 import { router } from 'expo-router';
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { compare, sub } from '../../lib/decimal';
-import { formatDecimal, formatRaw } from '../../lib/format';
+import { compare, ratioBps, sub } from '../../lib/decimal';
+import { formatDecimal, formatRaw, formatSignedBps } from '../../lib/format';
+import { signedUsd, usd } from '../../lib/money';
 import type { Position } from '../../lib/portfolio';
 import type { Dtf } from '../../lib/types';
 import { colors, fonts, space } from '../../theme/tokens';
 import { listStyles } from './listStyles';
 import { SmallButton } from './SmallButton';
 
-/** Each position: name, shares and NAV, P&L, value, and Redeem / Invest. */
+/**
+ * Each position: name, shares and NAV, P&L, value, and Redeem / Invest.
+ * Tapping the position opens its detail screen.
+ */
 export function HoldingsTab({
   positions,
   costBasis,
@@ -39,7 +43,17 @@ export function HoldingsTab({
               i === positions.length - 1 && listStyles.last,
             ]}
           >
-            <View style={styles.top}>
+            <Pressable
+              onPress={() =>
+                router.push({
+                  pathname: '/position/[id]',
+                  params: { id: p.dtfId },
+                })
+              }
+              accessibilityRole="button"
+              accessibilityLabel={`${dtf?.name ?? p.dtfId} position`}
+              style={({ pressed }) => [styles.top, pressed && styles.pressed]}
+            >
               <View style={listStyles.fill}>
                 <Text style={listStyles.title} numberOfLines={1}>
                   {dtf?.name ?? p.dtfId}
@@ -63,11 +77,17 @@ export function HoldingsTab({
                   },
                 ]}
               >
-                {pnl === null ? '—' : `${up ? '▲' : '▼'} ${formatDecimal(pnl)}`}
+                {pnl === null
+                  ? '—'
+                  : `${up ? '▲' : '▼'} ${signedUsd(pnl)}${
+                      compare(basis!, '0') > 0
+                        ? ` · ${formatSignedBps(ratioBps(pnl, basis!))}`
+                        : ''
+                    }`}
               </Text>
-            </View>
+            </Pressable>
             <View style={styles.bottom}>
-              <Text style={styles.value}>{formatDecimal(p.value)}</Text>
+              <Text style={styles.value}>{usd(p.value)}</Text>
               <View style={styles.actions}>
                 <SmallButton
                   label="Redeem"
@@ -90,6 +110,7 @@ export function HoldingsTab({
 const styles = StyleSheet.create({
   holding: { flexDirection: 'column', alignItems: 'stretch' },
   top: { flexDirection: 'row', gap: space.md },
+  pressed: { opacity: 0.75 },
   pnl: { fontFamily: fonts.regular, fontSize: 12 },
   bottom: {
     flexDirection: 'row',

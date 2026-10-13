@@ -4,7 +4,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useLoad } from '../../hooks/useLoad';
 import * as api from '../../lib/api';
 import { openInAppBrowser } from '../../lib/browser';
-import { formatDate } from '../../lib/format';
+import { formatDate, shortAddress } from '../../lib/format';
+import { primaryWallet } from '../../lib/user';
 import type { KycStatus, User } from '../../lib/types';
 import { colors, fonts, radius, space } from '../../theme/tokens';
 import { NoticeIcon } from '../icons';
@@ -34,11 +35,7 @@ export function EligibilityTab({
   /** Bumped by pull-to-refresh. */
   refreshKey: number;
 }) {
-  const wallet =
-    user.wallets.find(w => w.primary)?.address ??
-    user.walletAddress ??
-    user.wallets[0]?.address ??
-    null;
+  const wallet = primaryWallet(user);
   const { data, error, reload } = useLoad(
     () => api.getEligibility(wallet),
     `${wallet ?? 'none'}#${refreshKey}`,
@@ -110,6 +107,9 @@ export function EligibilityTab({
         </Text>
       ) : null}
       {kycError ? <Text style={styles.error}>{kycError}</Text> : null}
+      {wallet ? (
+        <InfoRow label="Wallet being verified" value={shortAddress(wallet)} />
+      ) : null}
       <InfoRow label="Provider" value={data.provider} />
       <InfoRow
         label="Verified"

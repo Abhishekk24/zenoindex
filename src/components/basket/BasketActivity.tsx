@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { AssetMap, symbolOf } from '../../lib/basket';
+import { explorerTxUrl } from '../../lib/chain';
 import {
   formatDate,
   formatRaw,
@@ -10,7 +11,7 @@ import {
 } from '../../lib/format';
 import type { DtfDetail } from '../../lib/types';
 import { colors, space, type } from '../../theme/tokens';
-import { Badge, Card, Divider, Empty, Mono } from '../ui';
+import { Badge, Card, Divider, Empty, LinkText, Mono } from '../ui';
 
 /** Basket detail: recent invests, redeems and rebalances. */
 export function BasketActivity({
@@ -34,10 +35,18 @@ export function BasketActivity({
           <View key={tx.id} style={styles.item}>
             {i > 0 && <Divider />}
             <View style={styles.line}>
-              <Badge
-                label={humanize(tx.action)}
-                tone={tx.action === 'invest' ? 'green' : 'neutral'}
-              />
+              <View style={styles.badges}>
+                <Badge
+                  label={humanize(tx.action)}
+                  tone={tx.action === 'invest' ? 'green' : 'neutral'}
+                />
+                {tx.status !== 'confirmed' ? (
+                  <Badge
+                    label={humanize(tx.status)}
+                    tone={tx.status === 'reverted' ? 'danger' : 'gold'}
+                  />
+                ) : null}
+              </View>
               <Text style={styles.date}>{formatDate(tx.occurredAt)}</Text>
             </View>
             <View style={styles.line}>
@@ -52,6 +61,22 @@ export function BasketActivity({
                     )} ${symbolOf(tx.assetId, assets)}`
                   : '—'}
               </Mono>
+            </View>
+            <View style={styles.line}>
+              <Text style={styles.date}>
+                {tx.shareAmountRaw
+                  ? `${formatRaw(tx.shareAmountRaw, dtf.shareDecimals, 4)} ${
+                      dtf.symbol
+                    }`
+                  : ''}
+              </Text>
+              {tx.txHash ? (
+                <LinkText
+                  label="Explorer"
+                  size={12}
+                  url={explorerTxUrl(tx.chainId || dtf.chainId, tx.txHash)}
+                />
+              ) : null}
             </View>
           </View>
         ))
@@ -68,5 +93,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: space.md,
   },
+  badges: { flexDirection: 'row', gap: space.xs },
   date: { ...type.small, color: colors.muted },
 });

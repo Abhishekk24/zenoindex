@@ -12,6 +12,7 @@
 import { Linking } from 'react-native';
 
 import { appKitStorage } from '../config/storage';
+import { appKit } from '../config/wallet';
 import { closeInAppBrowser, isWebUrl, openInAppBrowser } from './browser';
 
 /** AppKit's storage key for the connected wallet's link (SafeStorageKeys.WC_DEEPLINK). */
@@ -41,6 +42,31 @@ export async function openConnectedWallet(): Promise<boolean> {
  * web wallet's browser closes again once the request is answered.
  */
 export async function withWalletOpen<T>(request: () => Promise<T>): Promise<T> {
+  try {
+    return await sendAndOpen(request);
+  } catch (e) {
+    if (isStaleSession(e)) {
+      // The wallet dropped this session (expired, or disconnected on its side):
+      // forget it here too so the app asks for a fresh connection.
+      await appKit.disconnect().catch(() => {});
+      throw new Error(WALLET_SESSION_EXPIRED);
+    }
+    throw e;
+  }
+}
+
+export const WALLET_SESSION_EXPIRED =
+  'Your wallet connection expired. Connect your wallet again.';
+
+/** WalletConnect's errors for a session or request the wallet no longer has. */
+const STALE_SESSION =
+  /recently deleted|No matching key|topic doesn't exist|Request expired/i;
+
+export function isStaleSession(e: unknown): boolean {
+  return e instanceof Error && STALE_SESSION.test(e.message);
+}
+
+async function sendAndOpen<T>(request: () => Promise<T>): Promise<T> {
   const pending = request();
   const inBrowser = await openConnectedWallet();
   if (!inBrowser) return pending;

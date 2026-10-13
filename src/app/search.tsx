@@ -19,7 +19,7 @@ import { AppHeader } from '../components/AppHeader';
 import { SearchIcon } from '../components/icons';
 import { SkeletonCard } from '../components/search/SkeletonCard';
 import * as api from '../lib/api';
-import { shortAddress } from '../lib/format';
+import { formatDecimal, shortAddress } from '../lib/format';
 import type { Dtf } from '../lib/types';
 import { useLoad } from '../hooks/useLoad';
 import { colors, fonts, radius, space } from '../theme/tokens';
@@ -103,9 +103,14 @@ export default function SearchScreen() {
               accessibilityLabel={`${dtf.name}, ${dtf.symbol}`}
               style={({ pressed }) => [styles.row, pressed && styles.pressed]}
             >
-              <Text style={styles.name} numberOfLines={1}>
-                {dtf.name}
-              </Text>
+              <View style={styles.top}>
+                <Text style={[styles.name, styles.fill]} numberOfLines={1}>
+                  {dtf.name}
+                </Text>
+                <Text style={styles.nav}>
+                  {formatDecimal(dtf.sharePrice, 4)}
+                </Text>
+              </View>
               <Text style={styles.meta} numberOfLines={1}>
                 {dtf.symbol} · {managerLabel(dtf.manager)}
               </Text>
@@ -144,7 +149,10 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   pressed: { backgroundColor: colors.surface2 },
+  top: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  fill: { flex: 1 },
   name: { fontFamily: fonts.regular, fontSize: 16, color: colors.text },
+  nav: { fontFamily: fonts.mono, fontSize: 13, color: colors.textSecondary },
   meta: {
     fontFamily: fonts.regular,
     fontSize: 11,

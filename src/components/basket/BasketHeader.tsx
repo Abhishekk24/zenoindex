@@ -1,10 +1,11 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { isComingSoon } from '../../lib/basket';
-import { shortAddress } from '../../lib/format';
+import { chainName } from '../../lib/chain';
+import { formatAgo, shortAddress } from '../../lib/format';
 import type { DtfDetail } from '../../lib/types';
-import { colors, space } from '../../theme/tokens';
+import { colors, space, type } from '../../theme/tokens';
 import { Badge, Display, Label, Mono, Stripes } from '../ui';
 
 /** Basket detail top: status badges, name, symbol and manager. */
@@ -40,6 +41,16 @@ export function BasketHeader({
           {shortAddress(dtf.manager)}
         </Mono>
       </View>
+      {dtf.asOf ? (
+        <Text style={styles.freshness}>
+          Priced {formatAgo(dtf.asOf)}
+          {dtf.priceSource ? ` · ${dtf.priceSource}` : ''} ·{' '}
+          {chainName(dtf.chainId)}
+        </Text>
+      ) : null}
+      {dtf.priceStale ? (
+        <Badge label="Price may be out of date" tone="danger" />
+      ) : null}
     </View>
   );
 }
@@ -53,4 +64,5 @@ const styles = StyleSheet.create({
   },
   badges: { flexDirection: 'row', gap: space.sm },
   manager: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  freshness: { ...type.small, color: colors.dim },
 });

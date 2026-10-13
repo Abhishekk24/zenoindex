@@ -64,6 +64,10 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  */
 const EMAIL_CODES_ENABLED = false;
 
+const SIGN_TIMEOUT_MS = 2 * 60_000;
+const SIGN_TIMEOUT =
+  'No answer from your wallet. Connect your wallet again and retry.';
+
 /** Turns wallet/viem errors into something short for the user. */
 function walletErrorMessage(e: unknown): string {
   const text = e instanceof Error ? e.message : '';
@@ -87,6 +91,10 @@ export default function SignInScreen() {
   // straight away rather than waiting for a second tap.
   const signInOnConnect = useRef(false);
   const signInAfterSwitch = useRef(false);
+  // Only offer "Sign in with 0x…" for a wallet connected on this screen: a
+  // connection restored from an earlier run may be dead on the wallet's side,
+  // and its signature request would never arrive.
+  const [connectedHere, setConnectedHere] = useState(false);
 
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
@@ -134,14 +142,26 @@ export default function SignInScreen() {
         return;
       }
       const challenge = await api.requestWalletLoginChallenge(wallet);
-      const signature = await withWalletOpen(() =>
-        signMessageAsync({
-          account: wallet as `0x${string}`,
-          message: challenge.message,
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const signature = await Promise.race([
+        withWalletOpen(() =>
+          signMessageAsync({
+            account: wallet as `0x${string}`,
+            message: challenge.message,
+          }),
+        ),
+        // A wallet that lost this session never answers; don't wait forever.
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error(SIGN_TIMEOUT)),
+            SIGN_TIMEOUT_MS,
+          );
         }),
-      );
+      ]).finally(() => clearTimeout(timer));
       setUser(await api.walletLogin({ message: challenge.message, signature }));
     } catch (e) {
+      // No answer: drop the connection so the next try starts a fresh one.
+      if (e instanceof Error && e.message === SIGN_TIMEOUT) await disconnect();
       setError(walletErrorMessage(e));
     } finally {
       setBusy(false);
@@ -150,6 +170,7 @@ export default function SignInScreen() {
 
   const chooseWallet = async () => {
     setError(undefined);
+    setConnectedHere(true);
     // With a wallet still connected, open() shows that wallet's account view
     // instead of the picker — disconnect first so another one can be chosen.
     if (isConnected) await disconnect();
@@ -164,6 +185,7 @@ export default function SignInScreen() {
   const socialSignIn = async (provider: SocialProvider) => {
     setError(undefined);
     if (isConnected) await disconnect();
+    setConnectedHere(true);
     signInOnConnect.current = true;
     setConnecting(true);
     try {
@@ -274,7 +296,7 @@ export default function SignInScreen() {
                 onPress={() => socialSignIn('google')}
                 disabled={busy || connecting || pickerOpen}
               />
-              {isConnected && address ? (
+              {isConnected && address && connectedHere ? (
                 <>
                   <LightButton
                     label={
