@@ -28,7 +28,17 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAccountEffect, useSignMessage } from 'wagmi';
 
+import {
+  type CodeError,
+  EmailCodeStep,
+} from '../components/auth/EmailCodeStep';
 import { LightButton } from '../components/auth/LightButton';
+import {
+  CARD_BG,
+  DIVIDER,
+  INPUT_BG,
+  INPUT_BORDER,
+} from '../components/auth/palette';
 import { PrimaryButton } from '../components/auth/PrimaryButton';
 import { GoogleIcon } from '../components/icons';
 import { appKit } from '../config/wallet';
@@ -46,11 +56,13 @@ import { colors, fonts } from '../theme/tokens';
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// Colours specific to the sign-in design.
-const CARD_BG = '#000000';
-const INPUT_BG = '#08150f';
-const INPUT_BORDER = 'rgba(92, 199, 150, 0.28)';
-const DIVIDER = 'rgba(92, 199, 150, 0.22)';
+/**
+ * Zeno's own email codes (Send code → "Check your email" step). Off until the
+ * API has email-code endpoints; while off, Send code uses Reown's email login.
+ * TODO(backend): send / verify / resend endpoints, then turn this on and fill
+ * in sendEmailCode, verifyEmailCode and resendEmailCode below.
+ */
+const EMAIL_CODES_ENABLED = false;
 
 /** Turns wallet/viem errors into something short for the user. */
 function walletErrorMessage(e: unknown): string {
@@ -80,8 +92,27 @@ export default function SignInScreen() {
   // Email/Google login is open in the browser.
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string>();
+  // Zeno email codes (EMAIL_CODES_ENABLED).
+  const [step, setStep] = useState<'email' | 'code'>('email');
+  const [codeError, setCodeError] = useState<CodeError>();
 
   const validEmail = EMAIL.test(email.trim());
+
+  // TODO(backend): request a code for `email`; show the server's resend
+  // cooldown via EmailCodeStep's resendAfterSeconds.
+  const sendEmailCode = () => {
+    setError(undefined);
+    setCodeError(undefined);
+    setStep('code');
+  };
+  // TODO(backend): verify; on failure map the server's error to a CodeError,
+  // e.g. code_expired → { kind: 'expired', triesLeft }.
+  const verifyEmailCode = (_code: string) => {};
+  // TODO(backend): request a new code.
+  const resendEmailCode = () => setCodeError(undefined);
+
+  const sendCode = () =>
+    EMAIL_CODES_ENABLED ? sendEmailCode() : socialSignIn('email');
 
   const walletSignIn = async (connected: string) => {
     const wallet = appKitAccount.address ?? connected;
@@ -183,34 +214,24 @@ export default function SignInScreen() {
         bounces={false}
       >
         <View style={styles.card}>
-          <Text style={styles.title}>Sign in</Text>
-          <Text style={styles.subtitle}>
-            No account needed — signing in creates one.
-          </Text>
-
-          {isConnected && address ? (
-            <View style={styles.connected}>
-              <PrimaryButton
-                label={
-                  busy
-                    ? 'Check your wallet to sign…'
-                    : `Sign in with ${shortAddress(address)}`
-                }
-                onPress={() => walletSignIn(address)}
-                disabled={busy}
-                busy={busy}
-              />
-              <Pressable
-                onPress={chooseWallet}
-                disabled={busy}
-                accessibilityRole="button"
-                style={styles.linkButton}
-              >
-                <Text style={styles.link}>Use a different email or wallet</Text>
-              </Pressable>
-            </View>
+          {step === 'code' ? (
+            <EmailCodeStep
+              email={email.trim()}
+              error={codeError}
+              onVerify={verifyEmailCode}
+              onResend={resendEmailCode}
+              onChangeEmail={() => {
+                setCodeError(undefined);
+                setStep('email');
+              }}
+            />
           ) : (
             <>
+              <Text style={styles.title}>Sign in</Text>
+              <Text style={styles.subtitle}>
+                No account needed — signing in creates one.
+              </Text>
+
               <Text style={styles.label}>EMAIL ADDRESS</Text>
               <TextInput
                 value={email}
@@ -223,15 +244,14 @@ export default function SignInScreen() {
                 keyboardType="email-address"
                 textContentType="emailAddress"
                 returnKeyType="send"
-                onSubmitEditing={() =>
-                  validEmail && !connecting && socialSignIn('email')
-                }
+                onSubmitEditing={() => validEmail && !connecting && sendCode()}
                 style={styles.input}
               />
               <PrimaryButton
-                label={busy ? 'Check your wallet to sign…' : 'Send code'}
-                onPress={() => socialSignIn('email')}
+                label="Send code"
+                onPress={sendCode}
                 disabled={!validEmail || busy || connecting || pickerOpen}
+                busy={connecting}
               />
 
               <View style={styles.dividerRow}>
@@ -246,20 +266,50 @@ export default function SignInScreen() {
                 onPress={() => socialSignIn('google')}
                 disabled={busy || connecting || pickerOpen}
               />
-              <LightButton
-                label={pickerOpen ? 'Choose a wallet…' : 'Connect wallet'}
-                onPress={chooseWallet}
-                disabled={busy || connecting}
-              />
+              {isConnected && address ? (
+                <>
+                  <LightButton
+                    label={
+                      busy
+                        ? 'Check your wallet to sign…'
+                        : `Sign in with ${shortAddress(address)}`
+                    }
+                    onPress={() => walletSignIn(address)}
+                    disabled={busy || connecting}
+                  />
+                  <Pressable
+                    onPress={chooseWallet}
+                    disabled={busy || connecting}
+                    accessibilityRole="button"
+                    style={styles.linkButton}
+                  >
+                    <Text style={styles.link}>Use a different wallet</Text>
+                  </Pressable>
+                </>
+              ) : (
+                <LightButton
+                  label={
+                    busy
+                      ? 'Check your wallet to sign…'
+                      : pickerOpen
+                        ? 'Choose a wallet…'
+                        : 'Connect wallet'
+                  }
+                  onPress={chooseWallet}
+                  disabled={busy || connecting}
+                />
+              )}
             </>
           )}
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
           <Text style={styles.footer}>
+            {/* Terms and Privacy Policy open the in-app reader (legal/[doc]). */}
             By continuing you agree to the{' '}
             <Text
               style={styles.footerLink}
+              accessibilityRole="link"
               onPress={() =>
                 router.push({
                   pathname: '/legal/[doc]',
@@ -272,6 +322,7 @@ export default function SignInScreen() {
             {'\n'}and{' '}
             <Text
               style={styles.footerLink}
+              accessibilityRole="link"
               onPress={() =>
                 router.push({
                   pathname: '/legal/[doc]',
@@ -318,7 +369,6 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginTop: 6,
   },
-  connected: { marginTop: 12 },
   label: {
     fontFamily: fonts.medium,
     fontSize: 12,
