@@ -2,10 +2,6 @@
  * Zeno mobile: investor app for on-chain baskets (DTFs) on Robinhood Chain.
  * Providers, fonts and the splash screen; routes live in RootStack.
  */
-// WalletConnect polyfills (crypto.getRandomValues, TextEncoder, URL, Buffer)
-// must load before any AppKit/WalletConnect module, so this stays first.
-import '@walletconnect/react-native-compat';
-
 import {
   SpaceGrotesk_300Light,
   SpaceGrotesk_400Regular,
@@ -13,6 +9,7 @@ import {
   SpaceGrotesk_600SemiBold,
   SpaceGrotesk_700Bold,
 } from '@expo-google-fonts/space-grotesk';
+import { PrivyProvider } from '@privy-io/expo';
 import { AppKit, AppKitProvider } from '@reown/appkit-react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useFonts } from 'expo-font';
@@ -26,7 +23,7 @@ import { WagmiProvider } from 'wagmi';
 
 import { RootStack } from '../components/navigation/RootStack';
 import { OfflineBanner } from '../components/OfflineBanner';
-import { appKit, wagmiAdapter } from '../config/wallet';
+import { appKit, privyProps, wagmiAdapter } from '../config/wallet';
 import { SessionProvider } from '../lib/session';
 import { navigationTheme } from '../theme/navigationTheme';
 import { fonts } from '../theme/tokens';
@@ -59,28 +56,30 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={styles.root}>
-      {/* Order from the Reown docs: AppKitProvider → WagmiProvider →
-          QueryClientProvider. */}
-      <AppKitProvider instance={appKit}>
-        <WagmiProvider config={wagmiAdapter.wagmiConfig}>
-          <QueryClientProvider client={queryClient}>
-            <ThemeProvider value={navigationTheme}>
-              <SessionProvider>
-                <StatusBar style="light" />
-                <RootStack />
-                <OfflineBanner />
-              </SessionProvider>
-            </ThemeProvider>
-            {/* The wallet picker. AppKitProvider only holds state; without
-                this the picker never appears. Wrapped in a full-screen
-                absolute layer (Reown docs, Expo Android) that lets touches
-                through to the app while the picker is closed. */}
-            <View style={styles.appKit} pointerEvents="box-none">
-              <AppKit />
-            </View>
-          </QueryClientProvider>
-        </WagmiProvider>
-      </AppKitProvider>
+      {/* Privy (email / Google) outside; inside, the Reown docs' order for
+          external wallets: AppKitProvider → WagmiProvider → QueryClientProvider. */}
+      <PrivyProvider {...privyProps}>
+        <AppKitProvider instance={appKit}>
+          <WagmiProvider config={wagmiAdapter.wagmiConfig}>
+            <QueryClientProvider client={queryClient}>
+              <ThemeProvider value={navigationTheme}>
+                <SessionProvider>
+                  <StatusBar style="light" />
+                  <RootStack />
+                  <OfflineBanner />
+                </SessionProvider>
+              </ThemeProvider>
+              {/* The wallet picker. AppKitProvider only holds state; without
+                  this the picker never appears. Wrapped in a full-screen
+                  absolute layer (Reown docs, Expo Android) that lets touches
+                  through to the app while the picker is closed. */}
+              <View style={styles.appKit} pointerEvents="box-none">
+                <AppKit />
+              </View>
+            </QueryClientProvider>
+          </WagmiProvider>
+        </AppKitProvider>
+      </PrivyProvider>
     </GestureHandlerRootView>
   );
 }

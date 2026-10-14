@@ -1,7 +1,7 @@
 /**
  * The session's onboarding stage decides which routes exist:
  *
- *   signedOut → sign-in (email code or wallet)
+ *   signedOut → sign-in (email code, Google or wallet)
  *   terms     → terms
  *   profile   → complete-profile
  *   ready     → (tabs): Explore · Portfolio · Profile, search, basket/[id],

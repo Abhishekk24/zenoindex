@@ -1,12 +1,24 @@
 /**
- * Sign in with email, Google or a wallet (design: sign-in mockup).
+ * Sign in with email, Google or a wallet (design: sign-in mockup) — all three
+ * through Privy, so every user is a Privy user.
  *
- * Email and Google go through Reown's embedded wallet, finished in the in-app
- * browser (lib/socialLogin.ts); Connect wallet opens AppKit's wallet picker. Once
- * connected, the wallet signs the server's Sign-In with Ethereum message — a
- * signature only, no transaction. A new wallet gets a new account, which then
+ * - Email: a one-time code typed here. Google: Privy's OAuth page, returning
+ *   via the app's scheme. Privy then creates the user's embedded wallet.
+ * - Connect wallet: AppKit's picker connects an external wallet (MetaMask &
+ *   co.), which signs Privy's Sign-In with Ethereum message — a signature
+ *   only, no transaction.
+ *
+ * The backend then exchanges Privy's access token for a Zeno session on the
+ * user's wallet (POST /auth/privy). A new wallet gets a new account, which then
  * goes through terms and profile.
  */
+import {
+  useEmbeddedEthereumWallet,
+  useLoginWithEmail,
+  useLoginWithOAuth,
+  useLoginWithSiwe,
+  usePrivy,
+} from '@privy-io/expo';
 import {
   useAccount as useAppKitAccount,
   useAppKit,
@@ -26,25 +38,23 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAccountEffect, useSignMessage } from 'wagmi';
+import { getAddress } from 'viem';
+import { useAccountEffect, useChainId, useSignMessage } from 'wagmi';
 
 import { LightButton } from '../components/auth/LightButton';
 import { PrimaryButton } from '../components/auth/PrimaryButton';
 import { GoogleIcon } from '../components/icons';
-import { appKit } from '../config/wallet';
+import { SIWE_ORIGIN } from '../config/wallet';
 import { useKeyboardHeight } from '../hooks/useKeyboardHeight';
 import { useSession } from '../hooks/useSession';
 import * as api from '../lib/api';
 import { shortAddress } from '../lib/format';
-import {
-  connectWithSocial,
-  SocialLoginCancelled,
-  type SocialProvider,
-} from '../lib/socialLogin';
+import { signsWithExternalWallet } from '../lib/wallet';
 import { withWalletOpen } from '../lib/walletLink';
 import { colors, fonts } from '../theme/tokens';
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const CODE = /^\d{6}$/;
 
 const SIGN_TIMEOUT_MS = 2 * 60_000;
 const SIGN_TIMEOUT =
@@ -55,6 +65,15 @@ const CARD_BG = '#000000';
 const INPUT_BG = '#08150f';
 const INPUT_BORDER = 'rgba(92, 199, 150, 0.28)';
 const DIVIDER = 'rgba(92, 199, 150, 0.22)';
+
+/** Turns Privy/API errors into something short for the user. */
+function signInErrorMessage(e: unknown): string {
+  const text = e instanceof Error ? e.message : '';
+  if (/cancel/i.test(text)) return 'Sign-in cancelled.';
+  if (/invalid.*code|code.*invalid|incorrect/i.test(text))
+    return 'That code is not right. Check your email and try again.';
+  return text || 'Sign-in failed. Please try again.';
+}
 
 /** Turns wallet/viem errors into something short for the user. */
 function walletErrorMessage(e: unknown): string {
@@ -67,57 +86,114 @@ export default function SignInScreen() {
   const insets = useSafeAreaInsets();
   const { setUser } = useSession();
   const keyboardHeight = useKeyboardHeight();
+  const privy = usePrivy();
+  const { wallets } = useEmbeddedEthereumWallet();
+  const { sendCode, loginWithCode } = useLoginWithEmail();
+  const { login: loginWithOAuth } = useLoginWithOAuth();
+  const { generateSiweMessage, loginWithSiwe } = useLoginWithSiwe();
+  const walletChainId = useChainId();
   const { open, disconnect } = useAppKit();
   const { isOpen: pickerOpen } = useAppKitState();
-  // AppKit's active address, not wagmi's: for Reown email wallets wagmi reports
-  // the session's first account — the smart account, which can't be used here —
-  // while AppKit resolves the wallet's own account (EOA).
-  const appKitAccount = useAppKitAccount();
-  const { address, isConnected } = appKitAccount;
+  const { address: externalAddress, isConnected } = useAppKitAccount();
   const { signMessageAsync } = useSignMessage();
-  // Set when the user starts a sign-in: once a wallet connects, ask it to sign
+  // Set when the user picks a wallet: once it connects, ask it to sign
   // straight away rather than waiting for a second tap.
   const signInOnConnect = useRef(false);
-  const signInAfterSwitch = useRef(false);
   // Only offer "Sign in with 0x…" for a wallet connected on this screen: a
   // connection restored from an earlier run may be dead on the wallet's side,
   // and its signature request would never arrive.
   const [connectedHere, setConnectedHere] = useState(false);
 
   const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
+  const [codeSent, setCodeSent] = useState(false);
   const [busy, setBusy] = useState(false);
-  // Email/Google login is open in the browser.
-  const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string>();
+  // The Zeno session exchange failed (e.g. backend unreachable). Privy's sign-in
+  // stays valid — its email code is already used up — so retry the exchange
+  // rather than sending the user back to enter a code that no longer works.
+  const [exchangeFailed, setExchangeFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   const validEmail = EMAIL.test(email.trim());
+  const validCode = CODE.test(code.trim());
+  const walletAddress = wallets[0]?.address;
 
-  const walletSignIn = async (connected: string) => {
-    const wallet = appKitAccount.address ?? connected;
+  // Signed in to Privy (just now, or left from an earlier run when only the
+  // Zeno session expired): waiting for the wallet, then the Zeno session.
+  // Privy refuses a second login, so this never shows the form.
+  const finishing = privy.isReady && Boolean(privy.user);
+  // Wallet sign-ins have their wallet already; email / Google users' embedded
+  // wallet appears shortly after login (createOnLogin), and the backend looks
+  // it up on the Privy user, so wait for it before exchanging.
+  const accountWallet = signsWithExternalWallet(privy.user)
+    ? 'external'
+    : walletAddress;
+
+  useEffect(() => {
+    if (!finishing || !accountWallet) return;
+    let live = true;
+    (async () => {
+      try {
+        const token = await privy.getAccessToken();
+        if (!token) throw new Error('Sign-in expired. Please try again.');
+        const user = await api.privyLogin(token);
+        if (live) setUser(user);
+      } catch (e) {
+        if (!live) return;
+        setError(signInErrorMessage(e));
+        setExchangeFailed(true);
+      }
+    })();
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per wallet / retry
+  }, [finishing, accountWallet, attempt]);
+
+  const retryExchange = () => {
+    setError(undefined);
+    setExchangeFailed(false);
+    setAttempt(n => n + 1);
+  };
+
+  /** Drops the Privy sign-in so the user can start over with a fresh code or wallet. */
+  const startOver = async () => {
+    setError(undefined);
+    setExchangeFailed(false);
+    setCodeSent(false);
+    setCode('');
+    await privy.logout().catch(() => {});
+  };
+
+  const run = async (step: () => Promise<unknown>) => {
     setBusy(true);
     setError(undefined);
     try {
-      // Reown email wallets can be a smart account, which exists only on some
-      // networks (not Robinhood Chain) and can't sign in or trade here. Use the
-      // wallet's own account (EOA) instead.
-      const active = appKitAccount.allAccounts.find(
-        a => a.address.toLowerCase() === wallet.toLowerCase(),
-      );
-      // The switch is local (no wallet round trip); the effect below signs
-      // in as soon as AppKit reports the EOA, so the user taps only once.
-      if (active?.type === 'smartAccount' && appKitAccount.chain) {
-        signInAfterSwitch.current = true;
-        await appKit.switchAccountType('eip155', 'eoa', appKitAccount.chain);
-        return;
-      }
-      const challenge = await api.requestWalletLoginChallenge(wallet);
+      await step();
+    } catch (e) {
+      setError(signInErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const walletSignIn = async (wallet: string) => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      // Privy's SIWE message for this wallet; Privy checks the signature.
+      const message = await generateSiweMessage({
+        from: SIWE_ORIGIN,
+        wallet: {
+          chainId: `eip155:${walletChainId}`,
+          address: getAddress(wallet),
+        },
+      });
       let timer: ReturnType<typeof setTimeout> | undefined;
       const signature = await Promise.race([
         withWalletOpen(() =>
-          signMessageAsync({
-            account: wallet as `0x${string}`,
-            message: challenge.message,
-          }),
+          signMessageAsync({ account: wallet as `0x${string}`, message }),
         ),
         // A wallet that lost this session never answers; don't wait forever.
         new Promise<never>((_, reject) => {
@@ -127,7 +203,8 @@ export default function SignInScreen() {
           );
         }),
       ]).finally(() => clearTimeout(timer));
-      setUser(await api.walletLogin({ message: challenge.message, signature }));
+      // Signed in to Privy: `finishing` takes over and opens the Zeno session.
+      await loginWithSiwe({ signature });
     } catch (e) {
       // No answer: drop the connection so the next try starts a fresh one.
       if (e instanceof Error && e.message === SIGN_TIMEOUT) await disconnect();
@@ -147,37 +224,6 @@ export default function SignInScreen() {
     open();
   };
 
-  /**
-   * Email or Google via Reown's embedded wallet, finished in the in-app
-   * browser. Reown asks for the email there; it can't be handed it.
-   */
-  const socialSignIn = async (provider: SocialProvider) => {
-    setError(undefined);
-    if (isConnected) await disconnect();
-    setConnectedHere(true);
-    signInOnConnect.current = true;
-    setConnecting(true);
-    try {
-      await connectWithSocial(provider);
-    } catch (e) {
-      signInOnConnect.current = false;
-      setError(
-        e instanceof SocialLoginCancelled
-          ? e.message
-          : 'Sign-in could not start. Please try again.',
-      );
-    } finally {
-      setConnecting(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!signInAfterSwitch.current || !address) return;
-    signInAfterSwitch.current = false;
-    void walletSignIn(address);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per account switch
-  }, [address]);
-
   useAccountEffect({
     onConnect({ address: connected }) {
       if (!signInOnConnect.current) return;
@@ -185,6 +231,24 @@ export default function SignInScreen() {
       void walletSignIn(connected);
     },
   });
+
+  const requestCode = () =>
+    run(async () => {
+      await sendCode({ email: email.trim() });
+      setCodeSent(true);
+    });
+
+  const submitCode = () =>
+    run(async () => {
+      await loginWithCode({ code: code.trim(), email: email.trim() });
+    });
+
+  const googleSignIn = () =>
+    run(async () => {
+      await loginWithOAuth({ provider: 'google' });
+    });
+
+  const working = busy || finishing;
 
   return (
     <View style={styles.root}>
@@ -218,15 +282,37 @@ export default function SignInScreen() {
             No account needed — signing in creates one.
           </Text>
 
-          {isConnected && address && connectedHere ? (
+          {finishing ? (
+            <View style={styles.connected}>
+              {exchangeFailed ? (
+                <>
+                  <PrimaryButton label="Try again" onPress={retryExchange} />
+                  <Pressable
+                    onPress={startOver}
+                    accessibilityRole="button"
+                    style={styles.linkButton}
+                  >
+                    <Text style={styles.link}>Use a different account</Text>
+                  </Pressable>
+                </>
+              ) : (
+                <PrimaryButton
+                  label="Signing you in…"
+                  onPress={() => {}}
+                  disabled
+                  busy
+                />
+              )}
+            </View>
+          ) : isConnected && externalAddress && connectedHere ? (
             <View style={styles.connected}>
               <PrimaryButton
                 label={
                   busy
                     ? 'Check your wallet to sign…'
-                    : `Sign in with ${shortAddress(address)}`
+                    : `Sign in with ${shortAddress(externalAddress)}`
                 }
-                onPress={() => walletSignIn(address)}
+                onPress={() => walletSignIn(externalAddress)}
                 disabled={busy}
                 busy={busy}
               />
@@ -236,9 +322,57 @@ export default function SignInScreen() {
                 accessibilityRole="button"
                 style={styles.linkButton}
               >
-                <Text style={styles.link}>Use a different email or wallet</Text>
+                <Text style={styles.link}>Use a different wallet</Text>
+              </Pressable>
+              <Pressable
+                onPress={async () => {
+                  setConnectedHere(false);
+                  await disconnect();
+                }}
+                disabled={busy}
+                accessibilityRole="button"
+                style={styles.linkButton}
+              >
+                <Text style={styles.link}>Use email or Google instead</Text>
               </Pressable>
             </View>
+          ) : codeSent ? (
+            <>
+              <Text style={styles.label}>CODE SENT TO {email.trim()}</Text>
+              <TextInput
+                value={code}
+                onChangeText={text => setCode(text.replace(/\D/g, ''))}
+                placeholder="123456"
+                placeholderTextColor={colors.dim}
+                selectionColor={colors.green}
+                keyboardType="number-pad"
+                textContentType="oneTimeCode"
+                autoComplete="one-time-code"
+                maxLength={6}
+                returnKeyType="done"
+                onSubmitEditing={() => validCode && !working && submitCode()}
+                style={styles.input}
+                autoFocus
+              />
+              <PrimaryButton
+                label={busy ? 'Checking…' : 'Sign in'}
+                onPress={submitCode}
+                disabled={!validCode || working}
+                busy={busy}
+              />
+              <Pressable
+                onPress={() => {
+                  setCodeSent(false);
+                  setCode('');
+                  setError(undefined);
+                }}
+                disabled={working}
+                accessibilityRole="button"
+                style={styles.linkButton}
+              >
+                <Text style={styles.link}>Use a different email</Text>
+              </Pressable>
+            </>
           ) : (
             <>
               <Text style={styles.label}>EMAIL ADDRESS</Text>
@@ -253,15 +387,14 @@ export default function SignInScreen() {
                 keyboardType="email-address"
                 textContentType="emailAddress"
                 returnKeyType="send"
-                onSubmitEditing={() =>
-                  validEmail && !connecting && socialSignIn('email')
-                }
+                onSubmitEditing={() => validEmail && !working && requestCode()}
                 style={styles.input}
               />
               <PrimaryButton
-                label={busy ? 'Check your wallet to sign…' : 'Send code'}
-                onPress={() => socialSignIn('email')}
-                disabled={!validEmail || busy || connecting || pickerOpen}
+                label={busy ? 'Sending…' : 'Send code'}
+                onPress={requestCode}
+                disabled={!validEmail || working || pickerOpen}
+                busy={busy}
               />
 
               <View style={styles.dividerRow}>
@@ -273,13 +406,13 @@ export default function SignInScreen() {
               <LightButton
                 label="Continue with Google"
                 icon={<GoogleIcon />}
-                onPress={() => socialSignIn('google')}
-                disabled={busy || connecting || pickerOpen}
+                onPress={googleSignIn}
+                disabled={working || pickerOpen}
               />
               <LightButton
                 label={pickerOpen ? 'Choose a wallet…' : 'Connect wallet'}
                 onPress={chooseWallet}
-                disabled={busy || connecting}
+                disabled={working}
               />
             </>
           )}

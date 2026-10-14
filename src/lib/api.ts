@@ -13,7 +13,6 @@ import {
   toWalletPortfolio,
 } from './adapters';
 import { add, compare, div, fromRaw, mul, mulBps, sub } from './decimal';
-import { robinhood } from '../config/chains';
 import { ApiError, api, clearSession, setSessionToken } from './http';
 import type {
   Asset,
@@ -34,57 +33,21 @@ import type {
 type Row = Record<string, unknown>;
 
 // Auth ------------------------------------------------------------------------
-// Sign-in is Sign-In with Ethereum: the wallet (external or Reown email wallet)
-// is the account. No email codes, no separate wallet linking.
-
-export type WalletChallenge = {
-  message: string;
-  expiresInSeconds: number;
-};
+// Everyone signs in through Privy (email code, Google, or an external wallet's
+// SIWE); the backend verifies Privy's access token and signs in the user's
+// wallet — that wallet is the account (privyLogin).
 
 /**
- * POST /api/v1/auth/siwe/nonce — the server issues a single-use nonce and the
- * exact EIP-4361 message for the wallet to sign (a signature, no transaction).
+ * POST /api/v1/auth/privy — exchanges a Privy access token for a Zeno session
+ * on the user's embedded wallet, creating the account on first use.
  */
-export async function requestWalletLoginChallenge(
-  walletAddress: string,
-): Promise<WalletChallenge> {
-  const body = await api.post<Row>('/auth/siwe/nonce', {
-    walletAddress,
-    chainId: robinhood.id,
-  });
-  const message = typeof body['message'] === 'string' ? body['message'] : '';
-  if (!message)
-    throw new ApiError(
-      500,
-      'bad_response',
-      'The server sent no sign-in request.',
-      true,
-    );
-  return {
-    message,
-    expiresInSeconds:
-      typeof body['expiresInSeconds'] === 'number'
-        ? body['expiresInSeconds']
-        : 300,
-  };
-}
-
-/**
- * POST /api/v1/auth/siwe/verify — signs in that wallet's account, creating one
- * on first use (terms and profile still follow). The session token comes back
- * in the body (and as a `dtf_session` cookie); both are kept.
- */
-export async function walletLogin(input: {
-  message: string;
-  signature: string;
-}): Promise<User> {
+export async function privyLogin(accessToken: string): Promise<User> {
   const body = await api.post<{ user?: unknown; token?: unknown }>(
-    '/auth/siwe/verify',
-    input,
+    '/auth/privy',
+    { accessToken },
   );
   if (!body.user)
-    throw new ApiError(500, 'bad_response', 'Wallet sign-in failed.', true);
+    throw new ApiError(500, 'bad_response', 'Sign-in failed.', true);
   if (typeof body.token === 'string') await setSessionToken(body.token);
   return toUser(body.user);
 }

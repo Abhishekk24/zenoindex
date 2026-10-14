@@ -1,4 +1,4 @@
-import { useAccount, useAppKit } from '@reown/appkit-react-native';
+import { useAppKit } from '@reown/appkit-react-native';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -15,6 +15,7 @@ import {
 import { formatRaw, shortAddress } from '../../lib/format';
 import type { User } from '../../lib/types';
 import { primaryWallet } from '../../lib/user';
+import { useWallet } from '../../lib/wallet';
 import { colors, space, type } from '../../theme/tokens';
 import { Badge, Body, Button, Card, Divider, LinkText, Row } from '../ui';
 
@@ -46,19 +47,19 @@ async function loadBalances(wallet: string) {
 }
 
 /**
- * Profile → Wallets. You sign in with a wallet (SIWE), so the account IS that
- * wallet; to use another one, sign out and sign in with it.
+ * Profile → Wallets. The account IS one wallet: the Privy embedded wallet for
+ * email / Google, or the external wallet you signed in with (SIWE). To use
+ * another one, sign out and sign in with it.
  */
 export function WalletsTab({ user }: { user: User }) {
+  const { address, isExternal } = useWallet();
   const { open } = useAppKit();
-  const { address, isConnected } = useAccount();
   const signedIn = primaryWallet(user);
   const { data: balances } = useLoad(
     async () => (signedIn ? loadBalances(signedIn) : null),
     `balances#${signedIn ?? 'none'}`,
   );
   const mismatch =
-    isConnected &&
     address !== undefined &&
     !user.wallets.some(w => w.address.toLowerCase() === address.toLowerCase());
 
@@ -102,11 +103,13 @@ export function WalletsTab({ user }: { user: User }) {
           with the new one.
         </Body>
       )}
-      <Button
-        label={isConnected ? 'Manage connected wallet' : 'Connect wallet'}
-        variant="outline"
-        onPress={open}
-      />
+      {isExternal ? (
+        <Button
+          label={address ? 'Manage connected wallet' : 'Connect wallet'}
+          variant="outline"
+          onPress={() => open()}
+        />
+      ) : null}
     </Card>
   );
 }

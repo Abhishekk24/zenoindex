@@ -8,8 +8,6 @@ import { router } from 'expo-router';
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { encodeFunctionData, erc20Abi, parseUnits, type Hex } from 'viem';
-import { useAccount } from '@reown/appkit-react-native';
-import { useChainId, useSendTransaction, useSwitchChain } from 'wagmi';
 
 import * as api from '../lib/api';
 import {
@@ -32,7 +30,7 @@ import {
   shortAddress,
 } from '../lib/format';
 import type { Dtf, Operation, TradePreview, TxDraft } from '../lib/types';
-import { withWalletOpen } from '../lib/walletLink';
+import { useWallet } from '../lib/wallet';
 import { colors, fonts, space, type } from '../theme/tokens';
 import {
   Badge,
@@ -95,10 +93,10 @@ export function TradePanel({
   onConfirmed?: () => void;
 }) {
   const user = useUser();
-  const { address, isConnected } = useAccount();
-  const walletChainId = useChainId();
-  const { sendTransactionAsync } = useSendTransaction();
-  const { switchChainAsync } = useSwitchChain();
+  const { address, isExternal, sendTransaction } = useWallet();
+  const walletNeeded = isExternal
+    ? 'Connect the wallet you signed in with (Profile → Wallets) to trade.'
+    : 'Your wallet is still being set up. Try again in a moment.';
 
   const [side, setSide] = useState<Side>(initialSide);
   const [amount, setAmount] = useState('');
@@ -130,12 +128,9 @@ export function TradePanel({
     Boolean(dtf.minInvestment) &&
     compare(amount, dtf.minInvestment!) < 0;
 
-  /** The wallet that must sign: the connected account, if it is linked. */
+  /** The wallet that must sign: the embedded wallet, if it is the account's. */
   const signer = address?.toLowerCase();
   const linked = user.wallets.some(w => w.address.toLowerCase() === signer);
-  const wrongChain =
-    preview !== undefined &&
-    walletChainId !== preview.draft.transaction.chainId;
 
   // What the user can spend: base asset to invest, shares to redeem.
   const balanceToken =
@@ -166,7 +161,7 @@ export function TradePanel({
     if (!signer || !linked) {
       setResult({
         inputs,
-        error: 'Connect the wallet you signed in with first.',
+        error: walletNeeded,
       });
       return;
     }
@@ -187,18 +182,6 @@ export function TradePanel({
     }
   };
 
-  async function ensureChain(chainId: number) {
-    if (walletChainId === chainId) return;
-    try {
-      await switchChainAsync({ chainId });
-    } catch {
-      // Reown email wallets can't reach Robinhood Chain (see config/wallet.ts).
-      throw new Error(
-        'This wallet can’t use Robinhood Chain. Email and Google wallets can’t trade yet — sign in with an external wallet such as MetaMask to invest.',
-      );
-    }
-  }
-
   /**
    * The invest draft calls the vault's `deposit`, which pulls USDG via
    * transferFrom — so the vault needs an ERC-20 allowance first.
@@ -218,15 +201,11 @@ export function TradePanel({
     const watch = new AbortController();
     try {
       await Promise.race([
-        withWalletOpen(() =>
-          sendTransactionAsync({
-            account: signer as Hex,
-            chainId: dtf.chainId,
-            to: dtf.baseAssetId as Hex,
-            data,
-            value: 0n,
-          }),
-        ).then(async txHash => {
+        sendTransaction({
+          chainId: dtf.chainId,
+          to: dtf.baseAssetId as Hex,
+          data,
+        }).then(async txHash => {
           const receipt = await waitForReceipt(dtf.chainId, txHash);
           if (receipt.status !== 'success') {
             throw new Error('The spend approval transaction failed on-chain.');
@@ -260,18 +239,15 @@ export function TradePanel({
     let txHash: string;
     try {
       txHash = await Promise.race([
-        withWalletOpen(() =>
-          sendTransactionAsync({
-            account: signer as Hex,
-            chainId,
-            to: to as Hex,
-            data: draft.transaction.data,
-            value: BigInt(draft.transaction.value || '0'),
-            ...(draft.transaction.gas
-              ? { gas: BigInt(draft.transaction.gas) }
-              : {}),
-          }),
-        ),
+        sendTransaction({
+          chainId,
+          to: to as Hex,
+          data: draft.transaction.data,
+          value: BigInt(draft.transaction.value || '0'),
+          ...(draft.transaction.gas
+            ? { gas: BigInt(draft.transaction.gas) }
+            : {}),
+        }),
         pollUntil(() => findVaultTx(chainId, to, signer!, fromBlock), {
           signal: watch.signal,
           timeoutMs: WALLET_TIMEOUT_MS,
@@ -310,7 +286,6 @@ export function TradePanel({
     setLeg(0);
     try {
       setStep('signing');
-      await ensureChain(draft.transaction.chainId);
 
       if (side === 'invest') {
         setStep('approving');
@@ -398,11 +373,7 @@ export function TradePanel({
               tone="danger"
             />
           ) : null}
-          {!isConnected || !linked ? (
-            <Body muted>
-              Connect and link a wallet (Profile → Wallets) to invest.
-            </Body>
-          ) : null}
+          {!linked ? <Body muted>{walletNeeded}</Body> : null}
           <Field
             label={
               side === 'invest'
@@ -514,30 +485,6 @@ export function TradePanel({
               <Row
                 label="Gas limit"
                 value={preview.draft.transaction.gas ?? '—'}
-              />
-            </>
-          ) : null}
-          {wrongChain ? (
-            <>
-              <Body muted>
-                Your wallet is on another network. Switch to{' '}
-                {chainName(preview.draft.transaction.chainId)} to sign.
-              </Body>
-              <Button
-                label={`Switch to ${chainName(preview.draft.transaction.chainId)}`}
-                variant="outline"
-                onPress={() =>
-                  ensureChain(preview.draft.transaction.chainId).catch(e =>
-                    setResult({
-                      inputs,
-                      preview,
-                      error:
-                        e instanceof Error
-                          ? e.message
-                          : 'Could not switch network.',
-                    }),
-                  )
-                }
               />
             </>
           ) : null}

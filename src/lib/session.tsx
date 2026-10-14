@@ -5,6 +5,7 @@
  * is replayed against GET /auth/me; the returned user decides the stage
  * (see stageOf in lib/sessionContext.ts). Read it with hooks/useSession.
  */
+import { usePrivy } from '@privy-io/expo';
 import React, { useEffect, useMemo, useState } from 'react';
 
 import * as api from './api';
@@ -15,6 +16,7 @@ import type { User } from './types';
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [booted, setBooted] = useState(false);
+  const { logout: privyLogout } = usePrivy();
 
   // An expired session anywhere in the app returns the user to sign-in.
   useEffect(() => setSessionExpiredHandler(() => setUser(null)), []);
@@ -47,11 +49,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         setUser(await api.getMe());
       },
       signOut: async () => {
-        await api.signOut();
+        // Privy too, or the sign-in screen would resume its session.
+        await Promise.all([api.signOut(), privyLogout().catch(() => {})]);
         setUser(null);
       },
     }),
-    [user, booted],
+    [user, booted, privyLogout],
   );
 
   return (

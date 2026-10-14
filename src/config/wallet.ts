@@ -1,12 +1,8 @@
 /**
- * Reown AppKit for EVM wallets via wagmi; the app trades on Robinhood Chain mainnet.
- * External wallets plus Reown email (embedded) wallets. Mirrors the tested
- * IMPACTMAX web setup: the network is served through the WalletConnect
- * Blockchain API RPC so embedded and external wallets can both reach it.
- * The WalletConnect polyfills are loaded first in src/app/_layout.tsx.
+ * Wallets. Email / Google → Privy embedded wallet. External wallets → Reown
+ * AppKit over WalletConnect. The app trades on Robinhood Chain mainnet.
  */
-import '@walletconnect/react-native-compat';
-
+import type { PrivyProviderProps } from '@privy-io/expo';
 import { createAppKit } from '@reown/appkit-react-native';
 import Constants from 'expo-constants';
 import * as Linking from 'expo-linking';
@@ -17,12 +13,39 @@ import { colors } from '../theme/tokens';
 import { robinhood } from './chains';
 import { appKitStorage } from './storage';
 
+const appId = process.env.EXPO_PUBLIC_PRIVY_APP_ID;
+const clientId = process.env.EXPO_PUBLIC_PRIVY_CLIENT_ID;
 const projectId = process.env.EXPO_PUBLIC_REOWN_PROJECT_ID;
+
+if (!appId) throw new Error('Missing EXPO_PUBLIC_PRIVY_APP_ID');
+if (!clientId) throw new Error('Missing EXPO_PUBLIC_PRIVY_CLIENT_ID');
 
 if (!projectId) {
   throw new Error('Missing EXPO_PUBLIC_REOWN_PROJECT_ID');
 }
 
+// Privy signs everyone in: email / Google users get an embedded wallet on first
+// login (it takes custom chains, so it trades on Robinhood directly); wallet
+// users keep trading with their own wallet, so they get none.
+export const privyProps: Omit<PrivyProviderProps, 'children'> = {
+  appId,
+  clientId,
+  supportedChains: [robinhood],
+  config: {
+    embedded: { ethereum: { createOnLogin: 'users-without-wallets' } },
+  },
+};
+
+/** The SIWE origin for wallet sign-in; must be in the Privy dashboard's allowed domains. */
+export const SIWE_ORIGIN = {
+  domain: 'zenoindex.com',
+  uri: 'https://zenoindex.com',
+};
+
+// Reown AppKit (via wagmi) connects external wallets — MetaMask, Rainbow, … over
+// WalletConnect. Privy's Expo SDK verifies a wallet's SIWE signature but has no
+// EVM connector of its own, so AppKit connects and Privy signs the user in.
+// Polyfills for both load first in /entrypoint.js.
 const caipNetworkId = `eip155:${robinhood.id}` as const;
 const walletConnectRpc = `https://rpc.walletconnect.org/v1/?chainId=${caipNetworkId}&projectId=${projectId}`;
 
@@ -33,12 +56,9 @@ const robinhoodNetwork = {
   caipNetworkId,
 };
 
-// Ethereum is the default network. On React Native the email wallet is Reown's
-// web wallet (web-wallet.walletconnect.org), whose built-in chain list has no
-// Robinhood Chain: a session with 4663 as default can't even sign in. Sign-in
-// is a chain-agnostic signature, so it runs on Ethereum; trades switch to
-// Robinhood, which only external wallets can do (see TradePanel).
-// shortcut: email wallets can't trade until Reown's web wallet lists chain 4663, or we move to an embedded wallet that takes custom chains.
+// External wallets sign in on Ethereum (a chain-agnostic signature every wallet
+// knows) and switch to Robinhood Chain to trade (see lib/wallet.ts). Tested
+// this way with MetaMask & co. before the move to Privy; kept as is.
 const ethereumNetwork = {
   ...mainnet,
   chainNamespace: 'eip155' as const,
@@ -71,8 +91,8 @@ export const appKit = createAppKit({
   storage: appKitStorage,
   defaultNetwork: ethereumNetwork,
   features: {
-    // Email = Reown embedded wallet; external wallets stay listed below it.
-    socials: ['email'],
+    // External wallets only: email and Google go through Privy (privyProps).
+    socials: false,
     showWallets: true,
   },
   themeMode: 'dark',
