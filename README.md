@@ -40,6 +40,7 @@ Needs Postgres 13+. Migrations run on boot. Health check: `GET /health`.
 | `DIDIT_API_KEY`, `DIDIT_WORKFLOW_ID` | for KYC | Didit (same provider as cyrene-web). Without them, starting KYC returns 503 "not set up yet". |
 | `DIDIT_WEBHOOK_SECRET` | | enables `POST /webhooks/didit` (HMAC-verified). Optional: status is also pulled from Didit when the app checks it. |
 | `DIDIT_CALLBACK_URL` | | where Didit sends the browser after verification |
+| `PRIVY_APP_ID`, `PRIVY_APP_SECRET` | for mobile sign-in | Privy app (dashboard › App settings › Basics). `POST /auth/privy` verifies Privy access tokens with them; without them it returns 503. The secret never goes in the mobile app. |
 | `SEED_PROJECT_NAME`, `SEED_PUBLISHABLE_KEY_SHA256`, `SEED_SECRET_KEY_SHA256` | | first-boot project + keys, as SHA-256 hashes only; idempotent on every boot |
 
 ## Keys
