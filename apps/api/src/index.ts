@@ -2,6 +2,7 @@ import { serve } from "@hono/node-server";
 import { MAINNET, robinhood } from "@zenoindex/sdk";
 import { createPublicClient, http } from "viem";
 import { createApp } from "./app";
+import { privyAuth } from "./privy";
 import { createDb, migrate } from "./db";
 import { loadEnv } from "./env";
 import { seedProject, type KeyType } from "./tenancy";
@@ -33,5 +34,6 @@ const didit =
   env.DIDIT_API_KEY && env.DIDIT_WORKFLOW_ID
     ? { apiKey: env.DIDIT_API_KEY, workflowId: env.DIDIT_WORKFLOW_ID, webhookSecret: env.DIDIT_WEBHOOK_SECRET, callbackUrl: env.DIDIT_CALLBACK_URL }
     : undefined;
-const app = createApp({ db, client, secureCookies: env.NODE_ENV === "production", didit });
+const privy = env.PRIVY_APP_ID && env.PRIVY_APP_SECRET ? privyAuth(env.PRIVY_APP_ID, env.PRIVY_APP_SECRET) : undefined;
+const app = createApp({ db, client, secureCookies: env.NODE_ENV === "production", didit, privy });
 serve({ fetch: app.fetch, port: env.PORT }, (info) => console.log(`zenoindex api listening on :${info.port}`));

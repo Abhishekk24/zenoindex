@@ -17,6 +17,9 @@ const schema = z.object({
   DIDIT_WORKFLOW_ID: z.string().min(1).optional(),
   DIDIT_WEBHOOK_SECRET: z.string().min(1).optional(),
   DIDIT_CALLBACK_URL: z.url().optional(),
+  // Privy email / Google sign-in for the mobile app (optional: without both, POST /auth/privy returns 503). Secret stays server-side.
+  PRIVY_APP_ID: z.string().min(1).optional(),
+  PRIVY_APP_SECRET: z.string().min(1).optional(),
   SEED_PROJECT_NAME: z.string().min(1).optional(),
   SEED_PUBLISHABLE_KEY_SHA256: sha256Hex.optional(),
   SEED_SECRET_KEY_SHA256: sha256Hex.optional(),

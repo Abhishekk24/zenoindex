@@ -1,6 +1,6 @@
 import { erc20Abi, type Address, type PublicClient } from "viem";
 import { VaultAbi, ZenoIndexVaultAbi } from "./abis";
-import { MAINNET, SHARE_DECIMALS } from "./constants";
+import { BPS, MAINNET, SHARE_DECIMALS } from "./constants";
 
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 
@@ -167,6 +167,90 @@ export function swapFloor(client: PublicClient, tokenIn: Address, tokenOut: Addr
     args: [tokenIn, tokenOut, amountIn],
   });
 }
+
+/** Operators a super-admin scoped to `vault` pass Vault.onlyManager just like `vaultManager`. */
+export function isVaultOperator(client: PublicClient, vault: Address, account: Address, factory: Address = MAINNET.factory) {
+  return client.readContract({ address: factory, abi: ZenoIndexVaultAbi, functionName: "isVaultOperator", args: [vault, account] });
+}
+
+/**
+ * What a manager needs beyond getVault, valued the way executeRebalance sees it: a slot's weight is the USDG
+ * value of its free (unreserved) balance over the vault's free NAV — pending deposits and redeem escrow excluded.
+ * `slots[i]` is slot i with its token (from getAssets). Values and weights are null when a price is stale or missing.
+ */
+export async function getManagerView(
+  client: PublicClient,
+  vault: Address,
+  slots: readonly { assetId: bigint; allocationBps: number; mint: Address }[],
+  factory: Address = MAINNET.factory,
+) {
+  const c = { address: vault, abi: VaultAbi } as const;
+  const [[activeRedeemCount, vaultRedeemEscrowTotal, totalPendingUsdc, usdg], targets, reserved, balances, writeOffs, reactivates] =
+    await Promise.all([
+      client.multicall({
+        allowFailure: false,
+        contracts: [
+          { ...c, functionName: "activeRedeemCount" },
+          { ...c, functionName: "vaultRedeemEscrowTotal" },
+          { ...c, functionName: "totalPendingUsdc" },
+          { address: factory, abi: ZenoIndexVaultAbi, functionName: "usdcToken" },
+        ],
+      }),
+      client.multicall({ allowFailure: false, contracts: slots.map((_, i) => ({ ...c, functionName: "usdcTargetAmountAt", args: [i] }) as const) }),
+      client.multicall({ allowFailure: false, contracts: slots.map((_, i) => ({ ...c, functionName: "reservedAt", args: [i] }) as const) }),
+      client.multicall({
+        allowFailure: false,
+        contracts: slots.map((s) => ({ address: s.mint, abi: erc20Abi, functionName: "balanceOf", args: [vault] }) as const),
+      }),
+      client.multicall({ allowFailure: false, contracts: slots.map((s) => ({ ...c, functionName: "pendingWriteOff", args: [s.assetId] }) as const) }),
+      client.multicall({ allowFailure: false, contracts: slots.map((s) => ({ ...c, functionName: "pendingReactivate", args: [s.assetId] }) as const) }),
+    ]);
+
+  const isUsdg = (m: Address) => m.toLowerCase() === usdg.toLowerCase();
+  const earmarked = totalPendingUsdc + vaultRedeemEscrowTotal;
+  const sub = (a: bigint, b: bigint) => (a > b ? a - b : 0n);
+  // Same as Vault._freeBalance: a USDG slot's cash owed to pending deployment or redeemers isn't free.
+  const free = slots.map((s, i) => sub(balances[i]!, reserved[i]! + (isUsdg(s.mint) ? earmarked : 0n)));
+
+  const [values, usdgBalance] = await Promise.all([
+    client.multicall({
+      contracts: slots.map((s, i) => ({ address: factory, abi: ZenoIndexVaultAbi, functionName: "valueUsdc", args: [s.mint, free[i]!] }) as const),
+    }),
+    client.readContract({ address: usdg, abi: erc20Abi, functionName: "balanceOf", args: [vault] }),
+  ]);
+  const valueUsdc = values.map((r) => (r.status === "success" ? r.result : null));
+  /** USDG the vault can spend on buys (Vault._rebalanceTowardTarget's `usdcFree`). */
+  const freeUsdg = sub(usdgBalance, earmarked);
+  // Factory.sumNav: free slot values, plus free USDG when no slot holds USDG.
+  const freeNav = valueUsdc.includes(null)
+    ? null
+    : valueUsdc.reduce<bigint>((a, v) => a + v!, 0n) + (slots.some((s) => isUsdg(s.mint)) ? 0n : freeUsdg);
+
+  return {
+    usdg,
+    activeRedeemCount,
+    vaultRedeemEscrowTotal,
+    totalPendingUsdc,
+    freeUsdg,
+    freeNav,
+    slots: slots.map((s, i) => ({
+      index: i,
+      assetId: s.assetId,
+      mint: s.mint,
+      allocationBps: s.allocationBps,
+      usdcTargetAmount: targets[i]!,
+      reserved: reserved[i]!,
+      balance: balances[i]!,
+      free: free[i]!,
+      valueUsdc: valueUsdc[i] ?? null,
+      currentBps: freeNav === null || freeNav === 0n ? null : Number((valueUsdc[i]! * BigInt(BPS)) / freeNav),
+      pendingWriteOff: writeOffs[i]!,
+      pendingReactivate: reactivates[i]!,
+    })),
+  };
+}
+
+export type ManagerView = Awaited<ReturnType<typeof getManagerView>>;
 
 export type RedeemLeg = { index: number; assetId: bigint; amountIn: bigint; swapped: boolean };
 export type RedeemProgress = { active: boolean; escrowUsdc: bigint; legs: RedeemLeg[] };

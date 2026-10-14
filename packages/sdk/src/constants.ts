@@ -7,6 +7,15 @@ export const BPS = 10_000;
 export const USDG_DECIMALS = 6;
 export const SHARE_DECIMALS = 6;
 
+// Vault.sol libraries/Constants.sol.
+/** USDG (raw) that genesisDeposit pulls from the manager. */
+export const GENESIS_SEED_USDC = 1_000_000n;
+/** genesisDeposit's baseline share price is USDG per share scaled by 1e9 (PRICE_SCALE). */
+export const BASELINE_PRICE_DECIMALS = 9;
+/** executeRebalance is a no-op for a slot within this many bps of its target. */
+export const REBALANCE_DRIFT_BPS = 50;
+export const MAX_ASSETS = 20;
+
 export const robinhood = defineChain({
   id: 4663,
   name: "Robinhood Chain",

@@ -2,6 +2,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { MAINNET, robinhood } from "@zenoindex/sdk";
 import { createPublicClient, custom, http, type PublicClient } from "viem";
 import { createApp } from "../src/app";
+import type { Deps } from "../src/context";
 import { migrate, type Db } from "../src/db";
 import { createApiKey, createOrganization, createProject } from "../src/tenancy";
 
@@ -39,8 +40,8 @@ export async function seedProject(db: Db, name = "Test App") {
   return { projectId, pk: await createApiKey(db, projectId, "publishable"), sk: await createApiKey(db, projectId, "secret") };
 }
 
-export function makeApp(db: Db, client: PublicClient) {
-  const app = createApp({ db, client, secureCookies: false });
+export function makeApp(db: Db, client: PublicClient, extra: Partial<Deps> = {}) {
+  const app = createApp({ db, client, secureCookies: false, ...extra });
   const call = async (path: string, init: { method?: string; key?: string; token?: string; cookie?: string; body?: unknown } = {}) => {
     const headers: Record<string, string> = {};
     if (init.key) headers["x-api-key"] = init.key;

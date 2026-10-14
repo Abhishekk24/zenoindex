@@ -17,6 +17,19 @@ const KEY_AND_SESSION = [{ apiKey: [], session: [] }];
 const userResponse = s("object", { required: ["user"], properties: { user: ref("User") } });
 const operationTag = "Orders";
 
+const managerPrepare = (summary: string, description: string, required: string[], properties: Record<string, unknown>) => ({
+  post: {
+    tags: ["Manager"],
+    summary,
+    description,
+    security: KEY_AND_SESSION,
+    parameters: [pathParam("id", "Vault address")],
+    requestBody: body(s("object", { required, properties })),
+    responses: { 200: ok(ref("TxDraft")), ...errors(400, 401, 403, 404, 409) },
+  },
+});
+const slippage = s("integer", { default: 100, maximum: 5000, description: "Cushion below the factory's oracle floor (`swapFloor`) for `minOut`" });
+
 export const openapi = {
   openapi: "3.1.0",
   info: {
@@ -45,6 +58,7 @@ export const openapi = {
     { name: operationTag, description: "Tracking a prepared transaction through submit and confirm" },
     { name: "Portfolio" },
     { name: "KYC", description: "Identity verification via Didit" },
+    { name: "Manager", description: "Vault-manager dashboard and transactions. Only the basket's `vaultManager` or a vault operator; anyone else gets 403 `not_manager`. Prepared transactions are tracked through `/operations/{id}` like trades." },
   ],
   components: {
     securitySchemes: {
@@ -54,7 +68,7 @@ export const openapi = {
     responses: {
       E400: { description: "Validation failed", content: json(ref("Error")) },
       E401: { description: "Missing/invalid API key, or not signed in", content: json(ref("Error")) },
-      E403: { description: "Wallet doesn't match the signed-in user", content: json(ref("Error")) },
+      E403: { description: "Wallet doesn't match the signed-in user, or doesn't manage the basket (`not_manager`)", content: json(ref("Error")) },
       E404: { description: "Not found", content: json(ref("Error")) },
       E409: { description: "Conflict (not tradable, wrong state, tx mismatch, no swap route)", content: json(ref("Error")) },
       E502: { description: "Upstream provider failed", content: json(ref("Error")) },
@@ -144,7 +158,12 @@ export const openapi = {
       Operation: s("object", {
         properties: {
           id: str(undefined, { format: "uuid" }),
-          action: str(undefined, { enum: ["buy", "redeem_request", "redeem_swap", "redeem_claim", "redeem_claim_in_kind"] }),
+          action: str(undefined, {
+            enum: [
+              "buy", "redeem_request", "redeem_swap", "redeem_claim", "redeem_claim_in_kind",
+              "manager_genesis", "manager_deploy", "manager_rebalance", "manager_allocations", "manager_pause", "manager_write_off", "manager_reactivate", "manager_fee_recipient",
+            ],
+          }),
           status: str(undefined, { enum: ["draft_prepared", "submitted", "confirmed", "failed"] }),
           txHash: str(undefined, { nullable: true }),
           resourceId: { ...ref("Address"), description: "Vault address" },
@@ -163,7 +182,7 @@ export const openapi = {
           requestId: str(undefined, { format: "uuid" }),
           operation: ref("Operation"),
           transaction: s("object", { properties: { to: ref("Address"), data: str("Calldata"), value: str("Wei, decimal string"), chainId: s("integer") } }),
-          data: s("object", { description: "Quote (buy): `entryFee`, `estimatedShares` (raw)", additionalProperties: str() }),
+          data: s("object", { description: "Quote (buy): `entryFee`, `estimatedShares` (raw). Manager genesis: `approveToken`, `approveAmountRaw`", additionalProperties: str() }),
         },
       }),
       RedeemDraft: {
@@ -174,6 +193,41 @@ export const openapi = {
               step: str(undefined, { enum: ["request", "swap", "claim", "claimInKind"] }),
               finalStep: s("boolean", { description: "false → call prepare again after this one confirms" }),
               stepsRemaining: s("integer", { nullable: true }),
+            },
+          }),
+        ],
+      },
+      ManagerDtf: {
+        allOf: [
+          ref("Dtf"),
+          s("object", {
+            properties: {
+              feeRecipient: ref("Address"),
+              status: s("object", { properties: { paused: s("boolean"), adminLocked: s("boolean"), emergency: s("boolean", { description: "Protocol-wide" }), genesisDone: s("boolean") } }),
+              totalPendingUsdc: str("USDG deposited but not yet invested"),
+              redeemQueue: s("object", { properties: { activeCount: s("integer"), escrowUsdc: str("USDG owed to sellers") } }),
+              slots: s("array", {
+                items: s("object", {
+                  properties: {
+                    index: s("integer", { description: "`slotIndex` for deploy/rebalance" }),
+                    assetId: { ...ref("Address"), description: "Asset token" },
+                    symbol: str(undefined, { nullable: true }),
+                    targetBps: s("integer"),
+                    currentBps: s("integer", { nullable: true, description: "Weight of the free balance in the free NAV, as executeRebalance sees it; null on a stale price" }),
+                    driftBps: s("integer", { nullable: true, description: "currentBps - targetBps" }),
+                    pendingDeployUsdc: str("USDG waiting for `deploy`"),
+                    reservedRaw: str("Held for open sales"),
+                    balanceRaw: str(),
+                    valueUsdc: str("USDG value of the free balance", { nullable: true }),
+                    pendingWriteOff: s("boolean"),
+                    pendingReactivate: s("boolean"),
+                  },
+                }),
+              }),
+              actions: s("array", {
+                description: "To-do inbox: `genesis` before the first seed, `deploy` per slot with pending USDG, `rebalance` per slot drifting more than 50 bps",
+                items: s("object", { properties: { kind: str(undefined, { enum: ["genesis", "deploy", "rebalance"] }), slotIndex: s("integer"), amountUsdc: str(), driftBps: s("integer") } }),
+              }),
             },
           }),
         ],
@@ -222,6 +276,17 @@ export const openapi = {
         security: KEY,
         requestBody: body(s("object", { required: ["message", "signature"], properties: { message: str(), signature: str("0x…") } })),
         responses: { 200: ok(s("object", { properties: { user: ref("User"), token: str("Session token for `Authorization: Bearer`") } })), ...errors(400, 401) },
+      },
+    },
+    "/api/v1/auth/privy": {
+      post: {
+        tags: ["Auth"],
+        summary: "Sign in with Privy (email, Google or wallet), get a session",
+        description:
+          "Verifies a Privy access token server-side and signs in the Privy user's wallet: their embedded wallet (email / Google), else the external wallet they signed in with (Privy SIWE). Creates the user on first sign-in. 409 `wallet_not_ready` while Privy is still creating the wallet (retry). 503 when Privy isn't configured. Also sets the `dtf_session` cookie.",
+        security: KEY,
+        requestBody: body(s("object", { required: ["accessToken"], properties: { accessToken: str("Privy access token (`getAccessToken()`)") } })),
+        responses: { 200: ok(s("object", { properties: { user: ref("User"), token: str("Session token for `Authorization: Bearer`") } })), ...errors(400, 401, 409, 503) },
       },
     },
     "/api/v1/auth/me": {
@@ -350,6 +415,56 @@ export const openapi = {
         responses: { 200: ok(s("object", { properties: { sessionId: str(), url: str(), status: str() } })), ...errors(400, 401, 403, 502, 503) },
       },
     },
+
+    "/api/v1/manager/dtfs": {
+      get: { tags: ["Manager"], summary: "Baskets the signed-in wallet manages", security: KEY_AND_SESSION, responses: { 200: ok(s("object", { properties: { items: s("array", { items: ref("Dtf") }) } })), ...errors(401) } },
+    },
+    "/api/v1/manager/dtfs/{id}": {
+      get: { tags: ["Manager"], summary: "Manager dashboard", security: KEY_AND_SESSION, parameters: [pathParam("id", "Vault address")], responses: { 200: ok(ref("ManagerDtf")), ...errors(401, 403, 404) } },
+    },
+    "/api/v1/manager/dtfs/{id}/genesis/prepare": managerPrepare(
+      "Seed the basket (`genesisDeposit`)",
+      "Mints the first shares for 1 USDG at `baselineSharePrice`. The wallet must first approve `data.approveAmountRaw` of `data.approveToken` (USDG) to `transaction.to`. 409 when already seeded or not active (paused, admin-locked, emergency).",
+      ["baselineSharePrice"],
+      { baselineSharePrice: str("USDG per share, 0.00001 to 100000, up to 9 decimals", { examples: ["1"] }) },
+    ),
+    "/api/v1/manager/dtfs/{id}/deploy/prepare": managerPrepare(
+      "Invest a slot's pending deposits (`swapUsdcToAsset`)",
+      "Swaps the slot's whole pending USDG into the asset. 409 when nothing is pending or the basket isn't active.",
+      ["slotIndex"],
+      { slotIndex: s("integer"), slippageBps: slippage },
+    ),
+    "/api/v1/manager/dtfs/{id}/rebalance/prepare": managerPrepare(
+      "Trade a slot toward its target (`executeRebalance`)",
+      "Sells an overweight (or 0%) slot to USDG, or buys an underweight one with free USDG. 409 when within 50 bps of target, prices are stale, or the basket isn't active.",
+      ["slotIndex"],
+      { slotIndex: s("integer"), slippageBps: slippage },
+    ),
+    "/api/v1/manager/dtfs/{id}/allocations/prepare": managerPrepare(
+      "Set target weights (`setTargetAllocations`)",
+      "The full list, not a diff: up to 20 unique active assets summing to 10000 bps. Assets left out go to 0% and are sold off by rebalance. No swaps happen in this call.",
+      ["weights"],
+      { weights: s("array", { items: s("object", { required: ["assetId", "weightBps"], properties: { assetId: { ...ref("Address"), description: "Asset token" }, weightBps: s("integer") } }) }) },
+    ),
+    "/api/v1/manager/dtfs/{id}/pause/prepare": managerPrepare("Pause or unpause (`setPaused`)", "Pausing stops buys, genesis, deploy and rebalance. Sales still work.", ["paused"], { paused: s("boolean") }),
+    "/api/v1/manager/dtfs/{id}/write-off/prepare": managerPrepare(
+      "Propose writing off an asset (`proposeWriteOff`)",
+      "Takes effect when a protocol super-admin confirms it.",
+      ["assetId"],
+      { assetId: { ...ref("Address"), description: "Asset token in this basket" } },
+    ),
+    "/api/v1/manager/dtfs/{id}/reactivate/prepare": managerPrepare(
+      "Propose reactivating a written-off asset (`proposeReactivate`)",
+      "Takes effect when a protocol super-admin confirms it; the asset returns at 0%. 409 when the asset isn't written off.",
+      ["assetId"],
+      { assetId: { ...ref("Address"), description: "Asset token" } },
+    ),
+    "/api/v1/manager/dtfs/{id}/fee-recipient/prepare": managerPrepare(
+      "Change where manager fees go (`setFeeRecipient`)",
+      "Applies to fees from the next buy or sale.",
+      ["feeRecipient"],
+      { feeRecipient: ref("Address") },
+    ),
   },
 } as const;
 

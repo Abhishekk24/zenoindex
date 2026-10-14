@@ -41,3 +41,42 @@ export const buildClaim = (vault: Address) => vaultTx(vault, encodeFunctionData(
 /** Pays un-swapped legs in the underlying tokens. Works with stale prices / no swap route. */
 export const buildClaimInKind = (vault: Address) =>
   vaultTx(vault, encodeFunctionData({ abi: VaultAbi, functionName: "claimInKind" }));
+
+// Manager-only below: the sender must be `vaultManager` or a factory vault operator.
+// shortcut: no FeeEscrow fee-claim builders — FeeEscrow (evm d3bd438) isn't deployed on mainnet; add them when ABIs move past 7663cc6.
+
+/** Needs a USDG allowance to `vault` of GENESIS_SEED_USDC. `baselineSharePrice` is USDG per share × 1e9. */
+export const buildGenesisDeposit = (vault: Address, baselineSharePrice: bigint) =>
+  vaultTx(vault, encodeFunctionData({ abi: VaultAbi, functionName: "genesisDeposit", args: [baselineSharePrice] }));
+
+/** Swaps the slot's whole pending USDG (`usdcTargetAmountAt`); `path` runs USDG → asset. */
+export const buildSwapUsdcToAsset = (vault: Address, assetIndex: number, path: readonly Address[], minAssetOut: bigint) =>
+  vaultTx(
+    vault,
+    encodeFunctionData({ abi: VaultAbi, functionName: "swapUsdcToAsset", args: [assetIndex, path, minAssetOut] }),
+  );
+
+/** The FULL target list (not a diff): ≤ 20 unique ids, bps summing to 10_000. Dropped assets go to 0% and wind down. */
+export const buildSetTargetAllocations = (vault: Address, assetIds: readonly bigint[], allocationBps: readonly number[]) =>
+  vaultTx(
+    vault,
+    encodeFunctionData({ abi: VaultAbi, functionName: "setTargetAllocations", args: [assetIds, allocationBps] }),
+  );
+
+/** Trades one slot toward its target. `path` is asset → USDG when selling (overweight or 0%), USDG → asset when buying. */
+export const buildExecuteRebalance = (vault: Address, assetIndex: number, path: readonly Address[], minOut: bigint) =>
+  vaultTx(vault, encodeFunctionData({ abi: VaultAbi, functionName: "executeRebalance", args: [assetIndex, path, minOut] }));
+
+export const buildSetPaused = (vault: Address, paused: boolean) =>
+  vaultTx(vault, encodeFunctionData({ abi: VaultAbi, functionName: "setPaused", args: [paused] }));
+
+export const buildSetFeeRecipient = (vault: Address, feeRecipient: Address) =>
+  vaultTx(vault, encodeFunctionData({ abi: VaultAbi, functionName: "setFeeRecipient", args: [feeRecipient] }));
+
+/** Takes effect only once a super-admin confirms it on the factory. */
+export const buildProposeWriteOff = (vault: Address, assetId: bigint) =>
+  vaultTx(vault, encodeFunctionData({ abi: VaultAbi, functionName: "proposeWriteOff", args: [assetId] }));
+
+/** Only for a written-off asset; a super-admin confirms it and it comes back at 0%. */
+export const buildProposeReactivate = (vault: Address, assetId: bigint) =>
+  vaultTx(vault, encodeFunctionData({ abi: VaultAbi, functionName: "proposeReactivate", args: [assetId] }));

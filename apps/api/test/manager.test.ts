@@ -1,0 +1,169 @@
+import { applySlippage, MAINNET, robinhood, VaultAbi, ZenoIndexVaultAbi } from "@zenoindex/sdk";
+import { decodeFunctionData, encodeFunctionResult, erc20Abi, getAbiItem, getAddress, multicall3Abi, type Abi, type Hex } from "viem";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
+import { beforeEach, describe, expect, it } from "vitest";
+import type { Db } from "../src/db";
+import { createSession, upsertUserByWallet } from "../src/users";
+import { fakeClient, makeApp, seedProject, testDb, type RpcHandler } from "./helpers";
+
+const vault = "0x1111111111111111111111111111111111111111";
+const share = "0x2222222222222222222222222222222222222222";
+const tsla = "0x3333333333333333333333333333333333333333";
+const usdg = MAINNET.usdg;
+const abi = [...VaultAbi, ...ZenoIndexVaultAbi, ...erc20Abi] as Abi;
+
+// A fake chain: contract address → function name → value, or a function of the call's args.
+type Contracts = Record<string, Record<string, unknown>>;
+let chain: Contracts;
+
+function contracts(manager: string): Contracts {
+  return {
+    [MAINNET.factory]: {
+      usdcToken: usdg, router: tsla, isEmergency: false, totalVaults: 1n, totalAssets: 2n, maxPriceAge: 86400n, maxSwapSlippageBps: 300, treasury: tsla,
+      vaultClones: () => vault,
+      getAsset: (id: bigint) => (id === 0n ? [0n, usdg, true, true] : [1n, tsla, true, true]),
+      isVaultOperator: () => false,
+      valueUsdc: (token: string, amount: bigint) => (token.toLowerCase() === usdg ? amount : (amount * 2_000_000n) / 10n ** 18n), // TSLA = $2
+      swapFloor: (_in: string, _out: string, amount: bigint) => amount,
+    },
+    // 20% USDG / 80% TSLA. Free NAV = 1 USDG + 1 TSLA ($2) = $3 → USDG 33.33%, TSLA 66.66%; 0.4 USDG waiting to buy TSLA.
+    [vault]: {
+      vaultId: 0n, sharesToken: share, vaultManager: manager, feeRecipient: manager, fundType: 1, depositFeeBps: 100, redeemFeeBps: 50, maxShares: 0n,
+      paused: false, adminLocked: false, genesisDone: true, totalShares: 3_400_000n, numAssets: 2, totalPendingUsdc: 400_000n, totalNav: 3_400_000n,
+      assetIdAt: (i: number) => BigInt(i),
+      allocationBpsAt: (i: number) => [2000, 8000][i],
+      usdcTargetAmountAt: (i: number) => [0n, 400_000n][i],
+      reservedAt: () => 0n,
+      activeRedeemCount: 0n, vaultRedeemEscrowTotal: 0n,
+      pendingWriteOff: () => false, pendingReactivate: () => false, isWrittenOff: () => false,
+    },
+    [share]: { name: "Tech Index", symbol: "TECH" },
+    [usdg]: { name: "Global Dollar", symbol: "USDG", decimals: 6, balanceOf: () => 1_400_000n },
+    [tsla]: { name: "Tesla", symbol: "TSLA", decimals: 18, balanceOf: () => 10n ** 18n },
+  };
+}
+
+function ethCall(to: string, data: Hex): Hex {
+  const item = getAbiItem({ abi, name: data.slice(0, 10) }) as Abi[number] & { name: string };
+  const { args = [] } = decodeFunctionData({ abi: [item], data });
+  const v = chain[to.toLowerCase()]?.[item.name];
+  if (v === undefined) throw new Error(`unexpected call ${item.name} on ${to}`);
+  const result = typeof v === "function" ? v(...args) : v;
+  return encodeFunctionResult({ abi: [item], functionName: item.name, result } as never);
+}
+
+const rpc: RpcHandler = (method, params) => {
+  if (method !== "eth_call") throw new Error(`unexpected RPC call: ${method}`);
+  const { to, data } = params[0] as { to: string; data: Hex };
+  if (to.toLowerCase() !== robinhood.contracts.multicall3.address.toLowerCase()) return ethCall(to, data);
+  const { args } = decodeFunctionData({ abi: multicall3Abi, data });
+  const calls = args[0] as readonly { target: string; callData: Hex }[];
+  const result = calls.map((c) => ({ success: true, returnData: ethCall(c.target, c.callData) }));
+  return encodeFunctionResult({ abi: multicall3Abi, functionName: "aggregate3", result });
+};
+
+let db: Db;
+let call: ReturnType<typeof makeApp>["call"];
+let pk: string;
+let token: string;
+let strangerToken: string;
+
+beforeEach(async () => {
+  db = await testDb();
+  const seeded = await seedProject(db);
+  pk = seeded.pk;
+  ({ call } = makeApp(db, fakeClient(rpc))); // fresh client per test → fresh snapshot cache
+  const wallet = privateKeyToAccount(generatePrivateKey()).address.toLowerCase();
+  token = await createSession(db, await upsertUserByWallet(db, seeded.projectId, wallet));
+  strangerToken = await createSession(db, await upsertUserByWallet(db, seeded.projectId, privateKeyToAccount(generatePrivateKey()).address));
+  chain = contracts(wallet);
+});
+
+const prepare = (action: string, body: unknown, t = token) => call(`/manager/dtfs/${vault}/${action}/prepare`, { key: pk, token: t, body });
+const decode = (data: Hex) => decodeFunctionData({ abi: VaultAbi, data });
+
+describe("manager", () => {
+  it("only the vault manager or a vault operator gets in", async () => {
+    expect((await call("/manager/dtfs", { key: pk, token: strangerToken })).json.items).toEqual([]);
+    const r = await call(`/manager/dtfs/${vault}`, { key: pk, token: strangerToken });
+    expect(r.status).toBe(403);
+    expect(r.json.error.code).toBe("not_manager");
+    expect((await prepare("pause", { paused: true }, strangerToken)).status).toBe(403);
+    expect((await call(`/manager/dtfs/${vault}`, { key: pk })).status).toBe(401);
+
+    chain[MAINNET.factory]!.isVaultOperator = () => true;
+    ({ call } = makeApp(db, fakeClient(rpc)));
+    expect((await call(`/manager/dtfs/${vault}`, { key: pk, token: strangerToken })).status).toBe(200);
+  });
+
+  it("dashboard: status, weights vs targets, and the to-do inbox", async () => {
+    expect((await call("/manager/dtfs", { key: pk, token })).json.items.map((d: { id: string }) => d.id)).toEqual([vault]);
+    const r = await call(`/manager/dtfs/${vault}`, { key: pk, token });
+    expect(r.status).toBe(200);
+    expect(r.json).toMatchObject({
+      id: vault,
+      status: { paused: false, adminLocked: false, emergency: false, genesisDone: true },
+      totalPendingUsdc: "0.4",
+      redeemQueue: { activeCount: 0, escrowUsdc: "0" },
+      fees: { entryBps: 100, exitBps: 50 },
+      slots: [
+        { index: 0, assetId: usdg, symbol: "USDG", targetBps: 2000, currentBps: 3333, driftBps: 1333, pendingDeployUsdc: "0", valueUsdc: "1", balanceRaw: "1400000" },
+        { index: 1, assetId: tsla, symbol: "TSLA", targetBps: 8000, currentBps: 6666, driftBps: -1334, pendingDeployUsdc: "0.4", valueUsdc: "2", pendingWriteOff: false },
+      ],
+      // The weighted USDG slot isn't traded itself.
+      actions: [{ kind: "deploy", slotIndex: 1, amountUsdc: "0.4" }, { kind: "rebalance", slotIndex: 1, driftBps: -1334 }],
+    });
+  });
+
+  it("deploy prepare records an operation and encodes swapUsdcToAsset", async () => {
+    const r = await prepare("deploy", { slotIndex: 1 });
+    expect(r.status).toBe(200);
+    expect(r.json).toMatchObject({ action: "manager_deploy", operation: { status: "draft_prepared", action: "manager_deploy" }, transaction: { to: vault, value: "0", chainId: 4663 } });
+    expect(decode(r.json.transaction.data)).toEqual({
+      functionName: "swapUsdcToAsset",
+      args: [1, [getAddress(usdg), getAddress(tsla)], applySlippage(400_000n, 100)],
+    });
+    const { rows } = await db.query<{ action: string; amount_raw: string }>("select action, amount_raw from operations where id = $1", [r.json.requestId]);
+    expect(rows[0]).toEqual({ action: "manager_deploy", amount_raw: "400000" });
+
+    expect((await prepare("deploy", { slotIndex: 0 })).json.error.code).toBe("nothing_to_deploy");
+    expect((await prepare("deploy", { slotIndex: 2 })).status).toBe(400);
+  });
+
+  it("rebalance buys the underweight slot's delta with free USDG", async () => {
+    const r = await prepare("rebalance", { slotIndex: 1 });
+    // delta = 1334 bps × $3 free NAV = 0.4002 USDG
+    expect(decode(r.json.transaction.data)).toEqual({
+      functionName: "executeRebalance",
+      args: [1, [getAddress(usdg), getAddress(tsla)], applySlippage(400_200n, 100)],
+    });
+    expect((await prepare("rebalance", { slotIndex: 0 })).json.error.code).toBe("nothing_to_rebalance");
+  });
+
+  it("value-moving actions are refused while paused", async () => {
+    chain[vault]!.paused = true;
+    const r = await prepare("deploy", { slotIndex: 1 });
+    expect(r.status).toBe(409);
+    expect(r.json.error.code).toBe("not_active");
+    expect(decode((await prepare("pause", { paused: false })).json.transaction.data)).toEqual({ functionName: "setPaused", args: [false] });
+  });
+
+  it("allocations: full list, sums to 10000, unique, active assets", async () => {
+    const bad = async (weights: unknown) => (await prepare("allocations", { weights })).json.error;
+    expect(await bad([{ assetId: usdg, weightBps: 5000 }, { assetId: tsla, weightBps: 4000 }])).toMatchObject({ code: "validation_failed", message: "weights: must sum to 10000 bps" });
+    expect((await bad([{ assetId: tsla, weightBps: 5000 }, { assetId: tsla, weightBps: 5000 }])).message).toMatch(/only once/);
+    expect((await bad([{ assetId: share, weightBps: 10000 }])).message).toMatch(/isn't an active asset/);
+
+    const r = await prepare("allocations", { weights: [{ assetId: usdg, weightBps: 5000 }, { assetId: tsla, weightBps: 5000 }] });
+    expect(r.json.action).toBe("manager_allocations");
+    expect(decode(r.json.transaction.data)).toEqual({ functionName: "setTargetAllocations", args: [[0n, 1n], [5000, 5000]] });
+  });
+
+  it("genesis asks the app to approve the 1 USDG seed first", async () => {
+    chain[vault]!.genesisDone = false;
+    const r = await prepare("genesis", { baselineSharePrice: "1" });
+    expect(r.json.data).toEqual({ approveToken: usdg, approveAmountRaw: "1000000" });
+    expect(decode(r.json.transaction.data)).toEqual({ functionName: "genesisDeposit", args: [1_000_000_000n] });
+    expect((await prepare("genesis", { baselineSharePrice: "0.000001" })).status).toBe(400);
+  });
+});

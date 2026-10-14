@@ -6,7 +6,10 @@ import {
   buildClaim,
   buildClaimInKind,
   buildDeposit,
+  buildProposeReactivate,
+  buildProposeWriteOff,
   buildRequestRedeem,
+  buildSetFeeRecipient,
   buildSwapAssetToUsdc,
   MAINNET,
   nextRedeemStep,
@@ -35,6 +38,12 @@ describe("tx builders", () => {
     });
     expect(decode(buildClaim(vault).data).functionName).toBe("claim");
     expect(decode(buildClaimInKind(vault).data).functionName).toBe("claimInKind");
+  });
+
+  it("manager calls encode the right args", () => {
+    expect(decode(buildProposeWriteOff(vault, 3n).data)).toEqual({ functionName: "proposeWriteOff", args: [3n] });
+    expect(decode(buildProposeReactivate(vault, 3n).data)).toEqual({ functionName: "proposeReactivate", args: [3n] });
+    expect(decode(buildSetFeeRecipient(vault, asset).data)).toEqual({ functionName: "setFeeRecipient", args: [asset] });
   });
 
   it("approve targets the token", () => {

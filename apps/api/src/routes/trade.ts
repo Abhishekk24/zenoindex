@@ -11,54 +11,16 @@ import {
   swapFloor,
   USDG_DECIMALS,
   SHARE_DECIMALS,
-  type TxRequest,
 } from "@zenoindex/sdk";
 import type { Hono } from "hono";
 import { erc20Abi, parseUnits, TransactionNotFoundError, TransactionReceiptNotFoundError, type Address, type Hex } from "viem";
 import { z } from "zod";
-import { findVault, isTradable, mintOf, snapshot, type Snapshot, type VaultState } from "../chain";
+import { isTradable, mintOf } from "../chain";
 import { address, amount6, parseBody, requireUser, txHash, type AppEnv, type Ctx, type Deps } from "../context";
 import type { Db } from "../db";
 import { ApiError, badRequest, conflict, notFound } from "../errors";
+import { draft, insertOperation, publicOperation, swapPath, tradeContext, type OperationRow } from "../operations";
 import type { UserRow } from "../users";
-
-type Action = "buy" | "redeem_request" | "redeem_swap" | "redeem_claim" | "redeem_claim_in_kind";
-type OperationRow = {
-  id: string;
-  user_id: string;
-  wallet_address: string;
-  action: Action;
-  vault_address: string;
-  chain_id: number;
-  tx_to: string;
-  tx_data: string;
-  amount_raw: string | null;
-  shares_raw: string | null;
-  tx_hash: string | null;
-  status: "draft_prepared" | "submitted" | "confirmed" | "failed";
-  failure_reason: string | null;
-  created_at: Date;
-  updated_at: Date;
-  submitted_at: Date | null;
-  confirmed_at: Date | null;
-};
-
-const iso = (d: Date | null) => (d ? new Date(d).toISOString() : null);
-
-/** Flat Operation object (the app reads it at the top level). */
-export const publicOperation = (o: OperationRow) => ({
-  id: o.id,
-  action: o.action,
-  status: o.status,
-  txHash: o.tx_hash,
-  resourceId: o.vault_address,
-  walletAddress: o.wallet_address,
-  failureReason: o.failure_reason,
-  createdAt: iso(o.created_at),
-  updatedAt: iso(o.updated_at),
-  submittedAt: iso(o.submitted_at),
-  confirmedAt: iso(o.confirmed_at),
-});
 
 export function tradeRoutes(app: Hono<AppEnv>, { db, client }: Deps) {
   app.post("/dtfs/:id/buy/prepare", async (c) => {
@@ -177,57 +139,11 @@ export function tradeRoutes(app: Hono<AppEnv>, { db, client }: Deps) {
   });
 }
 
-async function tradeContext(c: Ctx, client: Deps["client"]) {
-  const user = requireUser(c);
-  const project = c.get("project");
-  const snap: Snapshot = await snapshot(client, project.factory);
-  return { user, project, snap, vault: findVault(snap, c.req.param("id")!) };
-}
-
 /** Contracts act on msg.sender, so the signer must be the signed-in wallet. */
 function assertSelf(user: UserRow, wallet: string) {
   if (wallet.toLowerCase() !== user.wallet_address) {
     throw new ApiError(403, "wallet_mismatch", "Connect the wallet you signed in with.");
   }
-}
-
-function draft(op: OperationRow, tx: TxRequest, chainId: number, data?: Record<string, string>) {
-  return {
-    action: op.action,
-    requestId: op.id,
-    operation: publicOperation(op),
-    transaction: { to: tx.to, data: tx.data, value: tx.value.toString(), chainId },
-    ...(data && { data }),
-  };
-}
-
-async function insertOperation(
-  db: Db,
-  project: { id: string; chainId: number },
-  user: UserRow,
-  vault: VaultState,
-  action: Action,
-  tx: TxRequest,
-  amounts: { amount?: bigint; shares?: bigint },
-) {
-  const { rows } = await db.query<OperationRow>(
-    `insert into operations (project_id, user_id, wallet_address, action, vault_address, chain_id, tx_to, tx_data, tx_value, amount_raw, shares_raw)
-     values ($1, $2, $3, $4, $5, $11, $6, $7, $8, $9, $10) returning *`,
-    [
-      project.id,
-      user.id,
-      user.wallet_address,
-      action,
-      vault.address.toLowerCase(),
-      tx.to.toLowerCase(),
-      tx.data.toLowerCase(),
-      tx.value.toString(),
-      amounts.amount?.toString() ?? null,
-      amounts.shares?.toString() ?? null,
-      project.chainId,
-    ],
-  );
-  return rows[0]!;
 }
 
 async function loadOperation(db: Db, c: Ctx, user: UserRow) {
@@ -277,12 +193,4 @@ async function checkOnChain(client: Deps["client"], op: OperationRow, hash: Hex)
     tx.input.toLowerCase() === op.tx_data;
   if (!matches) throw conflict("tx_mismatch", "That transaction doesn't match this order.");
   return receipt.status === "success" ? "success" : "reverted";
-}
-
-async function swapPath(db: Db, chainId: number, asset: string) {
-  const { rows } = await db.query<{ path: string[] }>("select path from swap_paths where chain_id = $1 and asset_address = $2", [
-    chainId,
-    asset.toLowerCase(),
-  ]);
-  return rows[0]?.path as Address[] | undefined;
 }

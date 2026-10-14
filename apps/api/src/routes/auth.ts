@@ -4,12 +4,12 @@ import { randomBytes } from "node:crypto";
 import { createSiweMessage, parseSiweMessage, validateSiweMessage } from "viem/siwe";
 import { z } from "zod";
 import { address, parseBody, requireUser, type AppEnv, type Deps } from "../context";
-import { badRequest, unauthorized } from "../errors";
+import { ApiError, badRequest, conflict, unauthorized } from "../errors";
 import { createSession, deleteSession, publicUser, sessionCookie, upsertUserByWallet, type UserRow } from "../users";
 
 const NONCE_TTL_SECONDS = 5 * 60;
 
-export function authRoutes(app: Hono<AppEnv>, { db, client, secureCookies }: Deps) {
+export function authRoutes(app: Hono<AppEnv>, { db, client, secureCookies, privy }: Deps) {
   // Step 1: server issues a single-use nonce and the exact EIP-4361 message for the wallet to sign.
   app.post("/auth/siwe/nonce", async (c) => {
     const project = c.get("project");
@@ -74,6 +74,21 @@ export function authRoutes(app: Hono<AppEnv>, { db, client, secureCookies }: Dep
     }
 
     const user = await upsertUserByWallet(db, project.id, wallet);
+    const token = await createSession(db, user);
+    c.header("Set-Cookie", sessionCookie(token, secureCookies));
+    return c.json({ user: publicUser(user, project.chainId), token });
+  });
+
+  // Mobile sign-in via Privy (email, Google or an external wallet): the verified Privy user's wallet is the account.
+  app.post("/auth/privy", async (c) => {
+    const project = c.get("project");
+    if (!privy) throw new ApiError(503, "privy_unavailable", "Email and Google sign-in isn't set up yet. Please try again later.", false);
+    const { accessToken } = await parseBody(c, z.object({ accessToken: z.string().min(1).max(4000) }));
+    const found = await privy.walletOf(accessToken);
+    if (!found) throw unauthorized("Your sign-in expired. Please sign in again.");
+    if (!found.wallet) throw conflict("wallet_not_ready", "Your wallet is still being set up. Please try again in a moment.");
+
+    const user = await upsertUserByWallet(db, project.id, found.wallet);
     const token = await createSession(db, user);
     c.header("Set-Cookie", sessionCookie(token, secureCookies));
     return c.json({ user: publicUser(user, project.chainId), token });
