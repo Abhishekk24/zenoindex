@@ -22,6 +22,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { WagmiProvider } from 'wagmi';
 
 import { RootStack } from '../components/navigation/RootStack';
+import { ModeSwitchOverlay } from '../components/ModeSwitchOverlay';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { appKit, privyProps, wagmiAdapter } from '../config/wallet';
 import { SessionProvider } from '../lib/session';
@@ -67,6 +68,7 @@ export default function RootLayout() {
                   <StatusBar style="light" />
                   <RootStack />
                   <OfflineBanner />
+                  <ModeSwitchOverlay />
                 </SessionProvider>
               </ThemeProvider>
               {/* The wallet picker. AppKitProvider only holds state; without

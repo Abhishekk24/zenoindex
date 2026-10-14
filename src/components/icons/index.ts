@@ -1,12 +1,25 @@
 /** Icons (24px grid). Tab icons fill in when their tab is active. */
+export { ArrowCircleIcon } from './ArrowCircleIcon';
+export { BasketsIcon } from './BasketsIcon';
+export { ChevronLeftIcon } from './ChevronLeftIcon';
 export { ChevronRightIcon } from './ChevronRightIcon';
+export { ChevronUpIcon } from './ChevronUpIcon';
+export { CoinsIcon } from './CoinsIcon';
+export { CopyIcon } from './CopyIcon';
+export { CreateIcon } from './CreateIcon';
 export { DocumentIcon } from './DocumentIcon';
+export { DocumentStackIcon } from './DocumentStackIcon';
+export { DropletIcon } from './DropletIcon';
 export { ExploreIcon } from './ExploreIcon';
 export { GoogleIcon } from './GoogleIcon';
+export { InfoIcon } from './InfoIcon';
 export { ManagerIcon } from './ManagerIcon';
+export { MoreIcon } from './MoreIcon';
 export { NoticeIcon } from './NoticeIcon';
+export { PenIcon } from './PenIcon';
 export { PortfolioIcon } from './PortfolioIcon';
 export { ProfileIcon } from './ProfileIcon';
+export { RebalanceIcon } from './RebalanceIcon';
 export { SearchIcon } from './SearchIcon';
 export { SignOutIcon } from './SignOutIcon';
 export { StrategyIcon } from './StrategyIcon';

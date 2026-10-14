@@ -5,7 +5,7 @@
  *   terms     → terms
  *   profile   → complete-profile
  *   ready     → (tabs): Explore · Portfolio · Profile, search, basket/[id],
- *               position/[id]
+ *               position/[id], edit-profile, manager/* (manager mode)
  *
  * legal/[doc] and wc-return are open at every stage.
  */
@@ -61,6 +61,31 @@ export function RootStack() {
         <Stack.Screen
           name="position/[id]"
           options={{ title: '', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen name="manager/create" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="manager/[id]/corporate-actions"
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="manager/[id]/fees"
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="manager/[id]/rebalance"
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="manager/[id]/liquidity"
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="edit-profile"
+          options={{
+            headerShown: false,
+            presentation: 'modal',
+            animation: 'slide_from_bottom',
+          }}
         />
       </Stack.Protected>
       {/* Terms / Privacy reader: opened from sign-in and terms, so not tied

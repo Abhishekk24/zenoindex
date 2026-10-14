@@ -2,8 +2,9 @@
  * Sign in with email, Google or a wallet (design: sign-in mockup) — all three
  * through Privy, so every user is a Privy user.
  *
- * - Email: a one-time code typed here. Google: Privy's OAuth page, returning
- *   via the app's scheme. Privy then creates the user's embedded wallet.
+ * - Email: Send code → "Check your email" step (EmailCodeStep) → Privy checks
+ *   the code. Google: Privy's OAuth page, returning via the app's scheme.
+ *   Privy then creates the user's embedded wallet.
  * - Connect wallet: AppKit's picker connects an external wallet (MetaMask &
  *   co.), which signs Privy's Sign-In with Ethereum message — a signature
  *   only, no transaction.
@@ -41,7 +42,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getAddress } from 'viem';
 import { useAccountEffect, useChainId, useSignMessage } from 'wagmi';
 
+import {
+  type CodeError,
+  EmailCodeStep,
+} from '../components/auth/EmailCodeStep';
 import { LightButton } from '../components/auth/LightButton';
+import {
+  CARD_BG,
+  DIVIDER,
+  INPUT_BG,
+  INPUT_BORDER,
+} from '../components/auth/palette';
 import { PrimaryButton } from '../components/auth/PrimaryButton';
 import { GoogleIcon } from '../components/icons';
 import { SIWE_ORIGIN } from '../config/wallet';
@@ -54,26 +65,10 @@ import { withWalletOpen } from '../lib/walletLink';
 import { colors, fonts } from '../theme/tokens';
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const CODE = /^\d{6}$/;
 
 const SIGN_TIMEOUT_MS = 2 * 60_000;
 const SIGN_TIMEOUT =
   'No answer from your wallet. Connect your wallet again and retry.';
-
-// Colours specific to the sign-in design.
-const CARD_BG = '#000000';
-const INPUT_BG = '#08150f';
-const INPUT_BORDER = 'rgba(92, 199, 150, 0.28)';
-const DIVIDER = 'rgba(92, 199, 150, 0.22)';
-
-/** Turns Privy/API errors into something short for the user. */
-function signInErrorMessage(e: unknown): string {
-  const text = e instanceof Error ? e.message : '';
-  if (/cancel/i.test(text)) return 'Sign-in cancelled.';
-  if (/invalid.*code|code.*invalid|incorrect/i.test(text))
-    return 'That code is not right. Check your email and try again.';
-  return text || 'Sign-in failed. Please try again.';
-}
 
 /** Turns wallet/viem errors into something short for the user. */
 function walletErrorMessage(e: unknown): string {
@@ -82,21 +77,37 @@ function walletErrorMessage(e: unknown): string {
   return text || 'Wallet sign-in failed.';
 }
 
+/** Turns Privy/API errors into something short for the user. */
+function signInErrorMessage(e: unknown): string {
+  const text = e instanceof Error ? e.message : '';
+  if (/cancel/i.test(text)) return 'Sign-in cancelled.';
+  return text || 'Sign-in failed. Please try again.';
+}
+
+/** Privy's code errors → the code step's error line; null if not about the code. */
+function codeErrorOf(e: unknown): CodeError | null {
+  const text = e instanceof Error ? e.message : '';
+  if (/too many|attempts|locked/i.test(text)) return { kind: 'locked' };
+  if (/expired/i.test(text)) return { kind: 'expired' };
+  if (/code|otp|incorrect|invalid/i.test(text)) return { kind: 'invalid' };
+  return null;
+}
+
 export default function SignInScreen() {
   const insets = useSafeAreaInsets();
   const { setUser } = useSession();
   const keyboardHeight = useKeyboardHeight();
   const privy = usePrivy();
   const { wallets } = useEmbeddedEthereumWallet();
-  const { sendCode, loginWithCode } = useLoginWithEmail();
+  const { sendCode: sendPrivyCode, loginWithCode } = useLoginWithEmail();
   const { login: loginWithOAuth } = useLoginWithOAuth();
   const { generateSiweMessage, loginWithSiwe } = useLoginWithSiwe();
-  const walletChainId = useChainId();
   const { open, disconnect } = useAppKit();
   const { isOpen: pickerOpen } = useAppKitState();
-  const { address: externalAddress, isConnected } = useAppKitAccount();
+  const { address, isConnected } = useAppKitAccount();
+  const walletChainId = useChainId();
   const { signMessageAsync } = useSignMessage();
-  // Set when the user picks a wallet: once it connects, ask it to sign
+  // Set when the user starts a sign-in: once a wallet connects, ask it to sign
   // straight away rather than waiting for a second tap.
   const signInOnConnect = useRef(false);
   // Only offer "Sign in with 0x…" for a wallet connected on this screen: a
@@ -105,10 +116,13 @@ export default function SignInScreen() {
   const [connectedHere, setConnectedHere] = useState(false);
 
   const [email, setEmail] = useState('');
-  const [code, setCode] = useState('');
-  const [codeSent, setCodeSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const [step, setStep] = useState<'email' | 'code'>('email');
+  const [codeError, setCodeError] = useState<CodeError>();
+  const [codeBusy, setCodeBusy] = useState<'verify' | 'resend'>();
+  // Bumped per code sent so EmailCodeStep restarts its resend countdown.
+  const [codeKey, setCodeKey] = useState(0);
   // The Zeno session exchange failed (e.g. backend unreachable). Privy's sign-in
   // stays valid — its email code is already used up — so retry the exchange
   // rather than sending the user back to enter a code that no longer works.
@@ -116,7 +130,6 @@ export default function SignInScreen() {
   const [attempt, setAttempt] = useState(0);
 
   const validEmail = EMAIL.test(email.trim());
-  const validCode = CODE.test(code.trim());
   const walletAddress = wallets[0]?.address;
 
   // Signed in to Privy (just now, or left from an earlier run when only the
@@ -161,16 +174,61 @@ export default function SignInScreen() {
   const startOver = async () => {
     setError(undefined);
     setExchangeFailed(false);
-    setCodeSent(false);
-    setCode('');
+    setCodeError(undefined);
+    setStep('email');
     await privy.logout().catch(() => {});
   };
 
-  const run = async (step: () => Promise<unknown>) => {
+  const sendCode = async () => {
+    setBusy(true);
+    setError(undefined);
+    setCodeError(undefined);
+    try {
+      await sendPrivyCode({ email: email.trim() });
+      setCodeKey(k => k + 1);
+      setStep('code');
+    } catch (e) {
+      setError(signInErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // On success Privy's user appears and `finishing` takes over.
+  const verifyEmailCode = async (code: string) => {
+    setCodeBusy('verify');
+    setError(undefined);
+    setCodeError(undefined);
+    try {
+      await loginWithCode({ code, email: email.trim() });
+    } catch (e) {
+      const codeErr = codeErrorOf(e);
+      if (codeErr) setCodeError(codeErr);
+      else setError(signInErrorMessage(e));
+    } finally {
+      setCodeBusy(undefined);
+    }
+  };
+
+  const resendEmailCode = async () => {
+    setCodeBusy('resend');
+    setError(undefined);
+    setCodeError(undefined);
+    try {
+      await sendPrivyCode({ email: email.trim() });
+      setCodeKey(k => k + 1);
+    } catch (e) {
+      setError(signInErrorMessage(e));
+    } finally {
+      setCodeBusy(undefined);
+    }
+  };
+
+  const googleSignIn = async () => {
     setBusy(true);
     setError(undefined);
     try {
-      await step();
+      await loginWithOAuth({ provider: 'google' });
     } catch (e) {
       setError(signInErrorMessage(e));
     } finally {
@@ -232,24 +290,6 @@ export default function SignInScreen() {
     },
   });
 
-  const requestCode = () =>
-    run(async () => {
-      await sendCode({ email: email.trim() });
-      setCodeSent(true);
-    });
-
-  const submitCode = () =>
-    run(async () => {
-      await loginWithCode({ code: code.trim(), email: email.trim() });
-    });
-
-  const googleSignIn = () =>
-    run(async () => {
-      await loginWithOAuth({ provider: 'google' });
-    });
-
-  const working = busy || finishing;
-
   return (
     <View style={styles.root}>
       <StatusBar style="dark" />
@@ -263,7 +303,6 @@ export default function SignInScreen() {
         style={[styles.logo, { top: insets.top + 20 }]}
         accessibilityLabel="Zeno"
       />
-
       <ScrollView
         style={styles.fill}
         contentContainerStyle={[
@@ -277,104 +316,50 @@ export default function SignInScreen() {
         bounces={false}
       >
         <View style={styles.card}>
-          <Text style={styles.title}>Sign in</Text>
-          <Text style={styles.subtitle}>
-            No account needed — signing in creates one.
-          </Text>
-
           {finishing ? (
-            <View style={styles.connected}>
-              {exchangeFailed ? (
-                <>
-                  <PrimaryButton label="Try again" onPress={retryExchange} />
-                  <Pressable
-                    onPress={startOver}
-                    accessibilityRole="button"
-                    style={styles.linkButton}
-                  >
-                    <Text style={styles.link}>Use a different account</Text>
-                  </Pressable>
-                </>
-              ) : (
-                <PrimaryButton
-                  label="Signing you in…"
-                  onPress={() => {}}
-                  disabled
-                  busy
-                />
-              )}
-            </View>
-          ) : isConnected && externalAddress && connectedHere ? (
-            <View style={styles.connected}>
-              <PrimaryButton
-                label={
-                  busy
-                    ? 'Check your wallet to sign…'
-                    : `Sign in with ${shortAddress(externalAddress)}`
-                }
-                onPress={() => walletSignIn(externalAddress)}
-                disabled={busy}
-                busy={busy}
-              />
-              <Pressable
-                onPress={chooseWallet}
-                disabled={busy}
-                accessibilityRole="button"
-                style={styles.linkButton}
-              >
-                <Text style={styles.link}>Use a different wallet</Text>
-              </Pressable>
-              <Pressable
-                onPress={async () => {
-                  setConnectedHere(false);
-                  await disconnect();
-                }}
-                disabled={busy}
-                accessibilityRole="button"
-                style={styles.linkButton}
-              >
-                <Text style={styles.link}>Use email or Google instead</Text>
-              </Pressable>
-            </View>
-          ) : codeSent ? (
             <>
-              <Text style={styles.label}>CODE SENT TO {email.trim()}</Text>
-              <TextInput
-                value={code}
-                onChangeText={text => setCode(text.replace(/\D/g, ''))}
-                placeholder="123456"
-                placeholderTextColor={colors.dim}
-                selectionColor={colors.green}
-                keyboardType="number-pad"
-                textContentType="oneTimeCode"
-                autoComplete="one-time-code"
-                maxLength={6}
-                returnKeyType="done"
-                onSubmitEditing={() => validCode && !working && submitCode()}
-                style={styles.input}
-                autoFocus
-              />
-              <PrimaryButton
-                label={busy ? 'Checking…' : 'Sign in'}
-                onPress={submitCode}
-                disabled={!validCode || working}
-                busy={busy}
-              />
-              <Pressable
-                onPress={() => {
-                  setCodeSent(false);
-                  setCode('');
-                  setError(undefined);
-                }}
-                disabled={working}
-                accessibilityRole="button"
-                style={styles.linkButton}
-              >
-                <Text style={styles.link}>Use a different email</Text>
-              </Pressable>
+              <Text style={styles.title}>Sign in</Text>
+              <View style={styles.connected}>
+                {exchangeFailed ? (
+                  <>
+                    <PrimaryButton label="Try again" onPress={retryExchange} />
+                    <Pressable
+                      onPress={startOver}
+                      accessibilityRole="button"
+                      style={styles.linkButton}
+                    >
+                      <Text style={styles.link}>Use a different account</Text>
+                    </Pressable>
+                  </>
+                ) : (
+                  <PrimaryButton
+                    label="Signing you in…"
+                    onPress={() => {}}
+                    disabled
+                    busy
+                  />
+                )}
+              </View>
             </>
+          ) : step === 'code' ? (
+            <EmailCodeStep
+              key={codeKey}
+              email={email.trim()}
+              error={codeError}
+              busy={codeBusy}
+              onVerify={verifyEmailCode}
+              onResend={resendEmailCode}
+              onChangeEmail={() => {
+                setCodeError(undefined);
+                setStep('email');
+              }}
+            />
           ) : (
             <>
+              <Text style={styles.title}>Sign in</Text>
+              <Text style={styles.subtitle}>
+                No account needed — signing in creates one.
+              </Text>
               <Text style={styles.label}>EMAIL ADDRESS</Text>
               <TextInput
                 value={email}
@@ -387,42 +372,68 @@ export default function SignInScreen() {
                 keyboardType="email-address"
                 textContentType="emailAddress"
                 returnKeyType="send"
-                onSubmitEditing={() => validEmail && !working && requestCode()}
+                onSubmitEditing={() => validEmail && !busy && sendCode()}
                 style={styles.input}
               />
               <PrimaryButton
-                label={busy ? 'Sending…' : 'Send code'}
-                onPress={requestCode}
-                disabled={!validEmail || working || pickerOpen}
+                label="Send code"
+                onPress={sendCode}
+                disabled={!validEmail || busy || pickerOpen}
                 busy={busy}
               />
-
               <View style={styles.dividerRow}>
                 <View style={styles.dividerLine} />
                 <Text style={styles.dividerText}>OR CONTINUE WITH</Text>
                 <View style={styles.dividerLine} />
               </View>
-
               <LightButton
                 label="Continue with Google"
                 icon={<GoogleIcon />}
                 onPress={googleSignIn}
-                disabled={working || pickerOpen}
+                disabled={busy || pickerOpen}
               />
-              <LightButton
-                label={pickerOpen ? 'Choose a wallet…' : 'Connect wallet'}
-                onPress={chooseWallet}
-                disabled={working}
-              />
+              {isConnected && address && connectedHere ? (
+                <>
+                  <LightButton
+                    label={
+                      busy
+                        ? 'Check your wallet to sign…'
+                        : `Sign in with ${shortAddress(address)}`
+                    }
+                    onPress={() => walletSignIn(address)}
+                    disabled={busy}
+                  />
+                  <Pressable
+                    onPress={chooseWallet}
+                    disabled={busy}
+                    accessibilityRole="button"
+                    style={styles.linkButton}
+                  >
+                    <Text style={styles.link}>Use a different wallet</Text>
+                  </Pressable>
+                </>
+              ) : (
+                <LightButton
+                  label={
+                    busy
+                      ? 'Check your wallet to sign…'
+                      : pickerOpen
+                        ? 'Choose a wallet…'
+                        : 'Connect wallet'
+                  }
+                  onPress={chooseWallet}
+                  disabled={busy}
+                />
+              )}
             </>
           )}
-
           {error ? <Text style={styles.error}>{error}</Text> : null}
-
           <Text style={styles.footer}>
+            {/* Terms and Privacy Policy open the in-app reader (legal/[doc]). */}
             By continuing you agree to the{' '}
             <Text
               style={styles.footerLink}
+              accessibilityRole="link"
               onPress={() =>
                 router.push({
                   pathname: '/legal/[doc]',
@@ -435,6 +446,7 @@ export default function SignInScreen() {
             {'\n'}and{' '}
             <Text
               style={styles.footerLink}
+              accessibilityRole="link"
               onPress={() =>
                 router.push({
                   pathname: '/legal/[doc]',
@@ -474,6 +486,7 @@ const styles = StyleSheet.create({
     lineHeight: 28,
     color: colors.text,
   },
+  connected: { marginTop: 12 },
   subtitle: {
     fontFamily: fonts.regular,
     fontSize: 13,
@@ -481,7 +494,6 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginTop: 6,
   },
-  connected: { marginTop: 12 },
   label: {
     fontFamily: fonts.medium,
     fontSize: 12,

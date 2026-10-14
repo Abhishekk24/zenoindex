@@ -3,6 +3,8 @@
  * actions (strategy filter, manager filter, search).
  *
  * Off Explore, the filter buttons go to Explore with that filter open.
+ * Profile passes `onEdit` instead: its only action is the user icon, which
+ * opens Edit profile.
  */
 import { router } from 'expo-router';
 import React from 'react';
@@ -16,6 +18,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useAppMode } from '../lib/appMode';
 import { colors, fonts, space } from '../theme/tokens';
 import { ManagerIcon, SearchIcon, StrategyIcon } from './icons';
 import { IconButton } from './ui';
@@ -35,6 +38,7 @@ export function AppHeader({
   managerActive,
   onStrategy,
   onManager,
+  onEdit,
 }: {
   title: string;
   /** Show the three round action buttons. */
@@ -45,8 +49,11 @@ export function AppHeader({
   managerActive?: boolean;
   onStrategy?: () => void;
   onManager?: () => void;
+  /** Profile: show only the user icon, opening Edit profile. */
+  onEdit?: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const { mode } = useAppMode();
   // Clear the status bar even if the safe-area inset reports 0 (seen on some
   // Android devices with edge-to-edge): fall back to Android's own height.
   const statusBar = Math.max(
@@ -55,14 +62,28 @@ export function AppHeader({
   );
   return (
     <View style={[styles.header, { paddingTop: statusBar + space.xl }]}>
-      <Image
-        source={require('../../assets/images/zeno-gold.png')}
-        style={styles.logo}
-        accessibilityLabel="Zeno"
-      />
+      <View style={styles.brand}>
+        <Image
+          source={require('../../assets/images/zeno-gold.png')}
+          style={styles.logo}
+          accessibilityLabel="Zeno"
+        />
+        {mode === 'manager' ? (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>MANAGER</Text>
+          </View>
+        ) : null}
+      </View>
       <View style={styles.titleRow}>
         <Text style={styles.title}>{title}</Text>
-        {actions && (
+        {onEdit ? (
+          <IconButton
+            icon={<ManagerIcon color={colors.text} />}
+            onPress={onEdit}
+            accessibilityLabel="Edit profile"
+          />
+        ) : null}
+        {actions && !onEdit && (
           <View style={styles.actions}>
             {filters && (
               <>
@@ -103,7 +124,20 @@ export function AppHeader({
 
 const styles = StyleSheet.create({
   header: { paddingHorizontal: space.lg },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   logo: { width: 50, height: 13 },
+  badge: {
+    borderRadius: 999,
+    backgroundColor: colors.surface3,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+  },
+  badgeText: {
+    fontFamily: fonts.semibold,
+    fontSize: 11,
+    letterSpacing: 0.8,
+    color: colors.textSecondary,
+  },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',

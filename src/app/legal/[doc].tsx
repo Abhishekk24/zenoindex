@@ -14,9 +14,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { NoticeIcon } from '../../components/icons';
 import { isLegalDocId, LEGAL } from '../../content/legal';
-import { colors, fonts, radius, space, type } from '../../theme/tokens';
+import { colors, fonts, space, type } from '../../theme/tokens';
 
 export default function LegalDocumentScreen() {
   const { doc } = useLocalSearchParams<{ doc: string }>();
@@ -57,35 +56,35 @@ export default function LegalDocumentScreen() {
             <Text style={styles.title} accessibilityRole="header">
               {document.title}
             </Text>
+            <Text style={styles.copy}>{document.copy}</Text>
             <Text style={styles.updated}>
-              {document.draft
-                ? 'Not yet published'
-                : `Last updated ${document.updated}`}
+              Last updated{' '}
+              <Text style={styles.updatedDate}>{document.updated}</Text>
             </Text>
 
-            {document.draft ? (
-              <View style={styles.draft}>
-                <NoticeIcon size={20} />
-                <Text style={styles.draftText}>
-                  Draft. Zeno&apos;s final text will replace this before launch.
-                </Text>
-              </View>
-            ) : null}
+            <Text style={styles.intro}>
+              {document.intro.map((part, i) =>
+                typeof part === 'string' ? (
+                  part
+                ) : (
+                  <Text
+                    key={i}
+                    style={styles.link}
+                    accessibilityRole="link"
+                    onPress={() => router.setParams({ doc: part.doc })}
+                  >
+                    {part.label}
+                  </Text>
+                ),
+              )}
+            </Text>
 
-            {document.sections.map((section, i) => (
+            {document.sections.map(section => (
               <View key={section.heading} style={styles.section}>
                 <Text style={styles.heading} accessibilityRole="header">
-                  <Text style={styles.number}>
-                    {String(i + 1).padStart(2, '0')}
-                  </Text>
-                  {'  '}
                   {section.heading}
                 </Text>
-                {section.body.map(paragraph => (
-                  <Text key={paragraph} style={styles.paragraph}>
-                    {paragraph}
-                  </Text>
-                ))}
+                <Text style={styles.paragraph}>{section.body}</Text>
               </View>
             ))}
           </>
@@ -122,19 +121,15 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: space.xl, paddingTop: space.xl },
   eyebrow: { ...type.label, color: colors.gold },
   title: { ...type.display, color: colors.text, marginTop: space.sm },
-  updated: { ...type.small, color: colors.dim, marginTop: space.xs },
-  draft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.md,
-    marginTop: space.xl,
-    padding: space.md,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.goldLine,
-    backgroundColor: colors.goldSoft,
+  copy: { ...type.body, color: colors.muted, marginTop: space.sm },
+  updated: { ...type.small, color: colors.dim, marginTop: space.md },
+  updatedDate: { fontFamily: fonts.medium, color: colors.textSecondary },
+  intro: { ...type.body, color: colors.textSecondary, marginTop: space.xl },
+  link: {
+    fontFamily: fonts.medium,
+    color: colors.text,
+    textDecorationLine: 'underline',
   },
-  draftText: { ...type.small, color: colors.goldLight, flex: 1 },
   section: {
     marginTop: space.xl,
     paddingTop: space.xl,
@@ -143,6 +138,5 @@ const styles = StyleSheet.create({
     gap: space.md,
   },
   heading: { ...type.heading, color: colors.text },
-  number: { fontFamily: fonts.mono, fontSize: 13, color: colors.gold },
   paragraph: { ...type.body, color: colors.textSecondary },
 });

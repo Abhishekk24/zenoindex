@@ -6,7 +6,7 @@
  * the tabs (a gold ring marks an applied filter); search opens /search.
  * Other screens can open a filter here via ?panel=strategy|manager.
  */
-import { router, useLocalSearchParams } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -23,6 +23,7 @@ import {
 } from '../../components/ui';
 import { useLoad } from '../../hooks/useLoad';
 import * as api from '../../lib/api';
+import { useAppMode } from '../../lib/appMode';
 import { assetMap, isPermissioned, strategyOf } from '../../lib/basket';
 import { compare } from '../../lib/decimal';
 import type { Dtf } from '../../lib/types';
@@ -77,6 +78,7 @@ function asPanel(value: string | undefined): Panel {
 export default function ExploreScreen() {
   const params = useLocalSearchParams<{ panel?: string; at?: string }>();
   const { data, error, loading, reload } = useLoad(loadExplore, 'explore');
+  const { mode } = useAppMode();
   const [access, setAccess] = useState<Access>('all');
   const [manager, setManager] = useState<string>();
   const [strategy, setStrategy] = useState<string>();
@@ -123,6 +125,9 @@ export default function ExploreScreen() {
   };
   const toggle = (next: Exclude<Panel, null>) =>
     setPanel(current => (current === next ? null : next));
+
+  // Manager mode has no Explore tab: its home is Baskets.
+  if (mode === 'manager') return <Redirect href="/baskets" />;
 
   return (
     <View style={styles.root}>
