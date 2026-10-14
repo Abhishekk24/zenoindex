@@ -1,7 +1,8 @@
 /**
  * Manager → basket → Corporate actions (design): actions grouped by type in
- * collapsible sections. SAMPLE DATA: the API's corporate-actions read model is
- * "unavailable" today.
+ * collapsible sections, from the basket's detail (GET /dtfs/:id). The API's
+ * corporate-actions read model is still "unavailable", so this is empty until
+ * the indexer lands.
  */
 import { useLocalSearchParams } from 'expo-router';
 import React, { useMemo, useState } from 'react';
@@ -10,17 +11,46 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ChevronUpIcon } from '../../../components/icons';
 import { ManagerBasketScreen } from '../../../components/manager/ManagerBasketScreen';
 import { ManagerTable } from '../../../components/manager/ManagerTable';
+import { Empty } from '../../../components/ui';
+import { useManagedBasket } from '../../../hooks/useManagedBasket';
 import { formatDate } from '../../../lib/format';
-import {
-  sampleBasket,
-  sampleCorporateActions,
-  type CorporateActionStatus,
-  type SampleCorporateAction,
-} from '../../../manager/sample';
+import type { CorporateAction } from '../../../lib/types';
 import { colors, fonts, space } from '../../../theme/tokens';
 
 const INFO =
   'Dividends, splits and eligibility updates recorded against your baskets.';
+
+type CorporateActionStatus = 'announced' | 'effective';
+
+type Row = {
+  id: string;
+  type: string;
+  /** e.g. "0.01"; null when the action has no amount. */
+  amount: string | null;
+  recordDate: string;
+  status: CorporateActionStatus;
+};
+
+/** "cash_dividend" → "Cash Dividend". */
+function typeLabel(actionType: string): string {
+  return actionType
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map(w => w[0]!.toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+}
+
+function toRow(action: CorporateAction): Row | null {
+  if (action.status === 'cancelled') return null;
+  const payload = (action.payload ?? {}) as { amount?: unknown };
+  return {
+    id: action.id,
+    type: typeLabel(action.actionType),
+    amount: payload.amount != null ? String(payload.amount) : null,
+    recordDate: action.effectiveAt,
+    status: action.status,
+  };
+}
 
 function StatusPill({ status }: { status: CorporateActionStatus }) {
   const effective = status === 'effective';
@@ -35,15 +65,16 @@ function StatusPill({ status }: { status: CorporateActionStatus }) {
 
 export default function ManagerCorporateActionsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const dtf = sampleBasket(id);
+  const { data: dtf, loading, error, reload } = useManagedBasket(id);
 
   const groups = useMemo(() => {
-    const byType = new Map<string, SampleCorporateAction[]>();
-    for (const action of sampleCorporateActions) {
-      byType.set(action.type, [...(byType.get(action.type) ?? []), action]);
+    const byType = new Map<string, Row[]>();
+    for (const action of dtf?.corporateActions ?? []) {
+      const row = toRow(action);
+      if (row) byType.set(row.type, [...(byType.get(row.type) ?? []), row]);
     }
     return [...byType.entries()];
-  }, []);
+  }, [dtf]);
 
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const allCollapsed = collapsed.size === groups.length;
@@ -58,6 +89,9 @@ export default function ManagerCorporateActionsScreen() {
   return (
     <ManagerBasketScreen
       dtf={dtf}
+      loading={loading}
+      error={error}
+      onRetry={reload}
       title="Corporate Actions"
       info={INFO}
       right={
@@ -77,6 +111,14 @@ export default function ManagerCorporateActionsScreen() {
       }
     >
       <View style={styles.groups}>
+        {groups.length === 0 ? (
+          <View style={styles.empty}>
+            <Empty
+              title="No corporate actions"
+              body="Dividends, splits and eligibility updates for this basket appear here."
+            />
+          </View>
+        ) : null}
         {groups.map(([type, actions]) => {
           const open = !collapsed.has(type);
           return (
@@ -118,6 +160,7 @@ export default function ManagerCorporateActionsScreen() {
 }
 
 const styles = StyleSheet.create({
+  empty: { paddingHorizontal: space.md },
   collapseAll: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted },
   groups: { gap: space.xxl },
   groupHead: {

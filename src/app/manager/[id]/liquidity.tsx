@@ -5,13 +5,20 @@ import { StyleSheet, View } from 'react-native';
 
 import { ManagerBasketScreen } from '../../../components/manager/ManagerBasketScreen';
 import { Empty } from '../../../components/ui';
-import { sampleBasket } from '../../../manager/sample';
+import { useManagedBasket } from '../../../hooks/useManagedBasket';
 import { space } from '../../../theme/tokens';
 
 export default function ManagerLiquidityScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { data: dtf, loading, error, reload } = useManagedBasket(id);
   return (
-    <ManagerBasketScreen dtf={sampleBasket(id)} title="Liquidity">
+    <ManagerBasketScreen
+      dtf={dtf}
+      loading={loading}
+      error={error}
+      onRetry={reload}
+      title="Liquidity"
+    >
       <View style={styles.pad}>
         <Empty
           title="Coming soon"

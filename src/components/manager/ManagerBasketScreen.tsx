@@ -12,7 +12,7 @@ import { shortAddress } from '../../lib/format';
 import type { Dtf } from '../../lib/types';
 import { colors, fonts, radius, space } from '../../theme/tokens';
 import { ChevronLeftIcon } from '../icons';
-import { Empty, Stripes } from '../ui';
+import { Empty, LoadState, Stripes } from '../ui';
 import { BasketMenu } from './BasketMenu';
 import { InfoTip } from './InfoTip';
 
@@ -38,8 +38,15 @@ export function ManagerBasketScreen({
   right,
   children,
   footer,
+  loading,
+  error,
+  onRetry,
 }: {
   dtf: Dtf | undefined;
+  /** While the basket loads (or failed to), show that instead of "not found". */
+  loading?: boolean;
+  error?: string;
+  onRetry?: () => void;
   title: string;
   /** Tooltip text for the ⓘ after the title. */
   info?: string;
@@ -92,6 +99,8 @@ export function ManagerBasketScreen({
             </View>
             {children}
           </>
+        ) : loading || error ? (
+          <LoadState error={error} onRetry={onRetry} />
         ) : (
           <View style={styles.pad}>
             <Empty

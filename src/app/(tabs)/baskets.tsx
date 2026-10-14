@@ -1,7 +1,8 @@
 /**
  * Manager mode home: the manager's own baskets (design: Baskets), each with a
  * ⋮ menu (Rebalance, Corporate actions, Fees, Liquidity, Open details).
- * SAMPLE DATA: the API can't list a manager's baskets yet (src/manager/sample.ts).
+ * Baskets come from GET /manager/dtfs: those whose vault manager (or vault
+ * operator) is the signed-in wallet.
  * Investor mode has no Baskets tab; it goes back to Explore.
  */
 import { Redirect, router } from 'expo-router';
@@ -13,16 +14,26 @@ import { BasketCard } from '../../components/explore/BasketCard';
 import { BasketMenu } from '../../components/manager/BasketMenu';
 import {
   Empty,
+  LoadState,
   Screen,
   SwipeTabContent,
   UnderlineTabs,
 } from '../../components/ui';
+import { useLoad } from '../../hooks/useLoad';
+import * as api from '../../lib/api';
 import { useAppMode } from '../../lib/appMode';
-import { isPermissioned } from '../../lib/basket';
-import { sampleAssets, sampleBaskets } from '../../manager/sample';
+import { assetMap, isPermissioned } from '../../lib/basket';
 import { colors, space } from '../../theme/tokens';
 
 type Access = 'all' | 'open' | 'permissioned';
+
+async function loadManaged() {
+  const [dtfs, assets] = await Promise.all([
+    api.listManagedDtfs(),
+    api.listAssets(),
+  ]);
+  return { dtfs, assets };
+}
 
 const ACCESS = [
   { value: 'all', label: 'All' },
@@ -33,16 +44,18 @@ const ACCESS = [
 export default function ManagerBasketsScreen() {
   const { mode } = useAppMode();
   const [access, setAccess] = useState<Access>('all');
+  const { data, error, reload } = useLoad(loadManaged, 'manager-baskets');
+  const assets = useMemo(() => assetMap(data?.assets ?? []), [data]);
 
   const visible = useMemo(
     () =>
-      sampleBaskets.filter(dtf => {
-        const permissioned = isPermissioned(dtf, sampleAssets);
+      (data?.dtfs ?? []).filter(dtf => {
+        const permissioned = isPermissioned(dtf, assets);
         if (access === 'open') return !permissioned;
         if (access === 'permissioned') return permissioned;
         return true;
       }),
-    [access],
+    [access, data, assets],
   );
 
   if (mode !== 'manager') return <Redirect href="/" />;
@@ -60,17 +73,19 @@ export default function ManagerBasketsScreen() {
           onIndexChange={i => setAccess(ACCESS[i]!.value)}
         >
           <View style={styles.list}>
-            {visible.length === 0 ? (
+            {!data ? (
+              <LoadState error={error} onRetry={reload} />
+            ) : visible.length === 0 ? (
               <Empty
                 title="No baskets here"
-                body="Baskets you create appear here with their NAV, AUM and fees."
+                body="Baskets your wallet manages appear here with their NAV, AUM and fees."
               />
             ) : (
               visible.map(dtf => (
                 <BasketCard
                   key={dtf.id}
                   dtf={dtf}
-                  assets={sampleAssets}
+                  assets={assets}
                   onPress={() =>
                     router.push({
                       pathname: '/basket/[id]',

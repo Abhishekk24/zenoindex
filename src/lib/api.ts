@@ -5,6 +5,7 @@
 import {
   listAssetsOf,
   listDtfsOf,
+  toDtf,
   toDtfDetail,
   toKyc,
   toOperation,
@@ -315,6 +316,100 @@ export async function trackOperation(
     'timeout',
     `Operation ${id} confirmation timed out.`,
     true,
+  );
+}
+
+// Manager ----------------------------------------------------------------------
+// Baskets the signed-in wallet manages (vault manager or vault operator). The
+// API answers 403 not_manager for anyone else.
+
+/** GET /api/v1/manager/dtfs */
+export async function listManagedDtfs(): Promise<Dtf[]> {
+  return listDtfsOf(await api.get('/manager/dtfs'));
+}
+
+/** Something the basket needs from its manager (the dashboard's to-do list). */
+export type ManagerAction =
+  | { kind: 'genesis' }
+  /** Invest USDG that deposits left waiting in this slot. */
+  | { kind: 'deploy'; slotIndex: number; amountUsdc: string }
+  /** Trade this slot back toward its target weight. */
+  | { kind: 'rebalance'; slotIndex: number; driftBps: number };
+
+export type ManagerSlot = {
+  index: number;
+  assetId: string;
+  symbol: string | null;
+  targetBps: number;
+  /** null while the asset has no fresh price. */
+  currentBps: number | null;
+  driftBps: number | null;
+  pendingDeployUsdc: string;
+  valueUsdc: string | null;
+  pendingWriteOff: boolean;
+  pendingReactivate: boolean;
+};
+
+export type ManagerDashboard = {
+  dtf: Dtf;
+  feeRecipient: string;
+  status: {
+    paused: boolean;
+    adminLocked: boolean;
+    emergency: boolean;
+    genesisDone: boolean;
+  };
+  totalPendingUsdc: string;
+  redeemQueue: { activeCount: number; escrowUsdc: string };
+  slots: ManagerSlot[];
+  actions: ManagerAction[];
+};
+
+/** GET /api/v1/manager/dtfs/:id */
+export async function getManagerDashboard(
+  id: string,
+): Promise<ManagerDashboard> {
+  const raw = await api.get<Row & Omit<ManagerDashboard, 'dtf'>>(
+    `/manager/dtfs/${encodeURIComponent(id)}`,
+  );
+  return {
+    dtf: toDtf(raw),
+    feeRecipient: raw.feeRecipient,
+    status: raw.status,
+    totalPendingUsdc: raw.totalPendingUsdc,
+    redeemQueue: raw.redeemQueue,
+    slots: raw.slots,
+    actions: raw.actions,
+  };
+}
+
+/** Body of each POST /manager/dtfs/:id/<name>/prepare. */
+export type ManagerPrepare =
+  | { name: 'genesis'; body: { baselineSharePrice: string } }
+  | { name: 'deploy'; body: { slotIndex: number; slippageBps?: number } }
+  | { name: 'rebalance'; body: { slotIndex: number; slippageBps?: number } }
+  | {
+      name: 'allocations';
+      body: { weights: { assetId: string; weightBps: number }[] };
+    }
+  | { name: 'pause'; body: { paused: boolean } }
+  | { name: 'write-off' | 'reactivate'; body: { assetId: string } }
+  | { name: 'fee-recipient'; body: { feeRecipient: string } };
+
+/**
+ * POST /api/v1/manager/dtfs/:id/<name>/prepare — an unsigned transaction on
+ * the same operations flow as trades (sign → submitOperation → confirm).
+ */
+export async function prepareManagerTx(
+  dtf: Dtf,
+  { name, body }: ManagerPrepare,
+): Promise<TxDraft> {
+  return toTxDraft(
+    await api.post(
+      `/manager/dtfs/${encodeURIComponent(dtf.id)}/${name}/prepare`,
+      body,
+      { chainId: dtf.chainId },
+    ),
   );
 }
 
