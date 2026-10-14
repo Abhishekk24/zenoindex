@@ -1,4 +1,7 @@
-/** A basket in the Explore list (design: Explore mockup). */
+/**
+ * A basket in the Explore list (design: Explore mockup). Manager mode reuses it
+ * with a ⋮ menu in `accessory`.
+ */
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -16,10 +19,13 @@ export function BasketCard({
   dtf,
   assets,
   onPress,
+  accessory,
 }: {
   dtf: Dtf;
   assets: AssetMap;
   onPress: () => void;
+  /** Top-right control over the card, e.g. the manager ⋮ menu. */
+  accessory?: React.ReactNode;
 }) {
   const tickers = dtf.weights.map(w => symbolOf(w.assetId, assets));
   const shown =
@@ -32,71 +38,74 @@ export function BasketCard({
   const comingSoon = isComingSoon(dtf);
 
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`${dtf.name}, ${dtf.symbol}`}
-      style={({ pressed }) => [styles.card, pressed && styles.pressed]}
-    >
-      <View style={styles.stripes} pointerEvents="none">
-        <Stripes height={84} stripe={2} gap={7} opacity={0.16} />
-      </View>
+    <View>
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={`${dtf.name}, ${dtf.symbol}`}
+        style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+      >
+        <View style={styles.stripes} pointerEvents="none">
+          <Stripes height={84} stripe={2} gap={7} opacity={0.16} />
+        </View>
 
-      <View style={styles.body}>
-        <Text style={styles.name} numberOfLines={1}>
-          {dtf.name}
-        </Text>
-        <Text style={styles.meta} numberOfLines={1}>
-          {dtf.symbol} · {shortAddress(dtf.manager)}
-        </Text>
-
-        <View style={styles.constituents}>
-          <View style={styles.avatars}>
-            {shown.map((ticker, i) => (
-              <View
-                key={`${ticker}-${i}`}
-                style={[styles.avatar, i > 0 && styles.avatarOverlap]}
-              >
-                <Text style={styles.avatarText}>
-                  {ticker.startsWith('+')
-                    ? ticker
-                    : ticker.slice(0, 2).toUpperCase()}
-                </Text>
-              </View>
-            ))}
-          </View>
-          <Text style={styles.count}>
-            {tickers.length} constituent{tickers.length === 1 ? '' : 's'}
+        <View style={styles.body}>
+          <Text style={styles.name} numberOfLines={1}>
+            {dtf.name}
           </Text>
-          <View
-            style={[styles.status, comingSoon ? styles.soon : styles.active]}
-          >
-            <Text
-              style={[
-                styles.statusText,
-                { color: comingSoon ? colors.muted : colors.green },
-              ]}
-            >
-              {comingSoon ? 'Coming soon' : 'Active'}
+          <Text style={styles.meta} numberOfLines={1}>
+            {dtf.symbol} · {shortAddress(dtf.manager)}
+          </Text>
+
+          <View style={styles.constituents}>
+            <View style={styles.avatars}>
+              {shown.map((ticker, i) => (
+                <View
+                  key={`${ticker}-${i}`}
+                  style={[styles.avatar, i > 0 && styles.avatarOverlap]}
+                >
+                  <Text style={styles.avatarText}>
+                    {ticker.startsWith('+')
+                      ? ticker
+                      : ticker.slice(0, 2).toUpperCase()}
+                  </Text>
+                </View>
+              ))}
+            </View>
+            <Text style={styles.count}>
+              {tickers.length} constituent{tickers.length === 1 ? '' : 's'}
             </Text>
+            <View
+              style={[styles.status, comingSoon ? styles.soon : styles.active]}
+            >
+              <Text
+                style={[
+                  styles.statusText,
+                  { color: comingSoon ? colors.muted : colors.green },
+                ]}
+              >
+                {comingSoon ? 'Coming soon' : 'Active'}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.rule} />
+
+          <View style={styles.stats}>
+            <BasketStat
+              label="NAV / share"
+              value={formatDecimal(dtf.sharePrice, 4)}
+            />
+            <BasketStat label="AUM" value={formatDecimal(dtf.aum, 0)} />
+            <BasketStat
+              label="Mgmt fee"
+              value={formatBps(dtf.fees.managementBps)}
+            />
           </View>
         </View>
-
-        <View style={styles.rule} />
-
-        <View style={styles.stats}>
-          <BasketStat
-            label="NAV / share"
-            value={formatDecimal(dtf.sharePrice, 4)}
-          />
-          <BasketStat label="AUM" value={formatDecimal(dtf.aum, 0)} />
-          <BasketStat
-            label="Mgmt fee"
-            value={formatBps(dtf.fees.managementBps)}
-          />
-        </View>
-      </View>
-    </Pressable>
+      </Pressable>
+      {accessory ? <View style={styles.accessory}>{accessory}</View> : null}
+    </View>
   );
 }
 
@@ -111,6 +120,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   pressed: { borderColor: colors.lineStrong },
+  accessory: { position: 'absolute', top: 16, right: 14 },
   stripes: {
     position: 'absolute',
     top: 0,

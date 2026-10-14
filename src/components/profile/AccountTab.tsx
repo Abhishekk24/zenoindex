@@ -1,10 +1,11 @@
 import * as Application from 'expo-application';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { LEGAL, type LegalDocId } from '../../content/legal';
 import { useSession } from '../../hooks/useSession';
+import { switchMode, useAppMode } from '../../lib/appMode';
 import { formatDate } from '../../lib/format';
 import type { User } from '../../lib/types';
 import { colors, fonts, space } from '../../theme/tokens';
@@ -14,10 +15,16 @@ import { InfoRow } from './InfoRow';
 
 const DOCS: LegalDocId[] = ['terms', 'privacy'];
 
-/** Profile → Account: personal details, legal documents and sign out. */
+/**
+ * Profile → Account: personal details, Manager Mode, legal documents and
+ * sign out.
+ */
 export function AccountTab({ user }: { user: User }) {
   const { signOut } = useSession();
+  const { mode, switchingTo } = useAppMode();
   const [error, setError] = useState<string>();
+  // Shows the target state while switching, so the switch moves at once.
+  const managerOn = (switchingTo ?? mode) === 'manager';
   const name =
     [user.firstName, user.lastName].filter(Boolean).join(' ') ||
     user.displayName ||
@@ -38,8 +45,19 @@ export function AccountTab({ user }: { user: User }) {
         value={user.email ?? '—'}
         // Email accounts are created by verifying a code sent to the address.
         extra={user.email ? <Badge label="Verified" tone="green" /> : null}
-        last
       />
+      <View style={styles.modeRow}>
+        <Text style={styles.modeLabel}>Manager Mode</Text>
+        <Switch
+          value={managerOn}
+          onValueChange={on => void switchMode(on ? 'manager' : 'investor')}
+          disabled={switchingTo !== null}
+          trackColor={{ false: colors.surface3, true: colors.primaryGreen }}
+          thumbColor="#ffffff"
+          ios_backgroundColor={colors.surface3}
+          accessibilityLabel="Manager Mode"
+        />
+      </View>
 
       <View style={styles.legal}>
         <Label>Legal</Label>
@@ -84,6 +102,15 @@ export function AccountTab({ user }: { user: User }) {
 }
 
 const styles = StyleSheet.create({
+  modeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: space.md,
+    paddingVertical: 14,
+    paddingHorizontal: space.xs,
+  },
+  modeLabel: { fontFamily: fonts.regular, fontSize: 15, color: colors.text },
   error: {
     fontFamily: fonts.regular,
     fontSize: 13,

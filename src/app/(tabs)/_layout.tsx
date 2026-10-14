@@ -1,18 +1,29 @@
+import { router } from 'expo-router';
 import { Tabs } from 'expo-router/js-tabs';
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
+  BasketsIcon,
+  CreateIcon,
   ExploreIcon,
   PortfolioIcon,
   ProfileIcon,
 } from '../../components/icons';
 import { TabBarBackground } from '../../components/navigation/TabBarBackground';
+import { useAppMode } from '../../lib/appMode';
 import { colors, fonts, tabBarHeight } from '../../theme/tokens';
 
+/**
+ * Investor mode: Explore · Portfolio · Profile. Manager mode (Profile →
+ * Manager Mode): Baskets · Create · Portfolio · Profile. Hidden tabs keep
+ * their routes but get no button (`href: null`).
+ */
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
+  const { mode } = useAppMode();
+  const manager = mode === 'manager';
   return (
     <Tabs
       screenOptions={{
@@ -41,6 +52,32 @@ export default function TabsLayout() {
           title: 'Explore',
           headerShown: false,
           tabBarIcon: ExploreIcon,
+          href: manager ? null : undefined,
+        }}
+      />
+      <Tabs.Screen
+        name="baskets"
+        options={{
+          title: 'Baskets',
+          headerShown: false,
+          tabBarIcon: BasketsIcon,
+          href: manager ? undefined : null,
+        }}
+      />
+      <Tabs.Screen
+        name="create"
+        options={{
+          title: 'Create',
+          headerShown: false,
+          tabBarIcon: CreateIcon,
+          href: manager ? undefined : null,
+        }}
+        listeners={{
+          // Create is a full-screen flow with its own back, not a tab page.
+          tabPress: e => {
+            e.preventDefault();
+            router.push('/manager/create');
+          },
         }}
       />
       <Tabs.Screen
