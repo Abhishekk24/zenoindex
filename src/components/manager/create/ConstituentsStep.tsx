@@ -7,9 +7,9 @@ import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import {
-  CREATE_ASSETS,
   assetOf,
   totalWeight,
+  type CreateAsset,
   type CreateForm,
 } from '../../../manager/createBasket';
 import { colors, fonts, space } from '../../../theme/tokens';
@@ -22,7 +22,10 @@ export function ConstituentsStep({
   update,
   providerLabel,
   baseError,
+  assets,
 }: {
+  /** Assets a basket can hold (GET /manager/create). */
+  assets: CreateAsset[];
   form: CreateForm;
   update: (patch: Partial<CreateForm>) => void;
   /** e.g. "Robinhood" → "Robinhood token" over the table. */
@@ -39,14 +42,16 @@ export function ConstituentsStep({
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q || picked) return [];
-    return CREATE_ASSETS.filter(
-      a =>
-        a.mode === 'in-kind' &&
-        !taken.has(a.id) &&
-        (a.name.toLowerCase().includes(q) ||
-          a.symbol.toLowerCase().includes(q)),
-    ).slice(0, 5);
-  }, [query, picked, taken]);
+    return assets
+      .filter(
+        a =>
+          a.mode === 'in-kind' &&
+          !taken.has(a.id) &&
+          (a.name.toLowerCase().includes(q) ||
+            a.symbol.toLowerCase().includes(q)),
+      )
+      .slice(0, 5);
+  }, [query, picked, taken, assets]);
 
   const add = () => {
     const id = picked ?? (matches.length === 1 ? matches[0]!.id : undefined);
@@ -84,10 +89,12 @@ export function ConstituentsStep({
         value={form.baseAssetId}
         placeholder="Enter name"
         chevron={false}
-        options={CREATE_ASSETS.filter(a => a.mode === 'zap').map(a => ({
-          value: a.id,
-          label: `${a.name} (${a.symbol})`,
-        }))}
+        options={assets
+          .filter(a => a.mode === 'zap')
+          .map(a => ({
+            value: a.id,
+            label: `${a.name} (${a.symbol})`,
+          }))}
         onChange={baseAssetId => update({ baseAssetId })}
         error={baseError}
       />
@@ -159,7 +166,7 @@ export function ConstituentsStep({
           {form.constituents.map(c => (
             <View key={c.assetId} style={styles.row}>
               <Text style={styles.assetName}>
-                {assetOf(c.assetId)?.name ?? c.assetId}
+                {assetOf(c.assetId, assets)?.name ?? c.assetId}
               </Text>
               <TextInput
                 value={c.weight}
@@ -169,12 +176,12 @@ export function ConstituentsStep({
                 placeholderTextColor={colors.dim}
                 selectionColor={colors.gold}
                 style={styles.weight}
-                accessibilityLabel={`${assetOf(c.assetId)?.name} weight, percent`}
+                accessibilityLabel={`${assetOf(c.assetId, assets)?.name} weight, percent`}
               />
               <Pressable
                 onPress={() => remove(c.assetId)}
                 accessibilityRole="button"
-                accessibilityLabel={`Remove ${assetOf(c.assetId)?.name}`}
+                accessibilityLabel={`Remove ${assetOf(c.assetId, assets)?.name}`}
                 hitSlop={6}
                 style={styles.remove}
               >

@@ -6,8 +6,10 @@
  * 5 Review ("Prep creation") · 6 Deploy ("Submit") · 7 Configure (no design
  * yet: coming soon). Continue checks the current step first.
  *
- * SAMPLE OPTIONS AND PREPARE (src/manager/createBasket.ts): nothing is sent;
- * the API has no create endpoint yet, so Submit says "Not connected yet".
+ * Assets come from GET /manager/create; Prep creation asks the API for the
+ * factory's createVault transaction and Submit signs it with the manager's
+ * wallet (src/manager/createBasket.ts). Only wallets the protocol admin
+ * allowlisted as vault creators can create; others see why on step 1.
  */
 import React, { useMemo, useState } from 'react';
 import {
@@ -20,6 +22,7 @@ import {
   View,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { InfoIcon } from '../../components/icons';
@@ -36,7 +39,10 @@ import {
 import { BackButton } from '../../components/manager/ManagerBasketScreen';
 import { Stripes } from '../../components/ui';
 import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
+import { useLoad } from '../../hooks/useLoad';
+import { useSendDraft } from '../../hooks/useSendDraft';
 import { shortAddress } from '../../lib/format';
+import { useWallet } from '../../lib/wallet';
 import {
   ALLOCATION_STRATEGIES,
   CREATE_CHAINS,
@@ -48,6 +54,7 @@ import {
   STEPS,
   assetOf,
   labelOf,
+  loadCreateOptions,
   pct,
   prepareCreation,
   providersOf,
@@ -89,6 +96,14 @@ export default function CreateBasketScreen() {
   const [checked, setChecked] = useState<Set<number>>(new Set());
   const [draft, setDraft] = useState<CreationDraft>();
   const [preparing, setPreparing] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const { address } = useWallet();
+  const sendDraft = useSendDraft();
+  const { data: options, error: optionsError } = useLoad(
+    loadCreateOptions,
+    'create-options',
+  );
+  const assets = options?.assets ?? [];
 
   const update = (patch: Partial<CreateForm>) => {
     setForm(current => ({ ...current, ...patch }));
@@ -118,15 +133,40 @@ export default function CreateBasketScreen() {
     try {
       setDraft(await prepareCreation(form));
       go(DEPLOY);
+    } catch (e) {
+      Alert.alert(
+        'Could not prepare',
+        e instanceof Error ? e.message : 'Try again.',
+      );
     } finally {
       setPreparing(false);
+    }
+  };
+
+  const submit = async () => {
+    if (!draft) return;
+    setSubmitting(true);
+    try {
+      await sendDraft(draft.tx);
+      Alert.alert(
+        'Basket created',
+        'Seed it from Rebalance (genesis, 1 USDG) before anyone can invest.',
+      );
+      router.replace('/baskets');
+    } catch (e) {
+      Alert.alert(
+        'Create failed',
+        e instanceof Error ? e.message : 'Transaction failed.',
+      );
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const chain = CREATE_CHAINS.find(c => c.value === form.chain);
   const providers = providersOf(form.chain);
   const providerLabel = labelOf(providers, form.provider);
-  const base = assetOf(form.baseAssetId);
+  const base = assetOf(form.baseAssetId, assets);
   const baseLabel = base ? `${base.name} (${base.symbol})` : '—';
 
   return (
@@ -249,6 +289,7 @@ export default function CreateBasketScreen() {
 
           {step === 2 && (
             <ConstituentsStep
+              assets={assets}
               form={form}
               update={update}
               providerLabel={providerLabel === '—' ? 'Provider' : providerLabel}
@@ -258,14 +299,6 @@ export default function CreateBasketScreen() {
 
           {step === 3 && (
             <View style={styles.fields}>
-              <TextField
-                label="Management fee (%)"
-                value={form.managementFee}
-                onChangeText={managementFee => update({ managementFee })}
-                placeholder="e.g. 1.50"
-                keyboardType="decimal-pad"
-                error={shown.managementFee}
-              />
               <TextField
                 label="Entry fee (%)"
                 value={form.entryFee}
@@ -281,15 +314,6 @@ export default function CreateBasketScreen() {
                 placeholder="e.g. 0.50"
                 keyboardType="decimal-pad"
                 error={shown.exitFee}
-              />
-              <TextField
-                label="Manager wallet (optional)"
-                value={form.managerWallet}
-                onChangeText={managerWallet => update({ managerWallet })}
-                placeholder="Leave blank to use your primary linked wallet"
-                autoCapitalize="none"
-                autoCorrect={false}
-                error={shown.managerWallet}
               />
               <TextField
                 label={`Minimum investment amount (${baseLabel})`}
@@ -356,8 +380,8 @@ export default function CreateBasketScreen() {
               <ReviewRow label="Provider" value={providerLabel} />
               <ReviewRow label="Base asset" value={baseLabel} />
               <ReviewRow
-                label="Management fee"
-                value={pct(form.managementFee)}
+                label="Manager"
+                value={address ? `You · ${shortAddress(address)}` : '—'}
               />
               <ReviewRow label="Entry fee" value={pct(form.entryFee)} />
               <ReviewRow label="Exit fee" value={pct(form.exitFee)} />
@@ -434,6 +458,17 @@ export default function CreateBasketScreen() {
           )}
         </View>
 
+        {step === 0 && (optionsError || (options && !options.canCreate)) ? (
+          <View style={styles.note}>
+            <InfoIcon color={colors.gold} size={18} />
+            <Text style={styles.noteText}>
+              {optionsError
+                ? optionsError
+                : `Your wallet${address ? ` ${shortAddress(address)}` : ''} isn't approved to create baskets yet. Send its address (Profile → Wallets) to the Zeno team to get it allowlisted.`}
+            </Text>
+          </View>
+        ) : null}
+
         {step === 0 ? (
           <View style={styles.note}>
             <InfoIcon color={colors.muted} size={18} />
@@ -476,21 +511,19 @@ export default function CreateBasketScreen() {
             </Pressable>
           ) : step === DEPLOY ? (
             <Pressable
-              onPress={() =>
-                Alert.alert(
-                  'Not connected yet',
-                  'Deploying a basket needs the create endpoint on the ZenoIndex API.',
-                )
-              }
-              disabled={!draft}
+              onPress={submit}
+              disabled={!draft || submitting}
               accessibilityRole="button"
+              accessibilityState={{ busy: submitting }}
               style={({ pressed }) => [
                 styles.submit,
-                !draft && styles.disabled,
+                (!draft || submitting) && styles.disabled,
                 pressed && styles.pressed,
               ]}
             >
-              <Text style={styles.submitText}>Submit</Text>
+              <Text style={styles.submitText}>
+                {submitting ? 'Waiting for confirmation…' : 'Submit'}
+              </Text>
             </Pressable>
           ) : step < STEPS.length - 1 ? (
             <Pressable

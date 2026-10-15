@@ -3,10 +3,14 @@
  * the summary the Review step shows. Choices and rules follow the web form
  * (programmable-dtf-infra apps/dtf-app/components/create-basket-form.tsx).
  *
- * SAMPLE OPTIONS AND PREPARE: the ZenoIndex API has no chains-and-providers,
- * asset catalogue for creation, or create/deploy endpoint yet. Swap
- * CREATE_CHAINS / CREATE_ASSETS / prepareCreation for API calls when they exist.
+ * Assets and the create transaction come from the API (GET /manager/create,
+ * POST /manager/create/prepare → factory createVault). On-chain a basket has a
+ * name, symbol, weights, an entry and an exit fee; the signer becomes its
+ * manager. The strategy / dividend / minimum-investment choices below aren't
+ * stored on-chain yet.
  */
+import * as api from '../lib/api';
+import type { TxDraft } from '../lib/types';
 
 export type Option = { value: string; label: string };
 
@@ -16,27 +20,30 @@ export type CreateAsset = {
   symbol: string;
   /** 'zap' assets can be a basket's base asset (USDG). */
   mode: 'zap' | 'in-kind';
+  logoUrl?: string | null;
 };
+
+/** Who may create, and the assets to pick (unpriced ones left out: createVault would revert). */
+export async function loadCreateOptions() {
+  const options = await api.getCreateOptions();
+  const assets: CreateAsset[] = options.assets
+    .filter(a => a.selectable)
+    .map(a => ({
+      id: a.id,
+      name: a.name,
+      symbol: a.symbol,
+      mode: a.id === options.baseAssetId ? 'zap' : 'in-kind',
+      logoUrl: a.logoUrl,
+    }));
+  return { ...options, assets };
+}
 
 export const CREATE_CHAINS: (Option & { providers: Option[] })[] = [
   {
     value: '4663',
-    label: 'Robinhood Chain (sample)',
+    label: 'Robinhood Chain',
     providers: [{ value: 'robinhood', label: 'Robinhood' }],
   },
-];
-
-export const CREATE_ASSETS: CreateAsset[] = [
-  { id: 'usdg', name: 'Global Dollar', symbol: 'USDG', mode: 'zap' },
-  { id: 'tsla', name: 'Tesla', symbol: 'TSLA', mode: 'in-kind' },
-  { id: 'amzn', name: 'Amazon', symbol: 'AMZN', mode: 'in-kind' },
-  { id: 'nvda', name: 'Nvidia', symbol: 'NVDA', mode: 'in-kind' },
-  { id: 'aapl', name: 'Apple', symbol: 'AAPL', mode: 'in-kind' },
-  { id: 'msft', name: 'Microsoft', symbol: 'MSFT', mode: 'in-kind' },
-  { id: 'googl', name: 'Alphabet', symbol: 'GOOGL', mode: 'in-kind' },
-  { id: 'meta', name: 'Meta', symbol: 'META', mode: 'in-kind' },
-  { id: 'spy', name: 'S&P 500 ETF', symbol: 'SPY', mode: 'in-kind' },
-  { id: 'weth', name: 'Wrapped Ether', symbol: 'WETH', mode: 'in-kind' },
 ];
 
 export const REBALANCE_STRATEGIES: Option[] = [
@@ -125,8 +132,11 @@ export function labelOf(options: Option[], value: string): string {
   return options.find(o => o.value === value)?.label ?? '—';
 }
 
-export function assetOf(id: string): CreateAsset | undefined {
-  return CREATE_ASSETS.find(a => a.id === id);
+export function assetOf(
+  id: string,
+  assets: CreateAsset[],
+): CreateAsset | undefined {
+  return assets.find(a => a.id === id);
 }
 
 export function providersOf(chain: string): Option[] {
@@ -144,9 +154,9 @@ export function totalWeight(form: CreateForm): number {
 }
 
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
-const isPercent = (v: string) => {
+const inRange = (v: string, min: number, max: number) => {
   const n = num(v);
-  return Number.isFinite(n) && n >= 0 && n <= 100;
+  return Number.isFinite(n) && n >= min && n <= max;
 };
 
 /** Field errors for one step (index into STEPS); empty when it can continue. */
@@ -174,14 +184,11 @@ export function stepErrors(
       break;
     }
     case 3:
-      if (!isPercent(form.managementFee))
-        e.managementFee = 'Enter a fee between 0 and 100.';
-      if (!isPercent(form.entryFee))
-        e.entryFee = 'Enter a fee between 0 and 100.';
-      if (!isPercent(form.exitFee))
-        e.exitFee = 'Enter a fee between 0 and 100.';
-      if (form.managerWallet.trim() && !ADDRESS.test(form.managerWallet.trim()))
-        e.managerWallet = 'Must be a 0x address.';
+      // The contract's bounds (Vault.init): entry 0–6%, exit 0.5–10%.
+      if (!inRange(form.entryFee, 0, 6))
+        e.entryFee = 'Enter an entry fee between 0 and 6%.';
+      if (!inRange(form.exitFee, 0.5, 10))
+        e.exitFee = 'Enter an exit fee between 0.5 and 10%.';
       if (form.feeRecipient.trim() && !ADDRESS.test(form.feeRecipient.trim()))
         e.feeRecipient = 'Must be a 0x address.';
       if (
@@ -206,19 +213,44 @@ export type CreationDraft = {
   to: string;
   chainId: number;
   calldata: string;
+  /** What Submit signs and sends. */
+  tx: TxDraft;
 };
 
-/** SAMPLE: what the create-prepare endpoint will return (design: Deploy). */
+/** Percent strings (summing to 100) → bps summing to exactly 10_000. */
+export function weightsBps(form: CreateForm) {
+  const weights = form.constituents.map(c => ({
+    assetId: c.assetId,
+    weightBps: Math.round(Number(c.weight) * 100),
+  }));
+  const drift = 10_000 - weights.reduce((sum, w) => sum + w.weightBps, 0);
+  if (weights.length && drift !== 0)
+    weights[weights.length - 1]!.weightBps += drift;
+  return weights;
+}
+
+const bps = (percent: string) => Math.round(Number(percent) * 100);
+
+/** POST /manager/create/prepare: the createVault transaction for this form. */
 export async function prepareCreation(
-  _form: CreateForm,
+  form: CreateForm,
 ): Promise<CreationDraft> {
-  await new Promise(resolve => setTimeout(resolve, 600));
+  const tx = await api.prepareCreateBasket(Number(form.chain), {
+    name: form.name.trim(),
+    symbol: form.symbol.trim().toUpperCase(),
+    weights: weightsBps(form),
+    entryFeeBps: bps(form.entryFee),
+    exitFeeBps: bps(form.exitFee),
+    ...(form.feeRecipient.trim()
+      ? { feeRecipient: form.feeRecipient.trim() }
+      : {}),
+  });
   return {
-    operation: `mock-op-${Date.now()}`,
-    status: 'draft_prepared',
-    to: '0x5F00000000000000000000000000000000000aa3',
-    chainId: 31337,
-    calldata:
-      '0x8f000000000000000000000000000000000000000000000000000000000000000000',
+    operation: tx.requestId,
+    status: tx.operation?.status ?? 'draft_prepared',
+    to: tx.transaction.to,
+    chainId: tx.transaction.chainId,
+    calldata: tx.transaction.data,
+    tx,
   };
 }

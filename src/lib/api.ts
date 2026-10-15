@@ -439,6 +439,52 @@ export async function prepareFeeClaim(chainId: number): Promise<TxDraft> {
   );
 }
 
+/** What GET /manager/create offers: who may create, and the assets to pick. */
+export type CreateOptions = {
+  /** Only the super-admin and wallets it allowlisted can create baskets. */
+  canCreate: boolean;
+  /** USDG — every basket is priced and bought in it. */
+  baseAssetId: string;
+  assets: {
+    id: string;
+    symbol: string;
+    name: string;
+    logoUrl: string | null;
+    /** false until the asset has a price (createVault needs one). */
+    selectable: boolean;
+  }[];
+  limits: {
+    maxAssets: number;
+    maxEntryFeeBps: number;
+    minExitFeeBps: number;
+    maxExitFeeBps: number;
+  };
+};
+
+/** GET /api/v1/manager/create */
+export async function getCreateOptions(): Promise<CreateOptions> {
+  return api.get<CreateOptions>('/manager/create');
+}
+
+export type CreateBasketInput = {
+  name: string;
+  symbol: string;
+  weights: { assetId: string; weightBps: number }[];
+  entryFeeBps: number;
+  exitFeeBps: number;
+  feeRecipient?: string;
+};
+
+/** POST /api/v1/manager/create/prepare — createVault; the signer becomes the manager. */
+export async function prepareCreateBasket(
+  chainId: number,
+  input: CreateBasketInput,
+): Promise<TxDraft> {
+  return toTxDraft(
+    await api.post('/manager/create/prepare', input, { chainId }),
+  );
+}
+
 // Portfolio --------------------------------------------------------------------
 
 export type PortfolioView = {

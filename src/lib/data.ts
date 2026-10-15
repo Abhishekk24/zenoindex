@@ -738,6 +738,33 @@ const ROUTES: Route[] = [
   ],
   [
     'GET',
+    /^\/manager\/create$/,
+    () =>
+      ok({
+        canCreate: true,
+        baseAssetId: USDG,
+        assets: assets.map(a => ({
+          id: a.id,
+          symbol: a.symbol,
+          name: a.name,
+          logoUrl: null,
+          selectable: true,
+        })),
+        limits: {
+          maxAssets: 20,
+          maxEntryFeeBps: 600,
+          minExitFeeBps: 50,
+          maxExitFeeBps: 1000,
+        },
+      }),
+  ],
+  [
+    'POST',
+    /^\/manager\/create\/prepare$/,
+    () => ok(txDraft('manager_create', addr(0xfac))),
+  ],
+  [
+    'GET',
     /^\/manager\/fees$/,
     () =>
       ok({
