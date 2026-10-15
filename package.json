@@ -26,8 +26,10 @@
     "expo": "~57.0.27",
     "expo-application": "~57.0.3",
     "expo-blur": "~57.0.3",
+    "expo-clipboard": "~57.0.2",
     "expo-constants": "~57.0.21",
     "expo-font": "~57.0.4",
+    "expo-image-picker": "~57.0.20",
     "expo-linking": "~57.0.12",
     "expo-router": "~57.0.25",
     "expo-secure-store": "~57.0.4",
@@ -52,6 +54,7 @@
     "node": ">= 22.11.0"
   },
   "overrides": {
+    "@react-native-async-storage/async-storage": "$@react-native-async-storage/async-storage",
     "@walletconnect/universal-provider": "2.21.10",
     "@walletconnect/sign-client": "2.21.10",
     "@walletconnect/core": "2.21.10",

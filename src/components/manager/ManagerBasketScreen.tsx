@@ -26,7 +26,7 @@ export function BackButton() {
       style={styles.back}
     >
       <ChevronLeftIcon color={colors.text} size={18} />
-      <Text style={styles.backText}>back</Text>
+      <Text style={styles.backText}>Back</Text>
     </Pressable>
   );
 }
