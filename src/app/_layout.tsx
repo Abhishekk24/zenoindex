@@ -32,8 +32,15 @@ import { fonts } from '../theme/tokens';
 // Hold the splash screen until the fonts are ready.
 SplashScreen.preventAutoHideAsync();
 
-// WalletConnect logs lookups of a pairing it already closed (after switching wallets) as errors; nothing fails.
-LogBox.ignoreLogs(['Record was recently deleted']);
+// Known library noise, kept out of the dev overlay (it still prints to the console):
+// - WalletConnect logs lookups of a pairing it already closed (after switching wallets); nothing fails.
+// - WalletConnect's relay publisher logs a failed publish it retries by itself (flaky socket, app resumed).
+// - Privy's embedded-wallet webview says "ready" again after a reload, when no request is waiting for it.
+LogBox.ignoreLogs([
+  'Record was recently deleted',
+  'core/relayer/publisher',
+  'No callback found for "privy:iframe:ready"',
+]);
 
 const queryClient = new QueryClient();
 
