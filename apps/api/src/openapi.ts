@@ -204,6 +204,7 @@ export const openapi = {
           s("object", {
             properties: {
               feeRecipient: ref("Address"),
+              tradingFeeBps: s("integer", { description: "Fee each rebalance swap pays on its output into the FeeEscrow (admin-set, ≤ 200). 0 before that deployment." }),
               status: s("object", { properties: { paused: s("boolean"), adminLocked: s("boolean"), emergency: s("boolean", { description: "Protocol-wide" }), genesisDone: s("boolean") } }),
               totalPendingUsdc: str("USDG deposited but not yet invested"),
               redeemQueue: s("object", { properties: { activeCount: s("integer"), escrowUsdc: str("USDG owed to sellers") } }),

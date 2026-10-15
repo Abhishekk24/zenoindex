@@ -2,9 +2,10 @@ import { defineChain, type Address } from "viem";
 
 /**
  * zenoindex-evm commit src/abis.ts is built from (branch feat/zenoindex/phase-1-hardening). Keep in sync with
- * scripts/gen-abis.mjs. bf57915 only adds to 7663cc6 (what MAINNET below runs): FeeEscrow + the factory's feeEscrow().
+ * scripts/gen-abis.mjs. 550d0a2 only adds to 7663cc6 (what MAINNET below runs): FeeEscrow + the factory's
+ * feeEscrow(), and AccessMaster's rebalance trading fee (tradingFeeBps).
  */
-export const EVM_COMMIT = "bf57915";
+export const EVM_COMMIT = "550d0a2";
 
 export const BPS = 10_000;
 export const USDG_DECIMALS = 6;

@@ -1,5 +1,5 @@
 import { erc20Abi, zeroAddress, type Address, type PublicClient } from "viem";
-import { FeeEscrowAbi, VaultAbi, ZenoIndexVaultAbi } from "./abis";
+import { AccessMasterAbi, FeeEscrowAbi, VaultAbi, ZenoIndexVaultAbi } from "./abis";
 import { BPS, MAINNET, SHARE_DECIMALS } from "./constants";
 
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
@@ -311,4 +311,17 @@ export async function getFeeEscrow(client: PublicClient, factory: Address = MAIN
 /** `manager`'s unclaimed fees in `token` — one balance across all the vaults they manage. */
 export async function getManagerClaimable(client: PublicClient, escrow: Address, manager: Address, token: Address) {
   return client.readContract({ address: escrow, abi: FeeEscrowAbi, functionName: "managerClaimable", args: [manager, token] });
+}
+
+/**
+ * The fee (bps, ≤ 200) every executeRebalance swap pays on its output into the FeeEscrow, set on AccessMaster by the
+ * admin. 0 on a deployment from before it (no `tradingFeeBps()`, so the call reverts).
+ */
+export async function getTradingFeeBps(client: PublicClient, factory: Address = MAINNET.factory): Promise<number> {
+  try {
+    const accessMaster = await client.readContract({ address: factory, abi: ZenoIndexVaultAbi, functionName: "accessMaster" });
+    return await client.readContract({ address: accessMaster, abi: AccessMasterAbi, functionName: "tradingFeeBps" });
+  } catch {
+    return 0;
+  }
 }

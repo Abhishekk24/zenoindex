@@ -13,6 +13,7 @@ import {
   GENESIS_SEED_USDC,
   getFeeEscrow,
   getManagerClaimable,
+  getTradingFeeBps,
   getManagerView,
   isVaultOperator,
   MAX_ASSETS,
@@ -49,7 +50,7 @@ export function managerRoutes(app: Hono<AppEnv>, { db, client }: Deps) {
 
   app.get("/manager/dtfs/:id", async (c) => {
     const { project, snap, vault: v } = await managerContext(c, client);
-    const view = await managerView(client, v, snap);
+    const [view, tradingFeeBps] = await Promise.all([managerView(client, v, snap), getTradingFeeBps(client, project.factory)]);
     const usdg = snap.protocol.usdg.toLowerCase();
     const slots = view.slots.map((s) => ({
       index: s.index,
@@ -76,6 +77,7 @@ export function managerRoutes(app: Hono<AppEnv>, { db, client }: Deps) {
     return c.json({
       ...toDtfRow(v, snap, project.chainId),
       feeRecipient: v.feeRecipient.toLowerCase(),
+      tradingFeeBps,
       status: { paused: v.paused, adminLocked: v.adminLocked, emergency: snap.protocol.isEmergency, genesisDone: v.genesisDone },
       totalPendingUsdc: usd(v.totalPendingUsdc),
       redeemQueue: { activeCount: Number(view.activeRedeemCount), escrowUsdc: usd(view.vaultRedeemEscrowTotal) },

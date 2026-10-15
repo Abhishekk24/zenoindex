@@ -1,4 +1,4 @@
-import { applySlippage, FeeEscrowAbi, MAINNET, robinhood, VaultAbi, ZenoIndexVaultAbi } from "@zenoindex/sdk";
+import { AccessMasterAbi, applySlippage, FeeEscrowAbi, MAINNET, robinhood, VaultAbi, ZenoIndexVaultAbi } from "@zenoindex/sdk";
 import { decodeFunctionData, encodeFunctionResult, erc20Abi, getAbiItem, getAddress, multicall3Abi, type Abi, type Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -11,7 +11,7 @@ const share = "0x2222222222222222222222222222222222222222";
 const tsla = "0x3333333333333333333333333333333333333333";
 const usdg = MAINNET.usdg;
 const escrow = "0x4444444444444444444444444444444444444444";
-const abi = [...VaultAbi, ...ZenoIndexVaultAbi, ...FeeEscrowAbi, ...erc20Abi] as Abi;
+const abi = [...VaultAbi, ...ZenoIndexVaultAbi, ...FeeEscrowAbi, ...AccessMasterAbi, ...erc20Abi] as Abi;
 
 // A fake chain: contract address → function name → value, or a function of the call's args.
 type Contracts = Record<string, Record<string, unknown>>;
@@ -107,6 +107,7 @@ describe("manager", () => {
       totalPendingUsdc: "0.4",
       redeemQueue: { activeCount: 0, escrowUsdc: "0" },
       fees: { entryBps: 100, exitBps: 50 },
+      tradingFeeBps: 0, // the fake factory predates it (no accessMaster().tradingFeeBps())
       slots: [
         { index: 0, assetId: usdg, symbol: "USDG", targetBps: 2000, currentBps: 3333, driftBps: 1333, pendingDeployUsdc: "0", valueUsdc: "1", balanceRaw: "1400000" },
         { index: 1, assetId: tsla, symbol: "TSLA", targetBps: 8000, currentBps: 6666, driftBps: -1334, pendingDeployUsdc: "0.4", valueUsdc: "2", pendingWriteOff: false },
@@ -229,5 +230,14 @@ describe("assets", () => {
         expect.objectContaining({ id: usdg, symbol: "USDG", logoUrl: null }),
       ]),
     );
+  });
+});
+
+describe("trading fee", () => {
+  it("dashboard reports AccessMaster's rebalance trading fee", async () => {
+    const accessMaster = "0x6666666666666666666666666666666666666666";
+    chain[MAINNET.factory]!.accessMaster = accessMaster;
+    chain[accessMaster] = { tradingFeeBps: 50 };
+    expect((await call(`/manager/dtfs/${vault}`, { key: pk, token })).json.tradingFeeBps).toBe(50);
   });
 });
