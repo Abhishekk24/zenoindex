@@ -7,7 +7,7 @@ import { demoHistory, navHistory, priceDeltas, recentActivity } from "../stats";
 
 const unavailable = { status: "unavailable" as const, items: [] };
 
-export function dtfRoutes(app: Hono<AppEnv>, { db, client, logos, demoStats }: Deps) {
+export function dtfRoutes(app: Hono<AppEnv>, { db, client, logos, demoStats, logsClient }: Deps) {
   app.get("/chains", (c) =>
     c.json({
       items: [
@@ -52,7 +52,11 @@ export function dtfRoutes(app: Hono<AppEnv>, { db, client, logos, demoStats }: D
     const [items, real, activity] = await Promise.all([
       holdings(client, v, snap),
       navHistory(db, project.id, row.id),
-      recentActivity(client, v.address, project.chainId).catch(() => null),
+      recentActivity(logsClient ?? client, v.address, project.chainId).catch((e: unknown) => {
+        console.error(`recent activity ${v.address}:`, e);
+        // Never echo an RPC URL (it can carry an API key).
+        return { error: (e instanceof Error ? e.message : String(e)).replace(/https?:\/\/\S+/g, "<rpc>").slice(0, 200) };
+      }),
     ]);
     // Until the daily worker has 2 real snapshots, show a demo history (flagged) so the charts aren't empty.
     const demo = real.length < 2 && demoStats === true;
@@ -64,7 +68,7 @@ export function dtfRoutes(app: Hono<AppEnv>, { db, client, logos, demoStats }: D
         holdings: { status: "available", items },
         performance: points.length ? { status: "available", items: points, ...flag } : unavailable,
         performanceDeltas: points.length >= 2 ? { status: "available", items: priceDeltas(points), ...flag } : unavailable,
-        recentTransactions: activity ? { status: "available", items: activity } : unavailable,
+        recentTransactions: Array.isArray(activity) ? { status: "available", items: activity } : { ...unavailable, reason: activity.error },
         corporateActions: unavailable,
       },
     });

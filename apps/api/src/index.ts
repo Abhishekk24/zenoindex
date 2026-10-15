@@ -2,6 +2,7 @@ import { serve } from "@hono/node-server";
 import { MAINNET, robinhood } from "@zenoindex/sdk";
 import { createPublicClient, http } from "viem";
 import { createApp } from "./app";
+import { publicRpcUrl } from "./chain";
 import { robinhoodLogos } from "./logos";
 import { startNavWorker } from "./stats";
 import { privyAuth } from "./privy";
@@ -37,6 +38,9 @@ const didit =
     ? { apiKey: env.DIDIT_API_KEY, workflowId: env.DIDIT_WORKFLOW_ID, webhookSecret: env.DIDIT_WEBHOOK_SECRET, callbackUrl: env.DIDIT_CALLBACK_URL }
     : undefined;
 const privy = env.PRIVY_APP_ID && env.PRIVY_APP_SECRET ? privyAuth(env.PRIVY_APP_ID, env.PRIVY_APP_SECRET) : undefined;
-const app = createApp({ db, client, secureCookies: env.NODE_ENV === "production", didit, privy, logos: robinhoodLogos(), demoStats: env.DEMO_STATS });
+const app = createApp({ db, client, secureCookies: env.NODE_ENV === "production", didit, privy, logos: robinhoodLogos(), demoStats: env.DEMO_STATS,
+  // Robinhood's public RPC serves eth_getLogs over the whole chain in one call; keyed providers often cap the range.
+  logsClient: createPublicClient({ chain: robinhood, transport: http(publicRpcUrl) }),
+});
 startNavWorker(db, client);
 serve({ fetch: app.fetch, port: env.PORT }, (info) => console.log(`zenoindex api listening on :${info.port}`));
