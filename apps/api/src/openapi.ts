@@ -473,6 +473,7 @@ export const openapi = {
             s("object", {
               properties: {
                 canCreate: s("boolean"),
+                baseAssetId: { ...ref("Address"), description: "USDG: what every basket is priced and bought in" },
                 assets: s("array", {
                   items: s("object", {
                     properties: {

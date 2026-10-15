@@ -303,6 +303,8 @@ export function createRoutes(app: Hono<AppEnv>, { db, client, logos }: Deps) {
     const usdg = snap.protocol.usdg.toLowerCase();
     return c.json({
       canCreate,
+      // Every basket is priced in USDG (the base asset).
+      baseAssetId: usdg,
       assets: active.map((a, i) => ({
         id: a.mint.toLowerCase(),
         symbol: a.symbol ?? "?",

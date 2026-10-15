@@ -267,6 +267,7 @@ describe("create basket", () => {
     const r = await options();
     expect(r.status).toBe(200);
     expect(r.json.canCreate).toBe(false);
+    expect(r.json.baseAssetId).toBe(usdg);
     expect(r.json.assets.map((a: { id: string; selectable: boolean }) => [a.id, a.selectable])).toEqual([
       [usdg, true],
       [tsla, true],
