@@ -1,8 +1,9 @@
 import { AccessMasterAbi, applySlippage, FeeEscrowAbi, MAINNET, robinhood, VaultAbi, ZenoIndexVaultAbi } from "@zenoindex/sdk";
-import { decodeFunctionData, encodeFunctionResult, erc20Abi, getAbiItem, getAddress, multicall3Abi, type Abi, type Hex } from "viem";
+import { decodeFunctionData, encodeAbiParameters, encodeEventTopics, encodeFunctionResult, erc20Abi, getAbiItem, getAddress, multicall3Abi, type Abi, type Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Db } from "../src/db";
+import { snapshotNav } from "../src/stats";
 import { createSession, upsertUserByWallet } from "../src/users";
 import { fakeClient, makeApp, seedProject, testDb, type RpcHandler } from "./helpers";
 
@@ -53,7 +54,12 @@ function ethCall(to: string, data: Hex): Hex {
   return encodeFunctionResult({ abi: [item], functionName: item.name, result } as never);
 }
 
+// eth_getLogs answers (raw RPC logs); empty unless a test sets them.
+let logs: unknown[] = [];
+
 const rpc: RpcHandler = (method, params) => {
+  if (method === "eth_getLogs") return logs;
+  if (method === "eth_getBlockByNumber") return { number: params[0], hash: `0x${"ab".repeat(32)}`, timestamp: "0x6a000000", transactions: [], logsBloom: null };
   if (method !== "eth_call") throw new Error(`unexpected RPC call: ${method}`);
   const { to, data } = params[0] as { to: string; data: Hex };
   if (to.toLowerCase() !== robinhood.contracts.multicall3.address.toLowerCase()) return ethCall(to, data);
@@ -78,6 +84,7 @@ beforeEach(async () => {
   token = await createSession(db, await upsertUserByWallet(db, seeded.projectId, wallet));
   strangerToken = await createSession(db, await upsertUserByWallet(db, seeded.projectId, privateKeyToAccount(generatePrivateKey()).address));
   chain = contracts(wallet);
+  logs = [];
 });
 
 const prepare = (action: string, body: unknown, t = token) => call(`/manager/dtfs/${vault}/${action}/prepare`, { key: pk, token: t, body });
@@ -324,5 +331,57 @@ describe("create basket", () => {
     expect((await create({ ...valid, exitFeeBps: 20 })).status).toBe(400);
     expect((await create({ ...valid, entryFeeBps: 700 })).status).toBe(400);
     expect((await create({ ...valid, weights: [{ assetId: tsla, weightBps: 9000 }] })).status).toBe(400);
+  });
+});
+
+describe("basket stats", () => {
+  const detail = (app = call) => app(`/dtfs/${vault}`, { key: pk });
+
+  it("demo NAV history (flagged) until there are 2 real daily snapshots", async () => {
+    const { call: withDemo } = makeApp(db, fakeClient(rpc), { demoStats: true });
+    const r = await detail(withDemo);
+    expect(r.status).toBe(200);
+    const perf = r.json.readModels.performance;
+    expect(perf).toMatchObject({ status: "available", demo: true });
+    expect(perf.items).toHaveLength(30);
+    expect(perf.items.at(-1).sharePrice).toBe(Number(r.json.sharePrice).toFixed(6));
+    expect(r.json.readModels.performanceDeltas).toMatchObject({ status: "available", demo: true });
+  });
+
+  it("real snapshots from the worker replace the demo", async () => {
+    expect(await snapshotNav(db, fakeClient(rpc))).toBe(1);
+    await snapshotNav(db, fakeClient(rpc));
+    const { call: withDemo } = makeApp(db, fakeClient(rpc), { demoStats: true });
+    const perf = (await detail(withDemo)).json.readModels.performance;
+    expect(perf.demo).toBeUndefined();
+    expect(perf.items).toHaveLength(2);
+    expect(perf.items[0]).toMatchObject({ navValue: "3.4", valuationStatus: "accepted" });
+  });
+
+  it("with demo stats off and no snapshots, the chart stays unavailable", async () => {
+    expect((await detail()).json.readModels.performance.status).toBe("unavailable");
+  });
+
+  it("recent activity comes from the vault's on-chain events", async () => {
+    const deposit = getAbiItem({ abi: VaultAbi, name: "Deposit" });
+    const user = "0x9999999999999999999999999999999999999999";
+    logs = [
+      {
+        address: vault,
+        topics: encodeEventTopics({ abi: [deposit], eventName: "Deposit" }),
+        data: encodeAbiParameters(deposit.inputs, [user, 5_000_000n, 4_950_000n, 10_000n, 40_000n, 4_950_000n]),
+        blockNumber: "0x10",
+        transactionHash: `0x${"cd".repeat(32)}`,
+        transactionIndex: "0x0",
+        blockHash: `0x${"ab".repeat(32)}`,
+        logIndex: "0x0",
+        removed: false,
+      },
+    ];
+    const r = await detail();
+    expect(r.json.readModels.recentTransactions).toMatchObject({
+      status: "available",
+      items: [{ action: "invest", walletAddress: user, amountRaw: "5000000", shareAmountRaw: "4950000", status: "confirmed" }],
+    });
   });
 });

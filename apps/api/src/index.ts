@@ -3,6 +3,7 @@ import { MAINNET, robinhood } from "@zenoindex/sdk";
 import { createPublicClient, http } from "viem";
 import { createApp } from "./app";
 import { robinhoodLogos } from "./logos";
+import { startNavWorker } from "./stats";
 import { privyAuth } from "./privy";
 import { createDb, migrate } from "./db";
 import { loadEnv } from "./env";
@@ -36,5 +37,6 @@ const didit =
     ? { apiKey: env.DIDIT_API_KEY, workflowId: env.DIDIT_WORKFLOW_ID, webhookSecret: env.DIDIT_WEBHOOK_SECRET, callbackUrl: env.DIDIT_CALLBACK_URL }
     : undefined;
 const privy = env.PRIVY_APP_ID && env.PRIVY_APP_SECRET ? privyAuth(env.PRIVY_APP_ID, env.PRIVY_APP_SECRET) : undefined;
-const app = createApp({ db, client, secureCookies: env.NODE_ENV === "production", didit, privy, logos: robinhoodLogos() });
+const app = createApp({ db, client, secureCookies: env.NODE_ENV === "production", didit, privy, logos: robinhoodLogos(), demoStats: env.DEMO_STATS });
+startNavWorker(db, client);
 serve({ fetch: app.fetch, port: env.PORT }, (info) => console.log(`zenoindex api listening on :${info.port}`));

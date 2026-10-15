@@ -20,6 +20,8 @@ const schema = z.object({
   // Privy email / Google sign-in for the mobile app (optional: without both, POST /auth/privy returns 503). Secret stays server-side.
   PRIVY_APP_ID: z.string().min(1).optional(),
   PRIVY_APP_SECRET: z.string().min(1).optional(),
+  /** Demo NAV history (flagged `demo: true`) for baskets with fewer than 2 real daily snapshots. On unless "false". */
+  DEMO_STATS: z.enum(["true", "false"]).default("true").transform((v) => v === "true"),
   SEED_PROJECT_NAME: z.string().min(1).optional(),
   SEED_PUBLISHABLE_KEY_SHA256: sha256Hex.optional(),
   SEED_SECRET_KEY_SHA256: sha256Hex.optional(),

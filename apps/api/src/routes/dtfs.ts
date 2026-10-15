@@ -3,10 +3,11 @@ import type { Hono } from "hono";
 import { explorerUrl, findVault, holdings, publicRpcUrl, snapshot, toDtfRow } from "../chain";
 import type { AppEnv, Deps } from "../context";
 import { logoOf } from "../logos";
+import { demoHistory, navHistory, priceDeltas, recentActivity } from "../stats";
 
 const unavailable = { status: "unavailable" as const, items: [] };
 
-export function dtfRoutes(app: Hono<AppEnv>, { client, logos }: Deps) {
+export function dtfRoutes(app: Hono<AppEnv>, { db, client, logos, demoStats }: Deps) {
   app.get("/chains", (c) =>
     c.json({
       items: [
@@ -47,14 +48,23 @@ export function dtfRoutes(app: Hono<AppEnv>, { client, logos }: Deps) {
     const project = c.get("project");
     const snap = await snapshot(client, project.factory);
     const v = findVault(snap, c.req.param("id"));
+    const row = toDtfRow(v, snap, project.chainId);
+    const [items, real, activity] = await Promise.all([
+      holdings(client, v, snap),
+      navHistory(db, project.id, row.id),
+      recentActivity(client, v.address, project.chainId).catch(() => null),
+    ]);
+    // Until the daily worker has 2 real snapshots, show a demo history (flagged) so the charts aren't empty.
+    const demo = real.length < 2 && demoStats === true;
+    const points = demo ? demoHistory(row.id, { sharePrice: row.sharePrice, nav: row.nav ?? "0", totalSupplyRaw: row.totalSupplyRaw }) : real;
+    const flag = demo ? { demo: true } : {};
     return c.json({
-      ...toDtfRow(v, snap, project.chainId),
+      ...row,
       readModels: {
-        holdings: { status: "available", items: await holdings(client, v, snap) },
-        // Need the indexer (Phase 3).
-        performance: unavailable,
-        performanceDeltas: unavailable,
-        recentTransactions: unavailable,
+        holdings: { status: "available", items },
+        performance: points.length ? { status: "available", items: points, ...flag } : unavailable,
+        performanceDeltas: points.length >= 2 ? { status: "available", items: priceDeltas(points), ...flag } : unavailable,
+        recentTransactions: activity ? { status: "available", items: activity } : unavailable,
         corporateActions: unavailable,
       },
     });
