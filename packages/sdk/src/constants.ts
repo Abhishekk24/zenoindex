@@ -1,7 +1,10 @@
 import { defineChain, type Address } from "viem";
 
-/** zenoindex-evm commit the mainnet contracts (and src/abis.ts) were built from. Keep in sync with scripts/gen-abis.mjs. */
-export const EVM_COMMIT = "7663cc6";
+/**
+ * zenoindex-evm commit src/abis.ts is built from (branch feat/zenoindex/phase-1-hardening). Keep in sync with
+ * scripts/gen-abis.mjs. bf57915 only adds to 7663cc6 (what MAINNET below runs): FeeEscrow + the factory's feeEscrow().
+ */
+export const EVM_COMMIT = "bf57915";
 
 export const BPS = 10_000;
 export const USDG_DECIMALS = 6;

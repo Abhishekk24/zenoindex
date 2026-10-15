@@ -21,7 +21,7 @@ export type Action =
   | "manager_pause"
   | "manager_write_off"
   | "manager_reactivate"
-  | "manager_fee_recipient";
+  | "manager_fee_claim";
 export type OperationRow = {
   id: string;
   user_id: string;
@@ -80,7 +80,8 @@ export async function insertOperation(
   db: Db,
   project: { id: string; chainId: number },
   user: UserRow,
-  vault: VaultState,
+  /** The contract the transaction targets: a vault, or the FeeEscrow for fee claims. */
+  vault: { address: string },
   action: Action,
   tx: TxRequest,
   amounts: { amount?: bigint; shares?: bigint },

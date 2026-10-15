@@ -1,5 +1,5 @@
-import { erc20Abi, type Address, type PublicClient } from "viem";
-import { VaultAbi, ZenoIndexVaultAbi } from "./abis";
+import { erc20Abi, zeroAddress, type Address, type PublicClient } from "viem";
+import { FeeEscrowAbi, VaultAbi, ZenoIndexVaultAbi } from "./abis";
 import { BPS, MAINNET, SHARE_DECIMALS } from "./constants";
 
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
@@ -295,4 +295,20 @@ export function nextRedeemStep(progress: RedeemProgress, opts: { inKind?: boolea
   const open = progress.legs.filter((l) => !l.swapped && l.amountIn > 0n);
   const leg = open[0];
   return leg ? { kind: "swap", leg, remaining: open.length } : { kind: "claim" };
+}
+
+/**
+ * The factory's FeeEscrow, or null when it has none: a factory deployed before FeeEscrow (no `feeEscrow()`, so the
+ * call reverts) or one whose escrow isn't set yet.
+ */
+export async function getFeeEscrow(client: PublicClient, factory: Address = MAINNET.factory): Promise<Address | null> {
+  const escrow = await client
+    .readContract({ address: factory, abi: ZenoIndexVaultAbi, functionName: "feeEscrow" })
+    .catch(() => null);
+  return escrow && escrow !== zeroAddress ? escrow : null;
+}
+
+/** `manager`'s unclaimed fees in `token` — one balance across all the vaults they manage. */
+export async function getManagerClaimable(client: PublicClient, escrow: Address, manager: Address, token: Address) {
+  return client.readContract({ address: escrow, abi: FeeEscrowAbi, functionName: "managerClaimable", args: [manager, token] });
 }

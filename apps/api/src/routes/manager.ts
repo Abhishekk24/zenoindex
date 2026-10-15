@@ -6,11 +6,13 @@ import {
   buildGenesisDeposit,
   buildProposeReactivate,
   buildProposeWriteOff,
-  buildSetFeeRecipient,
+  buildClaimManagerFees,
   buildSetPaused,
   buildSetTargetAllocations,
   buildSwapUsdcToAsset,
   GENESIS_SEED_USDC,
+  getFeeEscrow,
+  getManagerClaimable,
   getManagerView,
   isVaultOperator,
   MAX_ASSETS,
@@ -182,9 +184,41 @@ export function managerRoutes(app: Hono<AppEnv>, { db, client }: Deps) {
     return { tx: buildProposeReactivate(v.address, id) };
   });
 
-  prepare("fee-recipient", "manager_fee_recipient", async (c, { vault: v }) => {
-    const { feeRecipient } = await parseBody(c, z.object({ feeRecipient: address.refine((a) => a !== zeroAddress, "must not be the zero address") }));
-    return { tx: buildSetFeeRecipient(v.address, feeRecipient) };
+  // Fees: every deposit / redeem fee is escrowed in the factory's FeeEscrow and the manager's 80% accrues to ONE balance
+  // per manager wallet across all their vaults (credited to each vault's vaultManager; operators accrue nothing).
+  const feeContext = async (c: Ctx) => {
+    const user = requireUser(c);
+    const project = c.get("project");
+    const snap = await snapshot(client, project.factory);
+    const wallet = user.wallet_address as Address;
+    const escrow = await getFeeEscrow(client, project.factory);
+    const claimable = escrow ? await getManagerClaimable(client, escrow, wallet, snap.protocol.usdg) : 0n;
+    return { user, project, snap, wallet, escrow, claimable };
+  };
+
+  app.get("/manager/fees", async (c) => {
+    const { snap, wallet, escrow, claimable } = await feeContext(c);
+    return c.json({
+      // false on a factory deployed before FeeEscrow: fees are then paid straight to each vault's fee recipient.
+      available: escrow !== null,
+      token: snap.protocol.usdg.toLowerCase(),
+      claimable: usd(claimable),
+      claimableRaw: String(claimable),
+      baskets: snap.vaults.filter((v) => v.manager.toLowerCase() === wallet).length,
+    });
+  });
+
+  app.post("/manager/fees/claim/prepare", async (c) => {
+    const { user, project, snap, wallet, escrow, claimable } = await feeContext(c);
+    const { recipient } = await parseBody(
+      c,
+      z.object({ recipient: address.refine((a) => a !== zeroAddress, "must not be the zero address").optional() }),
+    );
+    if (!escrow) throw conflict("fees_unavailable", "Fee claims aren't available on this deployment yet.");
+    if (claimable === 0n) throw conflict("nothing_to_claim", "You have no fees to claim yet.");
+    const tx = buildClaimManagerFees(escrow, snap.protocol.usdg, (recipient ?? wallet) as Address);
+    const op = await insertOperation(db, project, user, { address: escrow }, "manager_fee_claim", tx, { amount: claimable });
+    return c.json(draft(op, tx, project.chainId));
   });
 }
 

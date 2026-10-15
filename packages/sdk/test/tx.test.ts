@@ -4,13 +4,14 @@ import {
   applySlippage,
   buildApprove,
   buildClaim,
+  buildClaimManagerFees,
   buildClaimInKind,
   buildDeposit,
   buildProposeReactivate,
   buildProposeWriteOff,
   buildRequestRedeem,
-  buildSetFeeRecipient,
   buildSwapAssetToUsdc,
+  FeeEscrowAbi,
   MAINNET,
   nextRedeemStep,
   sharePrice,
@@ -43,7 +44,16 @@ describe("tx builders", () => {
   it("manager calls encode the right args", () => {
     expect(decode(buildProposeWriteOff(vault, 3n).data)).toEqual({ functionName: "proposeWriteOff", args: [3n] });
     expect(decode(buildProposeReactivate(vault, 3n).data)).toEqual({ functionName: "proposeReactivate", args: [3n] });
-    expect(decode(buildSetFeeRecipient(vault, asset).data)).toEqual({ functionName: "setFeeRecipient", args: [asset] });
+  });
+
+  it("fee claims go to the FeeEscrow, not the vault", () => {
+    const escrow = "0x3333333333333333333333333333333333333333" as Address;
+    const tx = buildClaimManagerFees(escrow, MAINNET.usdg, asset);
+    expect(tx.to).toBe(escrow);
+    expect(decodeFunctionData({ abi: FeeEscrowAbi, data: tx.data })).toEqual({
+      functionName: "claimManagerFees",
+      args: [getAddress(MAINNET.usdg), asset],
+    });
   });
 
   it("approve targets the token", () => {

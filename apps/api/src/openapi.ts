@@ -161,7 +161,7 @@ export const openapi = {
           action: str(undefined, {
             enum: [
               "buy", "redeem_request", "redeem_swap", "redeem_claim", "redeem_claim_in_kind",
-              "manager_genesis", "manager_deploy", "manager_rebalance", "manager_allocations", "manager_pause", "manager_write_off", "manager_reactivate", "manager_fee_recipient",
+              "manager_genesis", "manager_deploy", "manager_rebalance", "manager_allocations", "manager_pause", "manager_write_off", "manager_reactivate", "manager_fee_claim",
             ],
           }),
           status: str(undefined, { enum: ["draft_prepared", "submitted", "confirmed", "failed"] }),
@@ -459,12 +459,39 @@ export const openapi = {
       ["assetId"],
       { assetId: { ...ref("Address"), description: "Asset token" } },
     ),
-    "/api/v1/manager/dtfs/{id}/fee-recipient/prepare": managerPrepare(
-      "Change where manager fees go (`setFeeRecipient`)",
-      "Applies to fees from the next buy or sale.",
-      ["feeRecipient"],
-      { feeRecipient: ref("Address") },
-    ),
+    "/api/v1/manager/fees": {
+      get: {
+        tags: ["Manager"],
+        summary: "The wallet's claimable manager fees",
+        description:
+          "Deposit and redeem fees are escrowed in the factory's FeeEscrow; the manager's share accrues to one balance per manager wallet across all their baskets. `available` is false on a factory without FeeEscrow (fees then go straight to each basket's fee recipient). `baskets` counts baskets this wallet is the manager of.",
+        security: KEY_AND_SESSION,
+        responses: {
+          200: ok(
+            s("object", {
+              properties: {
+                available: s("boolean"),
+                token: { ...ref("Address"), description: "USDG" },
+                claimable: str("USDG, decimal", { examples: ["12.5"] }),
+                claimableRaw: str("USDG base units"),
+                baskets: s("integer"),
+              },
+            }),
+          ),
+          ...errors(401),
+        },
+      },
+    },
+    "/api/v1/manager/fees/claim/prepare": {
+      post: {
+        tags: ["Manager"],
+        summary: "Claim manager fees (`FeeEscrow.claimManagerFees`)",
+        description: "Pays the wallet's whole claimable balance to `recipient` (default: the wallet). 409 `fees_unavailable` without FeeEscrow, `nothing_to_claim` at zero.",
+        security: KEY_AND_SESSION,
+        requestBody: body(s("object", { properties: { recipient: ref("Address") } })),
+        responses: { 200: ok(ref("TxDraft")), ...errors(400, 401, 409) },
+      },
+    },
   },
 } as const;
 

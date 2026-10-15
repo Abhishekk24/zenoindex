@@ -11,13 +11,14 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // Keep in sync with EVM_COMMIT in src/constants.ts.
-const EVM_COMMIT = "7663cc6";
+const EVM_COMMIT = "bf57915";
 const CONTRACTS = [
   ["ZenoIndexVault", "ZenoIndexVault.sol"],
   ["Vault", "Vault.sol"],
   ["ShareToken", "ShareToken.sol"],
   ["AccessMaster", "AccessMaster.sol"],
   ["UniswapV4Adapter", "UniswapV4Adapter.sol"],
+  ["FeeEscrow", "FeeEscrow.sol"],
 ];
 
 const here = dirname(fileURLToPath(import.meta.url));

@@ -1,4 +1,4 @@
-import { applySlippage, MAINNET, robinhood, VaultAbi, ZenoIndexVaultAbi } from "@zenoindex/sdk";
+import { applySlippage, FeeEscrowAbi, MAINNET, robinhood, VaultAbi, ZenoIndexVaultAbi } from "@zenoindex/sdk";
 import { decodeFunctionData, encodeFunctionResult, erc20Abi, getAbiItem, getAddress, multicall3Abi, type Abi, type Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -10,7 +10,8 @@ const vault = "0x1111111111111111111111111111111111111111";
 const share = "0x2222222222222222222222222222222222222222";
 const tsla = "0x3333333333333333333333333333333333333333";
 const usdg = MAINNET.usdg;
-const abi = [...VaultAbi, ...ZenoIndexVaultAbi, ...erc20Abi] as Abi;
+const escrow = "0x4444444444444444444444444444444444444444";
+const abi = [...VaultAbi, ...ZenoIndexVaultAbi, ...FeeEscrowAbi, ...erc20Abi] as Abi;
 
 // A fake chain: contract address → function name → value, or a function of the call's args.
 type Contracts = Record<string, Record<string, unknown>>;
@@ -165,5 +166,54 @@ describe("manager", () => {
     expect(r.json.data).toEqual({ approveToken: usdg, approveAmountRaw: "1000000" });
     expect(decode(r.json.transaction.data)).toEqual({ functionName: "genesisDeposit", args: [1_000_000_000n] });
     expect((await prepare("genesis", { baselineSharePrice: "0.000001" })).status).toBe(400);
+  });
+});
+
+describe("manager fees", () => {
+  const fees = (t = token) => call("/manager/fees", { key: pk, token: t });
+  const claim = (body: unknown = {}, t = token) => call("/manager/fees/claim/prepare", { key: pk, token: t, body });
+  const withEscrow = () => {
+    chain[MAINNET.factory]!.feeEscrow = escrow;
+    // 12.5 USDG accrued to the vault's manager; everyone else has nothing.
+    chain[escrow] = {
+      managerClaimable: (m: string, t: string) =>
+        m.toLowerCase() === chain[vault]!.vaultManager && t.toLowerCase() === usdg ? 12_500_000n : 0n,
+    };
+  };
+
+  it("a factory without FeeEscrow (deployed before it) has nothing to claim", async () => {
+    expect((await fees()).json).toEqual({ available: false, token: usdg, claimable: "0", claimableRaw: "0", baskets: 1 });
+    const r = await claim();
+    expect(r.status).toBe(409);
+    expect(r.json.error.code).toBe("fees_unavailable");
+  });
+
+  it("shows the manager's escrowed balance across their baskets", async () => {
+    withEscrow();
+    expect((await fees()).json).toEqual({ available: true, token: usdg, claimable: "12.5", claimableRaw: "12500000", baskets: 1 });
+    expect((await fees(strangerToken)).json).toMatchObject({ available: true, claimable: "0", baskets: 0 });
+  });
+
+  it("claim prepare targets the FeeEscrow and pays the wallet (or a recipient)", async () => {
+    withEscrow();
+    const r = await claim();
+    expect(r.status).toBe(200);
+    expect(r.json.action).toBe("manager_fee_claim");
+    expect(r.json.transaction.to).toBe(escrow);
+    const manager = chain[vault]!.vaultManager as string;
+    expect(decodeFunctionData({ abi: FeeEscrowAbi, data: r.json.transaction.data })).toEqual({
+      functionName: "claimManagerFees",
+      args: [getAddress(usdg), getAddress(manager)],
+    });
+    const other = "0x5555555555555555555555555555555555555555";
+    const toOther = await claim({ recipient: other });
+    expect(decodeFunctionData({ abi: FeeEscrowAbi, data: toOther.json.transaction.data }).args[1]).toBe(getAddress(other));
+  });
+
+  it("nothing to claim is a 409, not an empty transaction", async () => {
+    withEscrow();
+    const r = await claim({}, strangerToken);
+    expect(r.status).toBe(409);
+    expect(r.json.error.code).toBe("nothing_to_claim");
   });
 });

@@ -5,7 +5,7 @@ Plan and roadmap: [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
 
 | Package | What |
 |---|---|
-| `packages/sdk` (`@zenoindex/sdk`) | Generated contract ABIs (from zenoindex-evm@7663cc6), mainnet addresses, typed reads, tx builders |
+| `packages/sdk` (`@zenoindex/sdk`) | Generated contract ABIs (from zenoindex-evm@bf57915, incl. FeeEscrow), mainnet addresses, typed reads, tx builders |
 | `apps/api` (`@zenoindex/api`) | Hono HTTP API at `/api/v1`: API keys, SIWE login, DTF reads, buy/sell tx prep, order tracking |
 
 ## Run locally

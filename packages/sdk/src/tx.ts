@@ -1,5 +1,5 @@
 import { encodeFunctionData, erc20Abi, type Address, type Hex } from "viem";
-import { VaultAbi } from "./abis";
+import { FeeEscrowAbi, VaultAbi } from "./abis";
 import { BPS } from "./constants";
 
 /** Unsigned transaction for the user's wallet to sign. */
@@ -43,7 +43,6 @@ export const buildClaimInKind = (vault: Address) =>
   vaultTx(vault, encodeFunctionData({ abi: VaultAbi, functionName: "claimInKind" }));
 
 // Manager-only below: the sender must be `vaultManager` or a factory vault operator.
-// shortcut: no FeeEscrow fee-claim builders — FeeEscrow (evm d3bd438) isn't deployed on mainnet; add them when ABIs move past 7663cc6.
 
 /** Needs a USDG allowance to `vault` of GENESIS_SEED_USDC. `baselineSharePrice` is USDG per share × 1e9. */
 export const buildGenesisDeposit = (vault: Address, baselineSharePrice: bigint) =>
@@ -70,9 +69,6 @@ export const buildExecuteRebalance = (vault: Address, assetIndex: number, path: 
 export const buildSetPaused = (vault: Address, paused: boolean) =>
   vaultTx(vault, encodeFunctionData({ abi: VaultAbi, functionName: "setPaused", args: [paused] }));
 
-export const buildSetFeeRecipient = (vault: Address, feeRecipient: Address) =>
-  vaultTx(vault, encodeFunctionData({ abi: VaultAbi, functionName: "setFeeRecipient", args: [feeRecipient] }));
-
 /** Takes effect only once a super-admin confirms it on the factory. */
 export const buildProposeWriteOff = (vault: Address, assetId: bigint) =>
   vaultTx(vault, encodeFunctionData({ abi: VaultAbi, functionName: "proposeWriteOff", args: [assetId] }));
@@ -80,3 +76,13 @@ export const buildProposeWriteOff = (vault: Address, assetId: bigint) =>
 /** Only for a written-off asset; a super-admin confirms it and it comes back at 0%. */
 export const buildProposeReactivate = (vault: Address, assetId: bigint) =>
   vaultTx(vault, encodeFunctionData({ abi: VaultAbi, functionName: "proposeReactivate", args: [assetId] }));
+
+/**
+ * Pays the sender's whole FeeEscrow balance in `token` to `recipient`. The balance is per manager across all their
+ * vaults (credited to each vault's `vaultManager` on every deposit / redeem fee), so only the manager wallet can claim.
+ */
+export const buildClaimManagerFees = (escrow: Address, token: Address, recipient: Address): TxRequest => ({
+  to: escrow,
+  data: encodeFunctionData({ abi: FeeEscrowAbi, functionName: "claimManagerFees", args: [token, recipient] }),
+  value: 0n,
+});
