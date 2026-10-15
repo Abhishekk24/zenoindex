@@ -6,6 +6,8 @@ import type { Db } from "./db";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const PRICE_DECIMALS = 6;
+/** Demo history until a basket has this many real daily snapshots (a week). */
+export const MIN_REAL_POINTS = 7;
 
 export type NavPoint = {
   observedAt: string;
@@ -15,7 +17,10 @@ export type NavPoint = {
   valuationStatus: "accepted";
 };
 
-/** One row per vault with a valuation (a vault with a stale price has none). */
+/**
+ * One row per vault with a valuation (a vault with a stale price has none), at most one per ~day: a restart or
+ * deploy within 20h of the last snapshot adds nothing.
+ */
 export async function snapshotNav(db: Db, client: PublicClient) {
   const { rows: projects } = await db.query<{ id: string; chain_id: number; factory_address: string }>(
     "select id, chain_id, factory_address from projects",
@@ -26,11 +31,14 @@ export async function snapshotNav(db: Db, client: PublicClient) {
     for (const v of snap.vaults) {
       const row = toDtfRow(v, snap, p.chain_id);
       if (row.nav === undefined) continue;
-      await db.query(
-        "insert into nav_snapshots (project_id, vault_address, share_price, nav, total_supply_raw) values ($1, $2, $3, $4, $5)",
+      const { rows } = await db.query(
+        `insert into nav_snapshots (project_id, vault_address, share_price, nav, total_supply_raw)
+         select $1, $2, $3, $4, $5
+         where not exists (select 1 from nav_snapshots where project_id = $1 and vault_address = $2 and observed_at > now() - interval '20 hours')
+         returning 1`,
         [p.id, row.id, row.sharePrice, row.nav, row.totalSupplyRaw],
       );
-      saved++;
+      saved += rows.length;
     }
   }
   return saved;
@@ -77,7 +85,7 @@ function seeded(seedText: string) {
 
 /**
  * DEMO DATA: a plausible daily NAV history ending exactly at the basket's real current price, for showing the charts
- * before real snapshots exist (fewer than 2). Marked `demo: true` in the response; the app labels it.
+ * before a week of real daily snapshots exists. Marked `demo: true` in the response; the app labels it.
  */
 export function demoHistory(vault: string, current: { sharePrice: string; nav: string; totalSupplyRaw: string }, days = 30): NavPoint[] {
   const rand = seeded(vault.toLowerCase());

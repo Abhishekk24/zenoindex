@@ -3,7 +3,7 @@ import type { Hono } from "hono";
 import { explorerUrl, findVault, holdings, publicRpcUrl, snapshot, toDtfRow } from "../chain";
 import type { AppEnv, Deps } from "../context";
 import { logoOf } from "../logos";
-import { demoHistory, navHistory, priceDeltas, recentActivity } from "../stats";
+import { demoHistory, MIN_REAL_POINTS, navHistory, priceDeltas, recentActivity } from "../stats";
 
 const unavailable = { status: "unavailable" as const, items: [] };
 
@@ -58,8 +58,8 @@ export function dtfRoutes(app: Hono<AppEnv>, { db, client, logos, demoStats, log
         return { error: (e instanceof Error ? e.message : String(e)).replace(/https?:\/\/\S+/g, "<rpc>").slice(0, 200) };
       }),
     ]);
-    // Until the daily worker has 2 real snapshots, show a demo history (flagged) so the charts aren't empty.
-    const demo = real.length < 2 && demoStats === true;
+    // Until the daily worker has a week of real snapshots, show a demo history (flagged) so the charts aren't empty.
+    const demo = real.length < MIN_REAL_POINTS && demoStats === true;
     const points = demo ? demoHistory(row.id, { sharePrice: row.sharePrice, nav: row.nav ?? "0", totalSupplyRaw: row.totalSupplyRaw }) : real;
     const flag = demo ? { demo: true } : {};
     return c.json({

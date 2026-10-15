@@ -337,7 +337,7 @@ describe("create basket", () => {
 describe("basket stats", () => {
   const detail = (app = call) => app(`/dtfs/${vault}`, { key: pk });
 
-  it("demo NAV history (flagged) until there are 2 real daily snapshots", async () => {
+  it("demo NAV history (flagged) until there's a week of real daily snapshots", async () => {
     const { call: withDemo } = makeApp(db, fakeClient(rpc), { demoStats: true });
     const r = await detail(withDemo);
     expect(r.status).toBe(200);
@@ -348,14 +348,26 @@ describe("basket stats", () => {
     expect(r.json.readModels.performanceDeltas).toMatchObject({ status: "available", demo: true });
   });
 
-  it("real snapshots from the worker replace the demo", async () => {
+  it("the worker saves one snapshot per basket per day (restarts add none)", async () => {
     expect(await snapshotNav(db, fakeClient(rpc))).toBe(1);
+    expect(await snapshotNav(db, fakeClient(rpc))).toBe(0);
+  });
+
+  it("a week of real snapshots replaces the demo", async () => {
     await snapshotNav(db, fakeClient(rpc));
+    const { rows } = await db.query<{ project_id: string }>("select project_id from nav_snapshots limit 1");
+    for (let d = 1; d < 7; d++) {
+      await db.query(
+        `insert into nav_snapshots (project_id, vault_address, observed_at, share_price, nav, total_supply_raw)
+         values ($1, $2, now() - ($3 || ' days')::interval, '1', '3', '3000000')`,
+        [rows[0]!.project_id, vault, d],
+      );
+    }
     const { call: withDemo } = makeApp(db, fakeClient(rpc), { demoStats: true });
     const perf = (await detail(withDemo)).json.readModels.performance;
     expect(perf.demo).toBeUndefined();
-    expect(perf.items).toHaveLength(2);
-    expect(perf.items[0]).toMatchObject({ navValue: "3.4", valuationStatus: "accepted" });
+    expect(perf.items).toHaveLength(7);
+    expect(perf.items.at(-1)).toMatchObject({ navValue: "3.4", valuationStatus: "accepted" });
   });
 
   it("with demo stats off and no snapshots, the chart stays unavailable", async () => {
