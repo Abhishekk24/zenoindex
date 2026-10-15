@@ -94,6 +94,7 @@ export function toAsset(raw: Row): Asset {
       raw['underlyingTransferPolicy'] === 'open'
         ? raw['underlyingTransferPolicy']
         : 'unknown',
+    logoUrl: typeof raw['logoUrl'] === 'string' ? raw['logoUrl'] : null,
   };
 }
 

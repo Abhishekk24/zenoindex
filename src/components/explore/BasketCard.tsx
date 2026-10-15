@@ -3,7 +3,7 @@
  * with a ⋮ menu in `accessory`.
  */
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AssetMap, isComingSoon, symbolOf } from '../../lib/basket';
 import { formatBps, formatDecimal, shortAddress } from '../../lib/format';
@@ -27,12 +27,15 @@ export function BasketCard({
   /** Top-right control over the card, e.g. the manager ⋮ menu. */
   accessory?: React.ReactNode;
 }) {
-  const tickers = dtf.weights.map(w => symbolOf(w.assetId, assets));
+  const tickers = dtf.weights.map(w => ({
+    ticker: symbolOf(w.assetId, assets),
+    logo: assets.get(w.assetId)?.logoUrl ?? null,
+  }));
   const shown =
     tickers.length > MAX_AVATARS
       ? [
           ...tickers.slice(0, MAX_AVATARS - 1),
-          `+${tickers.length - MAX_AVATARS + 1}`,
+          { ticker: `+${tickers.length - MAX_AVATARS + 1}`, logo: null },
         ]
       : tickers;
   const comingSoon = isComingSoon(dtf);
@@ -59,16 +62,24 @@ export function BasketCard({
 
           <View style={styles.constituents}>
             <View style={styles.avatars}>
-              {shown.map((ticker, i) => (
+              {shown.map(({ ticker, logo }, i) => (
                 <View
                   key={`${ticker}-${i}`}
                   style={[styles.avatar, i > 0 && styles.avatarOverlap]}
                 >
-                  <Text style={styles.avatarText}>
-                    {ticker.startsWith('+')
-                      ? ticker
-                      : ticker.slice(0, 2).toUpperCase()}
-                  </Text>
+                  {logo ? (
+                    <Image
+                      source={{ uri: logo }}
+                      style={styles.avatarLogo}
+                      accessibilityLabel={ticker}
+                    />
+                  ) : (
+                    <Text style={styles.avatarText}>
+                      {ticker.startsWith('+')
+                        ? ticker
+                        : ticker.slice(0, 2).toUpperCase()}
+                    </Text>
+                  )}
                 </View>
               ))}
             </View>
@@ -151,7 +162,9 @@ const styles = StyleSheet.create({
     borderColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
+  avatarLogo: { width: '100%', height: '100%' },
   avatarOverlap: { marginLeft: -9 },
   avatarText: {
     fontFamily: fonts.semibold,

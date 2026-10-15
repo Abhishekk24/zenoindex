@@ -1,34 +1,73 @@
 /**
  * Manager → basket → Fees (design: Fee Schedule + "See accrued and
- * claimable" sheet), from GET /manager/dtfs/:id.
+ * claimable" sheet), from GET /manager/dtfs/:id and GET /manager/fees.
  *
- * The deployed vaults charge an entry fee on deposits and an exit fee on
- * redemptions (no annual management fee), split 80% manager / 20% platform
- * and paid straight to the fee recipient, so nothing accrues to claim.
- * shortcut: claimable fees + Claim Fees need FeeEscrow (zenoindex-evm d3bd438), not deployed yet; wire them when it is.
+ * Vaults charge an entry fee on deposits and an exit fee on redemptions (no
+ * annual management fee). Each fee is escrowed in the FeeEscrow: 80% accrues
+ * to the manager — one balance across all their baskets — and 20% to the
+ * platform. Claim Fees pays the whole balance to the manager wallet; only the
+ * basket's manager can claim (operators accrue nothing).
  */
 import { useLocalSearchParams } from 'expo-router';
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 
 import { BottomDrawer } from '../../../components/manager/BottomDrawer';
 import { ManagerBasketScreen } from '../../../components/manager/ManagerBasketScreen';
 import { ManagerTable } from '../../../components/manager/ManagerTable';
+import { Button } from '../../../components/ui';
 import { useLoad } from '../../../hooks/useLoad';
+import { useSendDraft } from '../../../hooks/useSendDraft';
 import * as api from '../../../lib/api';
-import { formatBps, formatDecimal, shortAddress } from '../../../lib/format';
+import { formatBps, formatDecimal } from '../../../lib/format';
 import { colors, fonts, radius, space } from '../../../theme/tokens';
 
 const FEE_INFO =
-  'Entry and exit fees are taken on each deposit and redemption: 80% to the manager, 20% to the platform, paid out straight away.';
+  'Entry and exit fees are taken on each deposit and redemption: 80% accrues to the manager across all their baskets, 20% to the platform.';
+
+const ACCRUAL = [
+  { label: 'Basis', value: 'Per deposit / redemption' },
+  { label: 'Manager share', value: '80%' },
+  { label: 'Claim cadence', value: 'Manager-initiated' },
+  { label: 'Performance fee', value: 'None' },
+];
+
+async function loadFees(id: string) {
+  const [dashboard, fees] = await Promise.all([
+    api.getManagerDashboard(id),
+    api.getManagerFees(),
+  ]);
+  return { dashboard, fees };
+}
 
 export default function ManagerFeesScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const sendDraft = useSendDraft();
   const { data, loading, error, reload } = useLoad(
-    async () => (id ? api.getManagerDashboard(id) : undefined),
+    async () => (id ? loadFees(id) : undefined),
     `manager-fees#${id ?? ''}`,
   );
-  const dtf = data?.dtf;
+  const [claiming, setClaiming] = useState(false);
+  const dtf = data?.dashboard.dtf;
+  const fees = data?.fees;
+  const canClaim = !!fees?.available && fees.claimableRaw !== '0' && !claiming;
+
+  const claim = async () => {
+    if (!dtf) return;
+    setClaiming(true);
+    try {
+      await sendDraft(await api.prepareFeeClaim(dtf.chainId));
+      Alert.alert('Fees claimed', 'Your fees were sent to your wallet.');
+      reload();
+    } catch (e) {
+      Alert.alert(
+        'Claim failed',
+        e instanceof Error ? e.message : 'Could not claim fees.',
+      );
+    } finally {
+      setClaiming(false);
+    }
+  };
 
   return (
     <ManagerBasketScreen
@@ -39,28 +78,31 @@ export default function ManagerFeesScreen() {
       title="Fee Schedule"
       info={FEE_INFO}
       footer={
-        data ? (
+        fees ? (
           <BottomDrawer
             tone="green"
-            label="See where fees go"
-            title="Fee payouts"
+            label="See accrued and claimable"
+            title="Accrued and claimable"
           >
             <View>
               <Text style={styles.total}>
-                {shortAddress(data.feeRecipient)}
+                {formatDecimal(fees.claimable)} USDG
               </Text>
               <Text style={styles.across}>
-                Fee recipient · paid on every deposit and redemption
+                {fees.available
+                  ? `Across ${fees.baskets} basket${fees.baskets === 1 ? '' : 's'}`
+                  : 'Fee claims start with the next contract deployment.'}
               </Text>
             </View>
+            <Button
+              label={claiming ? 'Claiming…' : 'Claim Fees'}
+              variant="green"
+              onPress={claim}
+              disabled={!canClaim}
+            />
             <Text style={styles.methodLabel}>ACCRUAL METHOD</Text>
             <View style={styles.method}>
-              {[
-                { label: 'Basis', value: 'Per deposit / redemption' },
-                { label: 'Manager share', value: '80%' },
-                { label: 'Claim cadence', value: 'Paid instantly' },
-                { label: 'Performance fee', value: 'None' },
-              ].map(row => (
+              {ACCRUAL.map(row => (
                 <View key={row.label} style={styles.methodRow}>
                   <Text style={styles.methodKey}>{row.label}</Text>
                   <Text style={styles.methodValue}>{row.value}</Text>

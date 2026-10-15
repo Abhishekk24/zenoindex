@@ -19,6 +19,8 @@ export type Asset = {
   mode: 'zap' | 'in-kind';
   underlyingTransferPolicy?:
     'open' | 'issuer_allowlist' | 'venue_gated' | 'unknown';
+  /** Token logo (Robinhood's asset list); null when there is none, e.g. USDG. */
+  logoUrl?: string | null;
 };
 
 export type Weight = { assetId: string; weightBps: number };

@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 
 import { AssetMap, symbolOf } from '../../lib/basket';
 import { formatBps, formatRaw } from '../../lib/format';
@@ -29,7 +29,15 @@ export function BasketHoldings({
           <View key={h.assetId} style={styles.item}>
             {i > 0 && <Divider />}
             <View style={styles.line}>
-              <Text style={styles.symbol}>{symbolOf(h.assetId, assets)}</Text>
+              <View style={styles.asset}>
+                {assets.get(h.assetId)?.logoUrl ? (
+                  <Image
+                    source={{ uri: assets.get(h.assetId)!.logoUrl! }}
+                    style={styles.logo}
+                  />
+                ) : null}
+                <Text style={styles.symbol}>{symbolOf(h.assetId, assets)}</Text>
+              </View>
               <Mono>
                 {formatRaw(
                   h.quantityRaw,
@@ -61,6 +69,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: space.md,
   },
+  asset: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  logo: { width: 24, height: 24, borderRadius: 12 },
   symbol: { ...type.heading, color: colors.text },
   weight: { ...type.small, color: colors.muted },
 });

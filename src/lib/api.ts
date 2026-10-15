@@ -393,8 +393,7 @@ export type ManagerPrepare =
       body: { weights: { assetId: string; weightBps: number }[] };
     }
   | { name: 'pause'; body: { paused: boolean } }
-  | { name: 'write-off' | 'reactivate'; body: { assetId: string } }
-  | { name: 'fee-recipient'; body: { feeRecipient: string } };
+  | { name: 'write-off' | 'reactivate'; body: { assetId: string } };
 
 /**
  * POST /api/v1/manager/dtfs/:id/<name>/prepare — an unsigned transaction on
@@ -410,6 +409,33 @@ export async function prepareManagerTx(
       body,
       { chainId: dtf.chainId },
     ),
+  );
+}
+
+/**
+ * The wallet's manager fees: every deposit / redeem fee is escrowed and the
+ * manager's share accrues to one balance across all their baskets.
+ * `available` is false until the contracts with FeeEscrow are deployed.
+ */
+export type ManagerFees = {
+  available: boolean;
+  token: string;
+  /** USDG, decimal. */
+  claimable: string;
+  claimableRaw: string;
+  /** Baskets this wallet is the manager of. */
+  baskets: number;
+};
+
+/** GET /api/v1/manager/fees */
+export async function getManagerFees(): Promise<ManagerFees> {
+  return api.get<ManagerFees>('/manager/fees');
+}
+
+/** POST /api/v1/manager/fees/claim/prepare — pays the whole balance to the wallet. */
+export async function prepareFeeClaim(chainId: number): Promise<TxDraft> {
+  return toTxDraft(
+    await api.post('/manager/fees/claim/prepare', {}, { chainId }),
   );
 }
 
