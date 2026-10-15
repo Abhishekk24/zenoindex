@@ -3,7 +3,7 @@ import type { Hono } from "hono";
 import { explorerUrl, findVault, holdings, publicRpcUrl, snapshot, toDtfRow } from "../chain";
 import type { AppEnv, Deps } from "../context";
 import { logoOf } from "../logos";
-import { demoHistory, MIN_REAL_POINTS, navHistory, priceDeltas, recentActivity } from "../stats";
+import { basketSeries, priceDeltas, recentActivity, withStats } from "../stats";
 
 const unavailable = { status: "unavailable" as const, items: [] };
 
@@ -41,7 +41,8 @@ export function dtfRoutes(app: Hono<AppEnv>, { db, client, logos, demoStats, log
   app.get("/dtfs", async (c) => {
     const project = c.get("project");
     const snap = await snapshot(client, project.factory);
-    return c.json({ items: snap.vaults.map((v) => toDtfRow(v, snap, project.chainId)) });
+    const rows = snap.vaults.map((v) => toDtfRow(v, snap, project.chainId));
+    return c.json({ items: await Promise.all(rows.map((r) => withStats(db, project.id, r, demoStats === true))) });
   });
 
   app.get("/dtfs/:id", async (c) => {
@@ -49,18 +50,17 @@ export function dtfRoutes(app: Hono<AppEnv>, { db, client, logos, demoStats, log
     const snap = await snapshot(client, project.factory);
     const v = findVault(snap, c.req.param("id"));
     const row = toDtfRow(v, snap, project.chainId);
-    const [items, real, activity] = await Promise.all([
+    const [items, series, activity] = await Promise.all([
       holdings(client, v, snap),
-      navHistory(db, project.id, row.id),
+      basketSeries(db, project.id, row, demoStats === true),
       recentActivity(logsClient ?? client, v.address, project.chainId).catch((e: unknown) => {
         console.error(`recent activity ${v.address}:`, e);
         // Never echo an RPC URL (it can carry an API key).
         return { error: (e instanceof Error ? e.message : String(e)).replace(/https?:\/\/\S+/g, "<rpc>").slice(0, 200) };
       }),
     ]);
-    // Until the daily worker has a week of real snapshots, show a demo history (flagged) so the charts aren't empty.
-    const demo = real.length < MIN_REAL_POINTS && demoStats === true;
-    const points = demo ? demoHistory(row.id, { sharePrice: row.sharePrice, nav: row.nav ?? "0", totalSupplyRaw: row.totalSupplyRaw }) : real;
+    // Until the daily worker has a week of real snapshots, the history is a demo one (flagged) so charts aren't empty.
+    const { points, demo } = series;
     const flag = demo ? { demo: true } : {};
     return c.json({
       ...row,

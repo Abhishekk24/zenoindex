@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { demoHistory, priceDeltas } from "../src/stats";
+import { demoHistory, listStats, priceDeltas } from "../src/stats";
 
 const vault = "0x1111111111111111111111111111111111111111";
 const current = { sharePrice: "1.25", nav: "125", totalSupplyRaw: "100000000" };
@@ -43,5 +43,29 @@ describe("priceDeltas", () => {
 
   it("needs two points", () => {
     expect(priceDeltas([at("1", 1)])).toEqual([]);
+  });
+});
+
+describe("listStats", () => {
+  const day = (sharePrice: string, daysAgo: number) => ({
+    observedAt: new Date(Date.UTC(2026, 9, 31) - daysAgo * 86_400_000).toISOString(),
+    navValue: "0",
+    sharePrice,
+    totalSupplyRaw: "0",
+    valuationStatus: "accepted" as const,
+  });
+
+  it("24h vs the previous point, 30d vs the first point within 30 days, last 30 for the sparkline", () => {
+    const points = [day("0.5", 40), day("1", 30), day("1.1", 1), day("1.21", 0)];
+    expect(listStats({ points, demo: false })).toEqual({
+      demo: false,
+      change24hBps: 1000,
+      change30dBps: 2100,
+      sparkline: ["0.5", "1", "1.1", "1.21"],
+    });
+  });
+
+  it("no history means no changes", () => {
+    expect(listStats({ points: [day("1", 0)], demo: true })).toEqual({ demo: true, change24hBps: null, change30dBps: null, sparkline: ["1"] });
   });
 });

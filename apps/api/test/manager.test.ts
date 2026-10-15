@@ -370,6 +370,15 @@ describe("basket stats", () => {
     expect(perf.items.at(-1)).toMatchObject({ navValue: "3.4", valuationStatus: "accepted" });
   });
 
+  it("basket lists carry card stats (30d, 24h, sparkline)", async () => {
+    const { call: withDemo } = makeApp(db, fakeClient(rpc), { demoStats: true });
+    const [item] = (await withDemo("/dtfs", { key: pk })).json.items;
+    expect(item.stats).toMatchObject({ demo: true, change24hBps: expect.any(Number), change30dBps: expect.any(Number) });
+    expect(item.stats.sparkline).toHaveLength(30);
+    const [managed] = (await withDemo("/manager/dtfs", { key: pk, token })).json.items;
+    expect(managed.stats.sparkline).toHaveLength(30);
+  });
+
   it("with demo stats off and no snapshots, the chart stays unavailable", async () => {
     expect((await detail()).json.readModels.performance.status).toBe("unavailable");
   });

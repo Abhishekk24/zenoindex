@@ -38,6 +38,7 @@ import { mintOf, snapshot, toDtfRow, type Snapshot, type VaultState } from "../c
 import { address, amount6, parseBody, requireUser, type AppEnv, type Ctx, type Deps } from "../context";
 import { ApiError, badRequest, conflict } from "../errors";
 import { logoOf } from "../logos";
+import { withStats } from "../stats";
 import { draft, insertOperation, swapPath, tradeContext, type Action } from "../operations";
 
 const slotIndex = z.number().int().min(0);
@@ -63,13 +64,14 @@ const usd = (raw: bigint | null) => (raw === null ? null : formatUnits(raw, USDG
 type ManagerCtx = Awaited<ReturnType<typeof managerContext>>;
 type Prepared = { tx: TxRequest; amount?: bigint; data?: Record<string, string> };
 
-export function managerRoutes(app: Hono<AppEnv>, { db, client }: Deps) {
+export function managerRoutes(app: Hono<AppEnv>, { db, client, demoStats }: Deps) {
   app.get("/manager/dtfs", async (c) => {
     const user = requireUser(c);
     const project = c.get("project");
     const snap = await snapshot(client, project.factory);
     const managed = await Promise.all(snap.vaults.map((v) => canManage(client, v, user.wallet_address as Address, project.factory)));
-    return c.json({ items: snap.vaults.filter((_, i) => managed[i]).map((v) => toDtfRow(v, snap, project.chainId)) });
+    const rows = snap.vaults.filter((_, i) => managed[i]).map((v) => toDtfRow(v, snap, project.chainId));
+    return c.json({ items: await Promise.all(rows.map((r) => withStats(db, project.id, r, demoStats === true))) });
   });
 
   app.get("/manager/dtfs/:id", async (c) => {

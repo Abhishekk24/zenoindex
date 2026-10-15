@@ -169,3 +169,37 @@ export async function recentActivity(client: PublicClient, vault: Address, chain
   activityCache.set(key, { at: Date.now(), items });
   return items;
 }
+
+type Row = { id: string; sharePrice: string; nav?: string; totalSupplyRaw: string };
+
+/** A basket's NAV history: the real daily snapshots, or (with demo stats on and under a week of them) the demo one. */
+export async function basketSeries(db: Db, projectId: string, row: Row, demoStats: boolean) {
+  const real = await navHistory(db, projectId, row.id);
+  const demo = real.length < MIN_REAL_POINTS && demoStats;
+  const points = demo ? demoHistory(row.id, { sharePrice: row.sharePrice, nav: row.nav ?? "0", totalSupplyRaw: row.totalSupplyRaw }) : real;
+  return { points, demo };
+}
+
+const bpsBetween = (from: NavPoint | undefined, to: NavPoint | undefined) => {
+  if (!from || !to) return null;
+  const a = parseUnits(from.sharePrice, PRICE_DECIMALS);
+  return a === 0n ? null : Number(((parseUnits(to.sharePrice, PRICE_DECIMALS) - a) * 10_000n) / a);
+};
+
+/** What a basket list card shows: 24h and 30-day share-price change and a 30-point sparkline. */
+export function listStats({ points, demo }: { points: NavPoint[]; demo: boolean }) {
+  const last = points.at(-1);
+  const cutoff = last ? Date.parse(last.observedAt) - 30 * DAY_MS : 0;
+  const monthAgo = points.find((p) => Date.parse(p.observedAt) >= cutoff);
+  return {
+    demo,
+    change24hBps: bpsBetween(points.at(-2), last),
+    change30dBps: points.length >= 2 ? bpsBetween(monthAgo, last) : null,
+    sparkline: points.slice(-30).map((p) => p.sharePrice),
+  };
+}
+
+/** A list row with its card stats. */
+export async function withStats<T extends Row>(db: Db, projectId: string, row: T, demoStats: boolean) {
+  return { ...row, stats: listStats(await basketSeries(db, projectId, row, demoStats)) };
+}

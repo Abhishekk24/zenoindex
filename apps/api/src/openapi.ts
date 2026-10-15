@@ -117,6 +117,15 @@ export const openapi = {
       Dtf: s("object", {
         description: "A basket (vault). `id` is the vault address.",
         properties: {
+          stats: s("object", {
+            description: "List-card stats (in list responses): share-price change over 24h / 30 days (bps, null without history) and a 30-point sparkline. `demo` while the basket has under a week of real daily snapshots.",
+            properties: {
+              demo: s("boolean"),
+              change24hBps: s("integer", { nullable: true }),
+              change30dBps: s("integer", { nullable: true }),
+              sparkline: s("array", { items: str("Share price") }),
+            },
+          }),
           id: ref("Address"),
           chainId: s("integer"),
           name: str(),
