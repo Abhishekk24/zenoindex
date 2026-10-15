@@ -4,13 +4,13 @@ import { robinhoodLogos } from "../src/logos";
 const body = {
   assets: [
     {
-      logoUrl: "https://cdn.robinhood.com/ncw_assets/logos/0xabc.png",
+      tokenSymbol: "tsla",
       deployments: [
         { contractAddress: "0xABC", chainId: 4663 },
         { contractAddress: "0xDEF", chainId: 46630 },
       ],
     },
-    { logoUrl: "http://insecure.example/logo.png", deployments: [{ contractAddress: "0x123", chainId: 4663 }] },
+    { tokenSymbol: "not a ticker!", deployments: [{ contractAddress: "0x123", chainId: 4663 }] },
     { deployments: [{ contractAddress: "0x456", chainId: 4663 }] },
   ],
 };
@@ -23,9 +23,9 @@ function fakeFetch(responses: (() => Response)[]) {
 const ok = () => new Response(JSON.stringify(body), { status: 200 });
 
 describe("robinhoodLogos", () => {
-  it("maps each chain's token addresses (lowercase) to https logos only", async () => {
+  it("maps each chain's token addresses (lowercase) to a logo for the token's ticker", async () => {
     const logos = robinhoodLogos(fakeFetch([ok]).fn);
-    expect([...(await logos(4663))]).toEqual([["0xabc", "https://cdn.robinhood.com/ncw_assets/logos/0xabc.png"]]);
+    expect([...(await logos(4663))]).toEqual([["0xabc", "https://financialmodelingprep.com/image-stock/TSLA.png"]]);
     expect([...(await logos(46630)).keys()]).toEqual(["0xdef"]);
   });
 
