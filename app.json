@@ -53,6 +53,14 @@
       ],
       "expo-secure-store",
       "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Zeno uses your photos so you can choose an image for a basket you create.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
       "./plugins/withWalletQueries"
     ],
     "experiments": {

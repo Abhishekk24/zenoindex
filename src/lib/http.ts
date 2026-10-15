@@ -10,6 +10,7 @@
  */
 import * as SecureStore from 'expo-secure-store';
 
+import { mockRequest, USE_MOCK_DATA } from './data';
 import { API_BASE, API_KEY } from './env';
 
 const SESSION_KEY = 'dtf.session';
@@ -113,6 +114,7 @@ export type ApiRequest = {
 
 async function request<T>(path: string, init: ApiRequest = {}): Promise<T> {
   const method = init.method ?? 'GET';
+  if (USE_MOCK_DATA) return mocked<T>(method, path, init.body);
   const controller = new AbortController();
   const timer = setTimeout(
     () => controller.abort(),
@@ -197,6 +199,28 @@ async function request<T>(path: string, init: ApiRequest = {}): Promise<T> {
     );
   }
   return body as T;
+}
+
+/** EXPO_PUBLIC_USE_MOCK_DATA=true: answer from lib/data.ts, errors included. */
+async function mocked<T>(
+  method: string,
+  path: string,
+  body: unknown,
+): Promise<T> {
+  const result = await mockRequest(method, path, body);
+  if (result.status >= 400) {
+    const error = ((result.body as Record<string, unknown>)['error'] ?? {}) as {
+      code?: string;
+      message?: string;
+    };
+    throw new ApiError(
+      result.status,
+      error.code ?? 'request_failed',
+      error.message ?? `Request failed (${result.status})`,
+      false,
+    );
+  }
+  return result.body as T;
 }
 
 export const api = {

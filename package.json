@@ -28,9 +28,11 @@
     "expo": "~57.0.27",
     "expo-application": "~57.0.3",
     "expo-blur": "~57.0.3",
+    "expo-clipboard": "~57.0.2",
     "expo-constants": "~57.0.21",
     "expo-crypto": "~57.0.4",
     "expo-font": "~57.0.4",
+    "expo-image-picker": "~57.0.20",
     "expo-linking": "~57.0.12",
     "expo-router": "~57.0.25",
     "expo-secure-store": "~57.0.4",
@@ -56,6 +58,13 @@
   "engines": {
     "node": ">= 22.11.0"
   },
+  "overrides": {
+    "@react-native-async-storage/async-storage": "$@react-native-async-storage/async-storage",
+    "@walletconnect/universal-provider": "2.21.10",
+    "@walletconnect/sign-client": "2.21.10",
+    "@walletconnect/core": "2.21.10",
+    "valtio": "2.1.8"
+  },
   "devDependencies": {
     "@types/react": "~19.2.4",
     "eslint": "^9.39.5",
@@ -64,11 +73,5 @@
     "eslint-plugin-prettier": "^5.5.6",
     "prettier": "^3.9.9",
     "typescript": "~6.0.3"
-  },
-  "overrides": {
-    "@walletconnect/universal-provider": "2.21.10",
-    "@walletconnect/sign-client": "2.21.10",
-    "@walletconnect/core": "2.21.10",
-    "valtio": "2.1.8"
   }
 }
