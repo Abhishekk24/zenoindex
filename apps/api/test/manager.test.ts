@@ -217,3 +217,17 @@ describe("manager fees", () => {
     expect(r.json.error.code).toBe("nothing_to_claim");
   });
 });
+
+describe("assets", () => {
+  it("carry the token's logo when the logo source knows it, null otherwise", async () => {
+    const logo = "https://cdn.robinhood.com/ncw_assets/logos/tsla.png";
+    const { call: callWithLogos } = makeApp(db, fakeClient(rpc), { logos: async () => new Map([[tsla, logo]]) });
+    const r = await callWithLogos("/assets", { key: pk });
+    expect(r.json.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: tsla, symbol: "TSLA", logoUrl: logo }),
+        expect.objectContaining({ id: usdg, symbol: "USDG", logoUrl: null }),
+      ]),
+    );
+  });
+});

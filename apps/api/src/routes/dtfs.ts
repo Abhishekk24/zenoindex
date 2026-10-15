@@ -5,7 +5,7 @@ import type { AppEnv, Deps } from "../context";
 
 const unavailable = { status: "unavailable" as const, items: [] };
 
-export function dtfRoutes(app: Hono<AppEnv>, { client }: Deps) {
+export function dtfRoutes(app: Hono<AppEnv>, { client, logos }: Deps) {
   app.get("/chains", (c) =>
     c.json({
       items: [
@@ -17,7 +17,7 @@ export function dtfRoutes(app: Hono<AppEnv>, { client }: Deps) {
 
   app.get("/assets", async (c) => {
     const project = c.get("project");
-    const snap = await snapshot(client, project.factory);
+    const [snap, logoOf] = await Promise.all([snapshot(client, project.factory), logos?.(project.chainId) ?? new Map<string, string>()]);
     const items = snap.assets.map((a) => ({
       id: a.mint.toLowerCase(),
       contractAddress: a.mint.toLowerCase(),
@@ -26,11 +26,12 @@ export function dtfRoutes(app: Hono<AppEnv>, { client }: Deps) {
       name: a.name ?? a.mint,
       decimals: a.decimals ?? 18,
       underlyingTransferPolicy: "open",
+      logoUrl: logoOf.get(a.mint.toLowerCase()) ?? null,
     }));
     // Every basket is priced in USDG, so the app needs it even before it's registered as an asset.
     const usdg = snap.protocol.usdg.toLowerCase();
     if (!items.some((a) => a.id === usdg)) {
-      items.push({ id: usdg, contractAddress: usdg, chainId: project.chainId, symbol: "USDG", name: "Global Dollar", decimals: USDG_DECIMALS, underlyingTransferPolicy: "open" });
+      items.push({ id: usdg, contractAddress: usdg, chainId: project.chainId, symbol: "USDG", name: "Global Dollar", decimals: USDG_DECIMALS, underlyingTransferPolicy: "open", logoUrl: logoOf.get(usdg) ?? null });
     }
     return c.json({ items });
   });

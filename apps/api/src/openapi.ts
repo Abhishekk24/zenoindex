@@ -111,6 +111,7 @@ export const openapi = {
           name: str(),
           decimals: s("integer"),
           underlyingTransferPolicy: str(undefined, { enum: ["open"] }),
+          logoUrl: str("Token logo (Robinhood's asset list); null when it has none, e.g. USDG", { nullable: true }),
         },
       }),
       Dtf: s("object", {

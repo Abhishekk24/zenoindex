@@ -3,12 +3,13 @@ import type { PublicClient } from "viem";
 import { z } from "zod";
 import type { Db } from "./db";
 import type { DiditConfig } from "./didit";
+import type { LogoSource } from "./logos";
 import type { PrivyAuth } from "./privy";
 import { badRequest, unauthorized } from "./errors";
 import type { KeyType, Project } from "./tenancy";
 import type { UserRow } from "./users";
 
-export type Deps = { db: Db; client: PublicClient; secureCookies: boolean; didit?: DiditConfig; privy?: PrivyAuth };
+export type Deps = { db: Db; client: PublicClient; secureCookies: boolean; didit?: DiditConfig; privy?: PrivyAuth; logos?: LogoSource };
 export type AppEnv = { Variables: { project: Project; keyType: KeyType; user: UserRow | null; sessionToken: string | null } };
 export type Ctx = Context<AppEnv>;
 
