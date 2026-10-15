@@ -2,6 +2,7 @@ import { robinhood, USDG_DECIMALS } from "@zenoindex/sdk";
 import type { Hono } from "hono";
 import { explorerUrl, findVault, holdings, publicRpcUrl, snapshot, toDtfRow } from "../chain";
 import type { AppEnv, Deps } from "../context";
+import { logoOf } from "../logos";
 
 const unavailable = { status: "unavailable" as const, items: [] };
 
@@ -17,7 +18,8 @@ export function dtfRoutes(app: Hono<AppEnv>, { client, logos }: Deps) {
 
   app.get("/assets", async (c) => {
     const project = c.get("project");
-    const [snap, logoOf] = await Promise.all([snapshot(client, project.factory), logos?.(project.chainId) ?? new Map<string, string>()]);
+    const [snap, logoMap] = await Promise.all([snapshot(client, project.factory), logos?.(project.chainId) ?? new Map<string, string>()]);
+    const usdg = snap.protocol.usdg.toLowerCase();
     const items = snap.assets.map((a) => ({
       id: a.mint.toLowerCase(),
       contractAddress: a.mint.toLowerCase(),
@@ -26,12 +28,11 @@ export function dtfRoutes(app: Hono<AppEnv>, { client, logos }: Deps) {
       name: a.name ?? a.mint,
       decimals: a.decimals ?? 18,
       underlyingTransferPolicy: "open",
-      logoUrl: logoOf.get(a.mint.toLowerCase()) ?? null,
+      logoUrl: logoOf(logoMap, a.mint.toLowerCase(), usdg),
     }));
     // Every basket is priced in USDG, so the app needs it even before it's registered as an asset.
-    const usdg = snap.protocol.usdg.toLowerCase();
     if (!items.some((a) => a.id === usdg)) {
-      items.push({ id: usdg, contractAddress: usdg, chainId: project.chainId, symbol: "USDG", name: "Global Dollar", decimals: USDG_DECIMALS, underlyingTransferPolicy: "open", logoUrl: logoOf.get(usdg) ?? null });
+      items.push({ id: usdg, contractAddress: usdg, chainId: project.chainId, symbol: "USDG", name: "Global Dollar", decimals: USDG_DECIMALS, underlyingTransferPolicy: "open", logoUrl: logoOf(logoMap, usdg, usdg) });
     }
     return c.json({ items });
   });

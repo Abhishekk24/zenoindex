@@ -8,6 +8,12 @@ const TTL_MS = 6 * 60 * 60 * 1000;
 const WAIT_MS = 2000;
 const logoForTicker = (ticker: string) => `https://financialmodelingprep.com/image-stock/${encodeURIComponent(ticker)}.png`;
 
+import { USDG_LOGO } from "./usdgLogo";
+
+/** A token's logo: USDG's embedded one, else the source's, else null. */
+export const logoOf = (logos: Map<string, string>, token: string, usdg: string) =>
+  token === usdg ? USDG_LOGO : (logos.get(token) ?? null);
+
 /** Lowercase token address → logo URL, for one chain. */
 export type LogoSource = (chainId: number) => Promise<Map<string, string>>;
 

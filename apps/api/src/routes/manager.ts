@@ -37,6 +37,7 @@ import { z } from "zod";
 import { mintOf, snapshot, toDtfRow, type Snapshot, type VaultState } from "../chain";
 import { address, amount6, parseBody, requireUser, type AppEnv, type Ctx, type Deps } from "../context";
 import { ApiError, badRequest, conflict } from "../errors";
+import { logoOf } from "../logos";
 import { draft, insertOperation, swapPath, tradeContext, type Action } from "../operations";
 
 const slotIndex = z.number().int().min(0);
@@ -295,7 +296,7 @@ export function createRoutes(app: Hono<AppEnv>, { db, client, logos }: Deps) {
     const project = c.get("project");
     const snap = await snapshot(client, project.factory);
     const active = snap.assets.filter((a) => a.exists && a.active);
-    const [canCreate, priced, logoOf] = await Promise.all([
+    const [canCreate, priced, logoMap] = await Promise.all([
       canCreateVault(client, user.wallet_address as Address, project.factory),
       hasPrices(client, active.map((a) => a.mint), project.factory),
       logos?.(project.chainId) ?? new Map<string, string>(),
@@ -309,7 +310,7 @@ export function createRoutes(app: Hono<AppEnv>, { db, client, logos }: Deps) {
         id: a.mint.toLowerCase(),
         symbol: a.symbol ?? "?",
         name: a.name ?? a.mint,
-        logoUrl: logoOf.get(a.mint.toLowerCase()) ?? null,
+        logoUrl: logoOf(logoMap, a.mint.toLowerCase(), usdg),
         // createVault needs a price for every asset but USDG.
         selectable: a.mint.toLowerCase() === usdg || priced[i]!,
       })),

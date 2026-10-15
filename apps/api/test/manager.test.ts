@@ -227,7 +227,7 @@ describe("assets", () => {
     expect(r.json.items).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: tsla, symbol: "TSLA", logoUrl: logo }),
-        expect.objectContaining({ id: usdg, symbol: "USDG", logoUrl: null }),
+        expect.objectContaining({ id: usdg, symbol: "USDG", logoUrl: expect.stringMatching(/^data:image\/png;base64,/) }),
       ]),
     );
   });
