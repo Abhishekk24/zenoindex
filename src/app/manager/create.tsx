@@ -2,9 +2,9 @@
  * Manager → Create basket (designs: Create steps 1–6). Opened from the Create
  * tab; full screen with ‹ back.
  *
- * 1 Select Provider · 2 Identity · 3 Constituents · 4 Fees & Access ·
- * 5 Review ("Prep creation") · 6 Deploy ("Submit") · 7 Configure (no design
- * yet: coming soon). Continue checks the current step first.
+ * 1 Identity · 2 Constituents · 3 Fees & Access · 4 Review ("Prep creation")
+ * · 5 Deploy ("Submit") · 6 Configure (no design yet: coming soon). The
+ * network is Robinhood Chain, preset: there is nothing to choose. Continue checks the current step first.
  *
  * Assets come from GET /manager/create; Prep creation asks the API for the
  * factory's createVault transaction and Submit signs it with the manager's
@@ -79,8 +79,8 @@ async function pickImage(): Promise<string | undefined> {
   return result.canceled ? undefined : result.assets[0]?.uri;
 }
 
-const REVIEW = 4;
-const DEPLOY = 5;
+const REVIEW = 3;
+const DEPLOY = 4;
 
 /** 0x8f…0000, as the Deploy design shows calldata. */
 const shortHex = (hex: string) =>
@@ -205,25 +205,6 @@ export default function CreateBasketScreen() {
         <View style={styles.body}>
           {step === 0 && (
             <View style={styles.fields}>
-              <SelectField
-                label="Chain"
-                value={form.chain}
-                options={CREATE_CHAINS}
-                onChange={value => update({ chain: value, provider: '' })}
-                error={shown.chain}
-              />
-              <SelectField
-                label="Provider"
-                value={form.provider}
-                options={providers}
-                onChange={provider => update({ provider })}
-                error={shown.provider}
-              />
-            </View>
-          )}
-
-          {step === 1 && (
-            <View style={styles.fields}>
               <TextField
                 label="Basket Name"
                 value={form.name}
@@ -287,7 +268,7 @@ export default function CreateBasketScreen() {
             </View>
           )}
 
-          {step === 2 && (
+          {step === 1 && (
             <ConstituentsStep
               assets={assets}
               form={form}
@@ -297,7 +278,7 @@ export default function CreateBasketScreen() {
             />
           )}
 
-          {step === 3 && (
+          {step === 2 && (
             <View style={styles.fields}>
               <TextField
                 label="Entry fee (%)"
@@ -451,7 +432,7 @@ export default function CreateBasketScreen() {
             </View>
           )}
 
-          {step === 6 && (
+          {step === 5 && (
             <Text style={styles.soon}>
               Coming soon. This step isn&apos;t designed yet.
             </Text>
@@ -529,19 +510,19 @@ export default function CreateBasketScreen() {
             <Pressable
               onPress={next}
               // The design greys Continue out on Constituents until it's valid.
-              disabled={step === 2 && !valid}
+              disabled={step === 1 && !valid}
               accessibilityRole="button"
-              accessibilityState={{ disabled: step === 2 && !valid }}
+              accessibilityState={{ disabled: step === 1 && !valid }}
               style={({ pressed }) => [
                 styles.continue,
-                step === 2 && !valid && styles.continueOff,
+                step === 1 && !valid && styles.continueOff,
                 pressed && styles.pressed,
               ]}
             >
               <Text
                 style={[
                   styles.continueText,
-                  step === 2 && !valid && styles.continueTextOff,
+                  step === 1 && !valid && styles.continueTextOff,
                 ]}
               >
                 Continue

@@ -1,11 +1,11 @@
 import React from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { AssetMap, symbolOf } from '../../lib/basket';
 import { formatBps, formatRaw } from '../../lib/format';
 import type { DtfDetail } from '../../lib/types';
 import { colors, space, type } from '../../theme/tokens';
-import { Card, Divider, Empty, Mono } from '../ui';
+import { Card, Divider, Empty, Mono, TokenLogo } from '../ui';
 
 /** Basket detail: each constituent's quantity and target vs actual weight. */
 export function BasketHoldings({
@@ -30,12 +30,10 @@ export function BasketHoldings({
             {i > 0 && <Divider />}
             <View style={styles.line}>
               <View style={styles.asset}>
-                {assets.get(h.assetId)?.logoUrl ? (
-                  <Image
-                    source={{ uri: assets.get(h.assetId)!.logoUrl! }}
-                    style={styles.logo}
-                  />
-                ) : null}
+                <TokenLogo
+                  uri={assets.get(h.assetId)?.logoUrl}
+                  style={styles.logo}
+                />
                 <Text style={styles.symbol}>{symbolOf(h.assetId, assets)}</Text>
               </View>
               <Mono>

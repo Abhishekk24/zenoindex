@@ -3,13 +3,13 @@
  * with a ⋮ menu in `accessory`.
  */
 import React from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AssetMap, isComingSoon, symbolOf } from '../../lib/basket';
 import { formatBps, formatDecimal, shortAddress } from '../../lib/format';
 import type { Dtf } from '../../lib/types';
 import { colors, fonts, radius } from '../../theme/tokens';
-import { Stripes } from '../ui';
+import { Stripes, TokenLogo } from '../ui';
 import { BasketStat } from './BasketStat';
 
 /** How many constituent avatars to show before collapsing into "+n". */
@@ -67,19 +67,17 @@ export function BasketCard({
                   key={`${ticker}-${i}`}
                   style={[styles.avatar, i > 0 && styles.avatarOverlap]}
                 >
-                  {logo ? (
-                    <Image
-                      source={{ uri: logo }}
-                      style={styles.avatarLogo}
-                      accessibilityLabel={ticker}
-                    />
-                  ) : (
-                    <Text style={styles.avatarText}>
-                      {ticker.startsWith('+')
-                        ? ticker
-                        : ticker.slice(0, 2).toUpperCase()}
-                    </Text>
-                  )}
+                  <TokenLogo
+                    uri={logo}
+                    style={styles.avatarLogo}
+                    fallback={
+                      <Text style={styles.avatarText}>
+                        {ticker.startsWith('+')
+                          ? ticker
+                          : ticker.slice(0, 2).toUpperCase()}
+                      </Text>
+                    }
+                  />
                 </View>
               ))}
             </View>

@@ -21,5 +21,6 @@ export { StatGrid } from './StatGrid';
 export { Stripes } from './Stripes';
 export { SwipeTabContent } from './SwipeTabContent';
 export { Title } from './Title';
+export { TokenLogo } from './TokenLogo';
 export { UnderlineTabs } from './UnderlineTabs';
 export type { BadgeTone, TabOption } from './types';

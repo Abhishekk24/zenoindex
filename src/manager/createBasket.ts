@@ -70,7 +70,6 @@ export const DIVIDEND_STRATEGIES: Option[] = [
 ];
 
 export const STEPS = [
-  'Select Provider',
   'Identity',
   'Constituents',
   'Fees & Access',
@@ -106,8 +105,9 @@ export type CreateForm = {
 };
 
 export const EMPTY_FORM: CreateForm = {
-  chain: '',
-  provider: '',
+  // Robinhood Chain is the only network baskets live on, so it's preset.
+  chain: '4663',
+  provider: 'robinhood',
   name: '',
   symbol: '',
   complianceScope: '',
@@ -167,15 +167,11 @@ export function stepErrors(
   const e: Partial<Record<keyof CreateForm, string>> = {};
   switch (step) {
     case 0:
-      if (!form.chain) e.chain = 'Choose a chain.';
-      if (!form.provider) e.provider = 'Choose a provider.';
-      break;
-    case 1:
       if (!form.name.trim()) e.name = 'Enter a basket name.';
       if (!/^[A-Z0-9]{2,11}$/.test(form.symbol.trim().toUpperCase()))
         e.symbol = 'Use 2–11 letters or numbers.';
       break;
-    case 2: {
+    case 1: {
       if (!form.baseAssetId) e.baseAssetId = 'Choose a base asset.';
       if (form.constituents.length < 2)
         e.constituents = 'Add at least 2 constituents to create a DTF.';
@@ -183,7 +179,7 @@ export function stepErrors(
         e.constituents = 'Weights must total 100.00%.';
       break;
     }
-    case 3:
+    case 2:
       // The contract's bounds (Vault.init): entry 0–6%, exit 0.5–10%.
       if (!inRange(form.entryFee, 0, 6))
         e.entryFee = 'Enter an entry fee between 0 and 6%.';

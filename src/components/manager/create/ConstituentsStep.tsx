@@ -1,8 +1,10 @@
 /**
- * Create step 3, Constituents (design): base asset, search-and-add target
- * assets, a weight per asset, and the running total (must reach 100.00% with
- * at least 2 assets to continue).
+ * Create step 2, Constituents (design): base asset, search-and-add target
+ * assets, a weight slider per asset (whole percents, capped so the total can't
+ * pass 100%), and the running total (must reach 100% with at least 2 assets
+ * to continue).
  */
+import Slider from '@react-native-community/slider';
 import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -63,11 +65,11 @@ export function ConstituentsStep({
     setPicked(undefined);
   };
 
-  const setWeight = (assetId: string, text: string) =>
+  const setWeight = (assetId: string, percent: number) =>
     update({
       constituents: form.constituents.map(c =>
         c.assetId === assetId
-          ? { ...c, weight: text.replace(',', '.').replace(/[^\d.]/g, '') }
+          ? { ...c, weight: String(Math.round(percent)) }
           : c,
       ),
     });
@@ -163,32 +165,41 @@ export function ConstituentsStep({
             <Text style={styles.headText}>ASSET</Text>
             <Text style={styles.headText}>WEIGHT</Text>
           </View>
-          {form.constituents.map(c => (
-            <View key={c.assetId} style={styles.row}>
-              <Text style={styles.assetName}>
-                {assetOf(c.assetId, assets)?.name ?? c.assetId}
-              </Text>
-              <TextInput
-                value={c.weight}
-                onChangeText={text => setWeight(c.assetId, text)}
-                keyboardType="decimal-pad"
-                placeholder="0"
-                placeholderTextColor={colors.dim}
-                selectionColor={colors.gold}
-                style={styles.weight}
-                accessibilityLabel={`${assetOf(c.assetId, assets)?.name} weight, percent`}
-              />
-              <Pressable
-                onPress={() => remove(c.assetId)}
-                accessibilityRole="button"
-                accessibilityLabel={`Remove ${assetOf(c.assetId, assets)?.name}`}
-                hitSlop={6}
-                style={styles.remove}
-              >
-                <Text style={styles.removeText}>×</Text>
-              </Pressable>
-            </View>
-          ))}
+          {form.constituents.map(c => {
+            const name = assetOf(c.assetId, assets)?.name ?? c.assetId;
+            const weight = Number(c.weight) || 0;
+            // What this asset can take without the total passing 100%.
+            const room = Math.max(0, 100 - (total - weight));
+            return (
+              <View key={c.assetId} style={styles.row}>
+                <View style={styles.rowTop}>
+                  <Text style={styles.assetName}>{name}</Text>
+                  <Text style={styles.weight}>{weight}%</Text>
+                  <Pressable
+                    onPress={() => remove(c.assetId)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Remove ${name}`}
+                    hitSlop={6}
+                    style={styles.remove}
+                  >
+                    <Text style={styles.removeText}>×</Text>
+                  </Pressable>
+                </View>
+                <Slider
+                  value={weight}
+                  minimumValue={0}
+                  maximumValue={Math.max(room, 1)}
+                  step={1}
+                  onValueChange={value => setWeight(c.assetId, value)}
+                  minimumTrackTintColor={colors.gold}
+                  maximumTrackTintColor={colors.lineStrong}
+                  thumbTintColor={colors.gold}
+                  accessibilityLabel={`${name} weight, percent`}
+                  style={styles.slider}
+                />
+              </View>
+            );
+          })}
         </View>
       ) : null}
 
@@ -311,14 +322,14 @@ const styles = StyleSheet.create({
     color: colors.muted,
   },
   row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.sm,
+    gap: space.xs,
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderTopWidth: 1,
     borderTopColor: colors.line,
   },
+  rowTop: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  slider: { width: '100%', height: 36 },
   assetName: {
     flex: 1,
     fontFamily: fonts.regular,
@@ -326,16 +337,11 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   weight: {
-    width: 46,
-    height: 44,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: colors.lineStrong,
-    backgroundColor: '#050706',
-    textAlign: 'center',
-    fontFamily: fonts.regular,
+    minWidth: 48,
+    textAlign: 'right',
+    fontFamily: fonts.medium,
     fontSize: 17,
-    color: colors.text,
+    color: colors.gold,
   },
   remove: {
     width: 40,
