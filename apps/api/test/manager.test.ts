@@ -241,3 +241,87 @@ describe("trading fee", () => {
     expect((await call(`/manager/dtfs/${vault}`, { key: pk, token })).json.tradingFeeBps).toBe(50);
   });
 });
+
+describe("create basket", () => {
+  const options = (t = token) => call("/manager/create", { key: pk, token: t });
+  const create = (body: unknown, t = token) => call("/manager/create/prepare", { key: pk, token: t, body });
+  const valid = {
+    name: "Tech Leaders",
+    symbol: "tech",
+    weights: [
+      { assetId: usdg, weightBps: 1000 },
+      { assetId: tsla, weightBps: 9000 },
+    ],
+    entryFeeBps: 100,
+    exitFeeBps: 50,
+  };
+  const allowCreator = (yes: boolean) => {
+    const f = chain[MAINNET.factory]!;
+    f.isVaultCreator = () => yes;
+    f.superAdmin = "0x7777777777777777777777777777777777777777";
+    f.hasPrice = () => true;
+  };
+
+  it("options: creator status and the assets to pick from", async () => {
+    allowCreator(false);
+    const r = await options();
+    expect(r.status).toBe(200);
+    expect(r.json.canCreate).toBe(false);
+    expect(r.json.assets.map((a: { id: string; selectable: boolean }) => [a.id, a.selectable])).toEqual([
+      [usdg, true],
+      [tsla, true],
+    ]);
+    expect(r.json.limits).toEqual({ maxAssets: 20, maxEntryFeeBps: 600, minExitFeeBps: 50, maxExitFeeBps: 1000 });
+  });
+
+  it("only an allowlisted creator (or the super-admin) may create", async () => {
+    allowCreator(false);
+    const r = await create(valid);
+    expect(r.status).toBe(403);
+    expect(r.json.error.code).toBe("not_vault_creator");
+  });
+
+  it("encodes createVault on the factory; the signer becomes the manager", async () => {
+    allowCreator(true);
+    const r = await create(valid);
+    expect(r.status).toBe(200);
+    expect(r.json.action).toBe("manager_create");
+    expect(r.json.transaction.to).toBe(MAINNET.factory);
+    const { functionName, args } = decodeFunctionData({ abi: ZenoIndexVaultAbi, data: r.json.transaction.data });
+    expect(functionName).toBe("createVault");
+    expect(args[0]).toMatchObject({
+      name: "Tech Leaders",
+      symbol: "TECH",
+      assetIds: [0n, 1n],
+      allocationBps: [1000, 9000],
+      depositFeeBps: 100,
+      redeemFeeBps: 50,
+      fundType: 1,
+      maxShares: 0n,
+      feeRecipient: "0x0000000000000000000000000000000000000000",
+    });
+  });
+
+  it("a fixed basket needs a share cap", async () => {
+    allowCreator(true);
+    expect((await create({ ...valid, fundType: "fixed" })).status).toBe(400);
+    const r = await create({ ...valid, fundType: "fixed", maxShares: "1000" });
+    expect(r.status).toBe(200);
+    expect(decodeFunctionData({ abi: ZenoIndexVaultAbi, data: r.json.transaction.data }).args[0]).toMatchObject({
+      fundType: 0,
+      maxShares: 1_000_000_000n,
+    });
+  });
+
+  it("rejects unpriced assets and out-of-range fees", async () => {
+    allowCreator(true);
+    chain[MAINNET.factory]!.hasPrice = (t: string) => t.toLowerCase() !== tsla;
+    const unpriced = await create(valid);
+    expect(unpriced.status).toBe(400);
+    expect(unpriced.json.error.code).toBe("no_price");
+    chain[MAINNET.factory]!.hasPrice = () => true;
+    expect((await create({ ...valid, exitFeeBps: 20 })).status).toBe(400);
+    expect((await create({ ...valid, entryFeeBps: 700 })).status).toBe(400);
+    expect((await create({ ...valid, weights: [{ assetId: tsla, weightBps: 9000 }] })).status).toBe(400);
+  });
+});

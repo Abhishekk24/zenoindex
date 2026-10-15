@@ -1,5 +1,5 @@
 import { encodeFunctionData, erc20Abi, type Address, type Hex } from "viem";
-import { FeeEscrowAbi, VaultAbi } from "./abis";
+import { FeeEscrowAbi, VaultAbi, ZenoIndexVaultAbi } from "./abis";
 import { BPS } from "./constants";
 
 /** Unsigned transaction for the user's wallet to sign. */
@@ -84,5 +84,31 @@ export const buildProposeReactivate = (vault: Address, assetId: bigint) =>
 export const buildClaimManagerFees = (escrow: Address, token: Address, recipient: Address): TxRequest => ({
   to: escrow,
   data: encodeFunctionData({ abi: FeeEscrowAbi, functionName: "claimManagerFees", args: [token, recipient] }),
+  value: 0n,
+});
+
+export type CreateVaultParams = {
+  name: string;
+  symbol: string;
+  assetIds: readonly bigint[];
+  allocationBps: readonly number[];
+  depositFeeBps: number;
+  redeemFeeBps: number;
+  /** 0 = Fixed (needs maxShares > 0), 1 = Dynamic (no cap). */
+  fundType: 0 | 1;
+  /** Share cap in share units (6 decimals); 0 for Dynamic. */
+  maxShares: bigint;
+  /** zero address = the sender. */
+  feeRecipient: Address;
+};
+
+/** New basket on the factory; the sender becomes its vaultManager. Only the super-admin or an allowlisted vault creator. */
+export const buildCreateVault = (factory: Address, p: CreateVaultParams): TxRequest => ({
+  to: factory,
+  data: encodeFunctionData({
+    abi: ZenoIndexVaultAbi,
+    functionName: "createVault",
+    args: [{ ...p, assetIds: [...p.assetIds], allocationBps: [...p.allocationBps] }],
+  }),
   value: 0n,
 });

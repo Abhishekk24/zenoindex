@@ -325,3 +325,25 @@ export async function getTradingFeeBps(client: PublicClient, factory: Address = 
     return 0;
   }
 }
+
+/** createVault is open to the protocol super-admin and wallets the super-admin allowlisted as vault creators. */
+export async function canCreateVault(client: PublicClient, account: Address, factory: Address = MAINNET.factory) {
+  const c = { address: factory, abi: ZenoIndexVaultAbi } as const;
+  const [creator, superAdmin] = await client.multicall({
+    allowFailure: false,
+    contracts: [
+      { ...c, functionName: "isVaultCreator", args: [account] },
+      { ...c, functionName: "superAdmin" },
+    ],
+  });
+  return creator || superAdmin.toLowerCase() === account.toLowerCase();
+}
+
+/** Whether the factory has a price for each token (createVault needs one for every non-USDG asset). */
+export async function hasPrices(client: PublicClient, tokens: readonly Address[], factory: Address = MAINNET.factory) {
+  if (tokens.length === 0) return [];
+  return client.multicall({
+    allowFailure: false,
+    contracts: tokens.map((t) => ({ address: factory, abi: ZenoIndexVaultAbi, functionName: "hasPrice", args: [t] }) as const),
+  });
+}

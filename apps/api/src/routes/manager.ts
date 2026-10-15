@@ -7,10 +7,17 @@ import {
   buildProposeReactivate,
   buildProposeWriteOff,
   buildClaimManagerFees,
+  buildCreateVault,
+  canCreateVault,
   buildSetPaused,
   buildSetTargetAllocations,
   buildSwapUsdcToAsset,
   GENESIS_SEED_USDC,
+  hasPrices,
+  MAX_DEPOSIT_FEE_BPS,
+  MAX_REDEEM_FEE_BPS,
+  MIN_REDEEM_FEE_BPS,
+  SHARE_DECIMALS,
   getFeeEscrow,
   getManagerClaimable,
   getTradingFeeBps,
@@ -28,11 +35,27 @@ import type { Hono } from "hono";
 import { formatUnits, parseUnits, zeroAddress, type Address } from "viem";
 import { z } from "zod";
 import { mintOf, snapshot, toDtfRow, type Snapshot, type VaultState } from "../chain";
-import { address, parseBody, requireUser, type AppEnv, type Ctx, type Deps } from "../context";
+import { address, amount6, parseBody, requireUser, type AppEnv, type Ctx, type Deps } from "../context";
 import { ApiError, badRequest, conflict } from "../errors";
 import { draft, insertOperation, swapPath, tradeContext, type Action } from "../operations";
 
 const slotIndex = z.number().int().min(0);
+/** A full target list (not a diff): 1-20 unique assets by token address, bps summing to 10_000. */
+const weightsSchema = z
+  .array(z.object({ assetId: address, weightBps: z.number().int().min(0).max(BPS) }))
+  .min(1)
+  .max(MAX_ASSETS)
+  .refine((w) => w.reduce((sum, x) => sum + x.weightBps, 0) === BPS, `must sum to ${BPS} bps`)
+  .refine((w) => new Set(w.map((x) => x.assetId)).size === w.length, "each asset may appear only once");
+
+/** Token addresses -> the factory's asset ids; each must be registered and active. */
+function assetIdsOf(snap: Snapshot, weights: { assetId: string }[]) {
+  return weights.map(({ assetId }) => {
+    const a = snap.assets.find((x) => x.mint.toLowerCase() === assetId);
+    if (!a?.exists || !a.active) throw badRequest("validation_failed", `weights: ${assetId} isn't an active asset`);
+    return a.assetId;
+  });
+}
 const slippageBps = z.number().int().min(0).max(5000).default(100);
 const usd = (raw: bigint | null) => (raw === null ? null : formatUnits(raw, USDG_DECIMALS));
 
@@ -145,22 +168,8 @@ export function managerRoutes(app: Hono<AppEnv>, { db, client }: Deps) {
   });
 
   prepare("allocations", "manager_allocations", async (c, { snap, vault: v }) => {
-    const { weights } = await parseBody(
-      c,
-      z.object({
-        weights: z
-          .array(z.object({ assetId: address, weightBps: z.number().int().min(0).max(BPS) }))
-          .min(1)
-          .max(MAX_ASSETS)
-          .refine((w) => w.reduce((sum, x) => sum + x.weightBps, 0) === BPS, `must sum to ${BPS} bps`)
-          .refine((w) => new Set(w.map((x) => x.assetId)).size === w.length, "each asset may appear only once"),
-      }),
-    );
-    const ids = weights.map(({ assetId }) => {
-      const a = snap.assets.find((x) => x.mint.toLowerCase() === assetId);
-      if (!a?.exists || !a.active) throw badRequest("validation_failed", `weights: ${assetId} isn't an active asset`);
-      return a.assetId;
-    });
+    const { weights } = await parseBody(c, z.object({ weights: weightsSchema }));
+    const ids = assetIdsOf(snap, weights);
     return { tx: buildSetTargetAllocations(v.address, ids, weights.map((w) => w.weightBps)) };
   });
 
@@ -274,4 +283,85 @@ function rebalanceLeg(view: ManagerView, i: number): { sell: boolean; amountIn: 
       : { sell: false, amountIn: delta < view.freeUsdg ? delta : view.freeUsdg };
   if (leg.amountIn === 0n) throw conflict("nothing_to_rebalance", "There's no free USDG to buy with yet.");
   return leg;
+}
+
+/**
+ * Creating a basket: open to the protocol super-admin and wallets it allowlisted as vault creators (factory
+ * setVaultCreator). The creator's wallet becomes the basket's manager.
+ */
+export function createRoutes(app: Hono<AppEnv>, { db, client, logos }: Deps) {
+  app.get("/manager/create", async (c) => {
+    const user = requireUser(c);
+    const project = c.get("project");
+    const snap = await snapshot(client, project.factory);
+    const active = snap.assets.filter((a) => a.exists && a.active);
+    const [canCreate, priced, logoOf] = await Promise.all([
+      canCreateVault(client, user.wallet_address as Address, project.factory),
+      hasPrices(client, active.map((a) => a.mint), project.factory),
+      logos?.(project.chainId) ?? new Map<string, string>(),
+    ]);
+    const usdg = snap.protocol.usdg.toLowerCase();
+    return c.json({
+      canCreate,
+      assets: active.map((a, i) => ({
+        id: a.mint.toLowerCase(),
+        symbol: a.symbol ?? "?",
+        name: a.name ?? a.mint,
+        logoUrl: logoOf.get(a.mint.toLowerCase()) ?? null,
+        // createVault needs a price for every asset but USDG.
+        selectable: a.mint.toLowerCase() === usdg || priced[i]!,
+      })),
+      limits: { maxAssets: MAX_ASSETS, maxEntryFeeBps: MAX_DEPOSIT_FEE_BPS, minExitFeeBps: MIN_REDEEM_FEE_BPS, maxExitFeeBps: MAX_REDEEM_FEE_BPS },
+    });
+  });
+
+  app.post("/manager/create/prepare", async (c) => {
+    const user = requireUser(c);
+    const project = c.get("project");
+    const body = await parseBody(
+      c,
+      z
+        .object({
+          name: z.string().trim().min(1).max(64),
+          symbol: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{2,11}$/, "use 2-11 letters or numbers"),
+          weights: weightsSchema,
+          entryFeeBps: z.number().int().min(0).max(MAX_DEPOSIT_FEE_BPS),
+          exitFeeBps: z.number().int().min(MIN_REDEEM_FEE_BPS).max(MAX_REDEEM_FEE_BPS),
+          // Fixed funds cap their total shares; dynamic ones don't.
+          fundType: z.enum(["dynamic", "fixed"]).default("dynamic"),
+          maxShares: amount6.optional(),
+          feeRecipient: address.refine((a) => a !== zeroAddress, "must not be the zero address").optional(),
+        })
+        .refine((b) => b.fundType === "dynamic" || (b.maxShares !== undefined && parseUnits(b.maxShares, SHARE_DECIMALS) > 0n), {
+          message: "a fixed basket needs maxShares above 0",
+          path: ["maxShares"],
+        }),
+    );
+    const snap = await snapshot(client, project.factory);
+    if (snap.protocol.isEmergency) throw conflict("not_active", "The protocol is in emergency mode.");
+    if (snap.protocol.router === zeroAddress) throw conflict("no_router", "Swaps aren't set up on this deployment yet.");
+    if (!(await canCreateVault(client, user.wallet_address as Address, project.factory))) {
+      throw new ApiError(403, "not_vault_creator", "This wallet isn't approved to create baskets. Ask the Zeno team to allowlist it.");
+    }
+    const ids = assetIdsOf(snap, body.weights);
+    const usdg = snap.protocol.usdg.toLowerCase();
+    const needPrice = body.weights.map((w) => w.assetId).filter((a) => a !== usdg) as Address[];
+    const priced = await hasPrices(client, needPrice, project.factory);
+    const unpriced = needPrice.filter((_, i) => !priced[i]);
+    if (unpriced.length) throw badRequest("no_price", `weights: no price yet for ${unpriced.join(", ")}`);
+
+    const tx = buildCreateVault(project.factory, {
+      name: body.name,
+      symbol: body.symbol,
+      assetIds: ids,
+      allocationBps: body.weights.map((w) => w.weightBps),
+      depositFeeBps: body.entryFeeBps,
+      redeemFeeBps: body.exitFeeBps,
+      fundType: body.fundType === "fixed" ? 0 : 1,
+      maxShares: body.fundType === "fixed" ? parseUnits(body.maxShares!, SHARE_DECIMALS) : 0n,
+      feeRecipient: (body.feeRecipient ?? zeroAddress) as Address,
+    });
+    const op = await insertOperation(db, project, user, { address: project.factory }, "manager_create", tx, {});
+    return c.json(draft(op, tx, project.chainId));
+  });
 }

@@ -6,7 +6,7 @@ import { openapi, swaggerHtml } from "./openapi";
 import { authRoutes } from "./routes/auth";
 import { dtfRoutes } from "./routes/dtfs";
 import { diditWebhook, kycRoutes } from "./routes/kyc";
-import { managerRoutes } from "./routes/manager";
+import { createRoutes, managerRoutes } from "./routes/manager";
 import { portfolioRoutes } from "./routes/portfolio";
 import { tradeRoutes } from "./routes/trade";
 import { resolveApiKey } from "./tenancy";
@@ -66,6 +66,7 @@ export function createApp(deps: Deps) {
   portfolioRoutes(v1, deps);
   kycRoutes(v1, deps);
   managerRoutes(v1, deps);
+  createRoutes(v1, deps);
 
   app.route("/api/v1", v1);
   return app;

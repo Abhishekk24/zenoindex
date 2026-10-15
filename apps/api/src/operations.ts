@@ -21,7 +21,8 @@ export type Action =
   | "manager_pause"
   | "manager_write_off"
   | "manager_reactivate"
-  | "manager_fee_claim";
+  | "manager_fee_claim"
+  | "manager_create";
 export type OperationRow = {
   id: string;
   user_id: string;

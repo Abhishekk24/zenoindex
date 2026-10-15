@@ -162,7 +162,7 @@ export const openapi = {
           action: str(undefined, {
             enum: [
               "buy", "redeem_request", "redeem_swap", "redeem_claim", "redeem_claim_in_kind",
-              "manager_genesis", "manager_deploy", "manager_rebalance", "manager_allocations", "manager_pause", "manager_write_off", "manager_reactivate", "manager_fee_claim",
+              "manager_genesis", "manager_deploy", "manager_rebalance", "manager_allocations", "manager_pause", "manager_write_off", "manager_reactivate", "manager_fee_claim", "manager_create",
             ],
           }),
           status: str(undefined, { enum: ["draft_prepared", "submitted", "confirmed", "failed"] }),
@@ -461,6 +461,64 @@ export const openapi = {
       ["assetId"],
       { assetId: { ...ref("Address"), description: "Asset token" } },
     ),
+    "/api/v1/manager/create": {
+      get: {
+        tags: ["Manager"],
+        summary: "Can this wallet create baskets, and with which assets",
+        description:
+          "Creating needs the protocol super-admin or a wallet it allowlisted as a vault creator (`canCreate`). `assets` are the registered, active assets; `selectable` is false for one without a price yet (createVault needs one for every asset but USDG).",
+        security: KEY_AND_SESSION,
+        responses: {
+          200: ok(
+            s("object", {
+              properties: {
+                canCreate: s("boolean"),
+                assets: s("array", {
+                  items: s("object", {
+                    properties: {
+                      id: { ...ref("Address"), description: "Asset token; use as `weights[].assetId`" },
+                      symbol: str(),
+                      name: str(),
+                      logoUrl: str(undefined, { nullable: true }),
+                      selectable: s("boolean"),
+                    },
+                  }),
+                }),
+                limits: s("object", {
+                  properties: { maxAssets: s("integer"), maxEntryFeeBps: s("integer"), minExitFeeBps: s("integer"), maxExitFeeBps: s("integer") },
+                }),
+              },
+            }),
+          ),
+          ...errors(401),
+        },
+      },
+    },
+    "/api/v1/manager/create/prepare": {
+      post: {
+        tags: ["Manager"],
+        summary: "Create a basket (`createVault`)",
+        description:
+          "The signing wallet becomes the basket's manager. 403 `not_vault_creator` unless allowlisted; 400 for an inactive or unpriced asset; 409 in an emergency or without a swap router. The new basket then needs genesis (1 USDG seed) before anyone can buy.",
+        security: KEY_AND_SESSION,
+        requestBody: body(
+          s("object", {
+            required: ["name", "symbol", "weights", "entryFeeBps", "exitFeeBps"],
+            properties: {
+              name: str(undefined, { examples: ["Tech Leaders"] }),
+              symbol: str("2-11 letters or digits", { examples: ["TECH"] }),
+              weights: s("array", { items: s("object", { required: ["assetId", "weightBps"], properties: { assetId: ref("Address"), weightBps: s("integer") } }) }),
+              entryFeeBps: s("integer", { maximum: 600 }),
+              exitFeeBps: s("integer", { minimum: 50, maximum: 1000 }),
+              fundType: str("`fixed` caps total shares at `maxShares`", { enum: ["dynamic", "fixed"], default: "dynamic" }),
+              maxShares: str("Share cap, required for fixed"),
+              feeRecipient: ref("Address"),
+            },
+          }),
+        ),
+        responses: { 200: ok(ref("TxDraft")), ...errors(400, 401, 403, 409) },
+      },
+    },
     "/api/v1/manager/fees": {
       get: {
         tags: ["Manager"],

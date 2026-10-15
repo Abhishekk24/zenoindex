@@ -19,6 +19,10 @@ export const BASELINE_PRICE_DECIMALS = 9;
 /** executeRebalance is a no-op for a slot within this many bps of its target. */
 export const REBALANCE_DRIFT_BPS = 50;
 export const MAX_ASSETS = 20;
+/** createVault fee bounds (Vault.init): entry ≤ 6%, exit 0.5%–10%. */
+export const MAX_DEPOSIT_FEE_BPS = 600;
+export const MIN_REDEEM_FEE_BPS = 50;
+export const MAX_REDEEM_FEE_BPS = 1000;
 
 export const robinhood = defineChain({
   id: 4663,
