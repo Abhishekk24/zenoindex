@@ -6,14 +6,19 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AssetMap, isComingSoon, symbolOf } from '../../lib/basket';
-import { formatBps, formatDecimal, shortAddress } from '../../lib/format';
+import { formatDecimal, formatSignedBps, shortAddress } from '../../lib/format';
 import type { Dtf } from '../../lib/types';
 import { colors, fonts, radius } from '../../theme/tokens';
+import { Sparkline } from '../charts/Sparkline';
 import { Stripes, TokenLogo } from '../ui';
 import { BasketStat } from './BasketStat';
 
 /** How many constituent avatars to show before collapsing into "+n". */
 const MAX_AVATARS = 5;
+
+/** Up green, down red, flat or unknown neutral. */
+const trendColor = (bps: number | null) =>
+  bps === null || bps === 0 ? colors.text : bps > 0 ? colors.green : colors.red;
 
 export function BasketCard({
   dtf,
@@ -39,6 +44,8 @@ export function BasketCard({
         ]
       : tickers;
   const comingSoon = isComingSoon(dtf);
+  const month = dtf.stats?.change30dBps ?? null;
+  const day = dtf.stats?.change24hBps ?? null;
 
   return (
     <View>
@@ -59,6 +66,23 @@ export function BasketCard({
           <Text style={styles.meta} numberOfLines={1}>
             {dtf.symbol} · {shortAddress(dtf.manager)}
           </Text>
+
+          {/* The figure people compare baskets by: how the share price did lately. */}
+          <View style={styles.performance}>
+            <View>
+              <Text style={[styles.returnValue, { color: trendColor(month) }]}>
+                {month === null ? '—' : formatSignedBps(month)}
+              </Text>
+              <View style={styles.returnLabelRow}>
+                <Text style={styles.returnLabel}>Past 30 days</Text>
+                {dtf.stats?.demo ? <Text style={styles.demo}>Demo</Text> : null}
+              </View>
+            </View>
+            <Sparkline
+              values={dtf.stats?.sparkline ?? []}
+              style={styles.spark}
+            />
+          </View>
 
           <View style={styles.constituents}>
             <View style={styles.avatars}>
@@ -107,8 +131,9 @@ export function BasketCard({
             />
             <BasketStat label="AUM" value={formatDecimal(dtf.aum, 0)} />
             <BasketStat
-              label="Mgmt fee"
-              value={formatBps(dtf.fees.managementBps)}
+              label="Today"
+              value={day === null ? '—' : formatSignedBps(day)}
+              color={day === null ? undefined : trendColor(day)}
             />
           </View>
         </View>
@@ -186,5 +211,35 @@ const styles = StyleSheet.create({
   soon: { borderColor: colors.lineStrong },
   statusText: { fontFamily: fonts.regular, fontSize: 13 },
   rule: { height: 1, backgroundColor: colors.line, marginVertical: 18 },
+  performance: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 16,
+    marginTop: 18,
+  },
+  returnValue: {
+    fontFamily: fonts.medium,
+    fontSize: 30,
+    lineHeight: 34,
+    letterSpacing: -0.5,
+  },
+  returnLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 2,
+  },
+  returnLabel: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted },
+  demo: {
+    fontFamily: fonts.medium,
+    fontSize: 11,
+    color: colors.gold,
+    borderWidth: 1,
+    borderColor: colors.goldStrong,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+  },
+  spark: { flex: 1 },
   stats: { flexDirection: 'row', paddingHorizontal: 6 },
 });

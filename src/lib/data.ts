@@ -258,6 +258,24 @@ const dtfs: MockDtf[] = [
 
 const NOW = '2026-10-15T09:00:00Z';
 
+/** List-card stats: a seeded 30-day walk ending at the basket's share price. */
+function mockStats(d: MockDtf) {
+  let seed = [...d.id].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
+  const rand = () => (seed = (seed * 1103515245 + 12345) >>> 0) / 2 ** 32;
+  const end = Number(d.sharePrice) || 1;
+  const drift = (rand() - 0.4) * 0.006;
+  const prices = [end];
+  for (let i = 1; i < 30; i++)
+    prices.unshift(prices[0]! / (1 + drift + (rand() - 0.5) * 0.03));
+  const bps = (from: number) => Math.round(((end - from) / from) * 10_000);
+  return {
+    demo: true,
+    change24hBps: bps(prices[28]!),
+    change30dBps: bps(prices[0]!),
+    sparkline: prices.map(p => p.toFixed(6)),
+  };
+}
+
 function dtfJson(d: MockDtf) {
   return {
     id: d.id,
@@ -282,6 +300,7 @@ function dtfJson(d: MockDtf) {
     lifecycle: d.lifecycle,
     totalSupplyRaw: d.totalSupplyRaw,
     ...(d.minInvestmentRaw ? { minInvestmentRaw: d.minInvestmentRaw } : {}),
+    stats: mockStats(d),
   };
 }
 

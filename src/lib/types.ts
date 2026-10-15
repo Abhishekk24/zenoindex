@@ -30,7 +30,20 @@ export type StrategyType =
 
 export type DtfStatus = 'coming_soon' | 'active';
 
+/** List-card performance (GET /dtfs, /manager/dtfs). */
+export type DtfStats = {
+  /** Demo history (no week of real data yet); label it. */
+  demo: boolean;
+  /** Share-price change, bps; null without enough history. */
+  change24hBps: number | null;
+  change30dBps: number | null;
+  /** Up to 30 share prices, oldest first. */
+  sparkline: number[];
+};
+
 export type Dtf = {
+  /** Present in list responses. */
+  stats?: DtfStats;
   id: string;
   chainId: number;
   name: string;

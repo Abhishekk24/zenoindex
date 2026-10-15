@@ -9,6 +9,7 @@ import type {
   Availability,
   CorporateAction,
   Dtf,
+  DtfStats,
   DtfDetail,
   DtfHolding,
   DtfTransaction,
@@ -102,12 +103,26 @@ export function listAssetsOf(body: unknown): Asset[] {
   return items(body, toAsset);
 }
 
+function toStats(raw: unknown): DtfStats | undefined {
+  const r = obj(raw);
+  if (!r) return undefined;
+  return {
+    demo: r['demo'] === true,
+    change24hBps: num(r['change24hBps']) ?? null,
+    change30dBps: num(r['change30dBps']) ?? null,
+    sparkline: arr(r['sparkline'])
+      .map(v => Number(v))
+      .filter(Number.isFinite),
+  };
+}
+
 export function toDtf(raw: Row): Dtf {
   const fees = obj(raw['fees']) ?? {};
   const baseDecimals = num(raw['baseAssetDecimals']) ?? 18;
   const minInvestmentRaw = str(raw['minInvestmentRaw']);
   const lifecycle = str(raw['lifecycle']);
   return {
+    stats: toStats(raw['stats']),
     id: String(raw['id'] ?? raw['contractAddress'] ?? ''),
     chainId: num(raw['chainId']) ?? 0,
     name: String(raw['name'] ?? ''),

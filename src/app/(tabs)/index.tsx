@@ -32,13 +32,13 @@ import { colors, fonts, space } from '../../theme/tokens';
 
 type Access = 'all' | 'open' | 'permissioned';
 type Panel = 'strategy' | 'manager' | null;
-type Sort = 'listed' | 'aum' | 'nav' | 'fee' | 'name';
+type Sort = 'listed' | 'return30d' | 'aum' | 'nav' | 'name';
 
 const SORTS: { value: Sort; label: string }[] = [
   { value: 'listed', label: 'Listed' },
+  { value: 'return30d', label: 'Best 30 days' },
   { value: 'aum', label: 'Largest AUM' },
   { value: 'nav', label: 'NAV / share' },
-  { value: 'fee', label: 'Lowest fee' },
   { value: 'name', label: 'Name' },
 ];
 
@@ -51,8 +51,12 @@ function sortBaskets(dtfs: Dtf[], sort: Sort): Dtf[] {
         return compare(b.aum, a.aum);
       case 'nav':
         return compare(b.sharePrice, a.sharePrice);
-      case 'fee':
-        return a.fees.managementBps - b.fees.managementBps;
+      case 'return30d':
+        // Baskets without enough history sort last.
+        return (
+          (b.stats?.change30dBps ?? -Infinity) -
+          (a.stats?.change30dBps ?? -Infinity)
+        );
       default:
         return a.name.localeCompare(b.name);
     }

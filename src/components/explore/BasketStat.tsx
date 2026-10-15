@@ -4,11 +4,20 @@ import { StyleSheet, Text, View } from 'react-native';
 import { colors, fonts } from '../../theme/tokens';
 
 /** One figure in a basket card's stats row: "NAV / SHARE  1.0000". */
-export function BasketStat({ label, value }: { label: string; value: string }) {
+export function BasketStat({
+  label,
+  value,
+  color,
+}: {
+  label: string;
+  value: string;
+  /** e.g. green / red for a change. */
+  color?: string;
+}) {
   return (
     <View style={styles.stat}>
       <Text style={styles.label}>{label.toUpperCase()}</Text>
-      <Text style={styles.value} numberOfLines={1}>
+      <Text style={[styles.value, color ? { color } : null]} numberOfLines={1}>
         {value}
       </Text>
     </View>
