@@ -1,5 +1,7 @@
+import { usePrivy, type PrivyUser } from '@privy-io/expo';
 import { useAppKit } from '@reown/appkit-react-native';
-import React from 'react';
+import * as Clipboard from 'expo-clipboard';
+import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { robinhood } from '../../config/chains';
@@ -16,8 +18,9 @@ import { formatRaw, shortAddress } from '../../lib/format';
 import type { User } from '../../lib/types';
 import { primaryWallet } from '../../lib/user';
 import { useWallet } from '../../lib/wallet';
-import { colors, space, type } from '../../theme/tokens';
-import { Badge, Body, Button, Card, Divider, LinkText, Row } from '../ui';
+import { colors, fonts, space, type } from '../../theme/tokens';
+import { Badge, Body, Button, Card, LinkText, Row } from '../ui';
+import { DepositSheet } from './DepositSheet';
 
 /**
  * The signed-in wallet's stablecoin (what baskets are bought with) and gas
@@ -46,42 +49,84 @@ async function loadBalances(wallet: string) {
   };
 }
 
+/** "Email wallet · you@mail.com" / "Google wallet · …" for Privy sign-ins. */
+function signInLabel(user: PrivyUser | null): string | null {
+  for (const a of user?.linked_accounts ?? []) {
+    if (a.type === 'email') return `Email wallet · ${a.address}`;
+    if (a.type === 'google_oauth') return `Google wallet · ${a.email}`;
+  }
+  return null;
+}
+
 /**
  * Profile → Wallets. The account IS one wallet: the Privy embedded wallet for
- * email / Google, or the external wallet you signed in with (SIWE). To use
- * another one, sign out and sign in with it.
+ * email / Google, or the external wallet you signed in with. Its full address
+ * is shown to copy, and Deposit shows it as a QR code to fund the wallet (an
+ * email / Google wallet has no other way in). To use another wallet, sign out
+ * and sign in with it.
  */
 export function WalletsTab({ user }: { user: User }) {
   const { address, isExternal } = useWallet();
   const { open } = useAppKit();
+  const { user: privyUser } = usePrivy();
   const signedIn = primaryWallet(user);
   const { data: balances } = useLoad(
     async () => (signedIn ? loadBalances(signedIn) : null),
     `balances#${signedIn ?? 'none'}`,
   );
+  const [copied, setCopied] = useState(false);
+  const [depositing, setDepositing] = useState(false);
   const mismatch =
     address !== undefined &&
     !user.wallets.some(w => w.address.toLowerCase() === address.toLowerCase());
+  const kind = isExternal ? 'External wallet' : signInLabel(privyUser);
+
+  const copy = async () => {
+    if (!signedIn) return;
+    await Clipboard.setStringAsync(signedIn);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
     <Card title="Your wallet" banded>
       <Body muted>
         This wallet holds your basket shares and signs your transactions.
       </Body>
-      {user.wallets.map((wallet, i) => (
-        <View key={wallet.address} style={styles.item}>
-          {i > 0 && <Divider />}
+      {signedIn ? (
+        <View style={styles.item}>
           <View style={styles.line}>
-            <LinkText
-              mono
-              label={shortAddress(wallet.address)}
-              url={explorerAddressUrl(robinhood.id, wallet.address)}
-            />
-            {wallet.primary ? <Badge label="Signed in" tone="gold" /> : null}
+            <Text style={styles.muted} numberOfLines={1}>
+              {kind ?? 'Wallet'}
+            </Text>
+            <Badge label={robinhood.name} tone="gold" />
           </View>
-          <Text style={styles.muted}>{robinhood.name}</Text>
+          <Text style={styles.address} selectable>
+            {signedIn}
+          </Text>
+          <View style={styles.actions}>
+            <View style={styles.action}>
+              <Button
+                label={copied ? 'Copied' : 'Copy address'}
+                variant="outline"
+                onPress={copy}
+              />
+            </View>
+            <View style={styles.action}>
+              <Button label="Deposit" onPress={() => setDepositing(true)} />
+            </View>
+          </View>
+          <LinkText
+            label="View on explorer"
+            url={explorerAddressUrl(robinhood.id, signedIn)}
+          />
+          <DepositSheet
+            address={signedIn}
+            visible={depositing}
+            onClose={() => setDepositing(false)}
+          />
         </View>
-      ))}
+      ) : null}
       {balances ? (
         <View style={styles.item}>
           {balances.base ? (
@@ -106,7 +151,7 @@ export function WalletsTab({ user }: { user: User }) {
       {isExternal ? (
         <Button
           label={address ? 'Manage connected wallet' : 'Connect wallet'}
-          variant="outline"
+          variant="ghost"
           onPress={() => open()}
         />
       ) : null}
@@ -115,12 +160,20 @@ export function WalletsTab({ user }: { user: User }) {
 }
 
 const styles = StyleSheet.create({
-  item: { gap: space.xs },
+  item: { gap: space.sm },
   line: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     gap: space.md,
   },
-  muted: { ...type.small, color: colors.muted },
+  muted: { ...type.small, color: colors.muted, flexShrink: 1 },
+  address: {
+    fontFamily: fonts.mono,
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.text,
+  },
+  actions: { flexDirection: 'row', gap: space.sm },
+  action: { flex: 1 },
 });
