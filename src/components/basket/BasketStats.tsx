@@ -7,7 +7,7 @@ import {
   formatSignedBps,
 } from '../../lib/format';
 import type { DtfDetail } from '../../lib/types';
-import { Card, Stat, StatGrid } from '../ui';
+import { Badge, Card, Stat, StatGrid } from '../ui';
 
 function tone(bps?: number): 'up' | 'down' | undefined {
   if (bps === undefined || bps === 0) return undefined;
@@ -25,7 +25,12 @@ export function BasketStats({
   const inception = dtf.performanceDeltas.find(d => d.window === 'inception');
   const latest = dtf.performanceDeltas.find(d => d.window === 'latest');
   return (
-    <Card>
+    <Card
+      action={
+        // The day / since-inception changes come from the demo NAV history.
+        dtf.demoStats ? <Badge label="Demo data" tone="gold" /> : undefined
+      }
+    >
       <StatGrid>
         <Stat
           label="NAV / share"

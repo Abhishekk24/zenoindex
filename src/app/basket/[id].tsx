@@ -12,6 +12,7 @@ import { AllocationBar } from '../../components/charts/AllocationBar';
 import { NavChart } from '../../components/charts/NavChart';
 import { TradePanel } from '../../components/TradePanel';
 import {
+  Badge,
   Card,
   Empty,
   LinkText,
@@ -90,7 +91,12 @@ export default function BasketDetailScreen() {
         <BasketPosition dtf={dtf} wallet={wallet} version={version} />
       ) : null}
 
-      <Card title="NAV performance">
+      <Card
+        title="NAV performance"
+        action={
+          dtf.demoStats ? <Badge label="Demo data" tone="gold" /> : undefined
+        }
+      >
         {dtf.readModels.performance === 'unavailable' ? (
           <Empty
             title="Pricing is still indexing"

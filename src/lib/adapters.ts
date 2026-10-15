@@ -244,6 +244,7 @@ export function toDtfDetail(raw: unknown): DtfDetail {
     performanceDeltas: readItems(rm['performanceDeltas'], toDelta),
     recentTransactions: readItems(rm['recentTransactions'], toTransaction),
     corporateActions: readItems(rm['corporateActions'], toCorporateAction),
+    demoStats: obj(rm['performance'])?.['demo'] === true,
     readModels: {
       holdings: availability(rm['holdings']),
       performance: availability(rm['performance']),

@@ -122,6 +122,8 @@ export type DtfDetail = Dtf & {
   performanceDeltas: PerformanceDelta[];
   recentTransactions: DtfTransaction[];
   corporateActions: CorporateAction[];
+  /** The NAV history and price changes are demo data (no real history yet); label them. */
+  demoStats: boolean;
   readModels: {
     holdings: Availability;
     performance: Availability;
