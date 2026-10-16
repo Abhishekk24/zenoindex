@@ -217,7 +217,9 @@ export type LinkedWallet = {
 /** Matches the web app's `publicUser` shape. */
 export type User = {
   id: string;
+  /** '' when none. From the sign-in method (verified) or typed in Profile. */
   email: string;
+  emailVerified: boolean;
   displayName: string | null;
   firstName: string | null;
   lastName: string | null;

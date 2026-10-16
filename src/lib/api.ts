@@ -92,6 +92,14 @@ export async function completeProfile(
   return toUser(body.user);
 }
 
+/** POST /api/v1/auth/email — wallet sign-ins add an email for notifications (409 when the sign-in method set it). */
+export async function setEmail(email: string): Promise<User> {
+  const body = await api.post<{ user?: unknown }>('/auth/email', { email });
+  if (!body.user)
+    throw new ApiError(500, 'bad_response', 'Could not save email.', true);
+  return toUser(body.user);
+}
+
 /** POST /api/v1/auth/logout — clears the session server- and client-side. */
 export async function signOut(): Promise<void> {
   try {

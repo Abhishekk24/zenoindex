@@ -37,6 +37,7 @@ let signedIn = true;
 const user = {
   id: 'user-mock-1',
   email: 'ans.rajan.mishra@gmail.com',
+  emailVerified: true,
   displayName: 'Anish Mishra',
   firstName: 'Anish',
   lastName: 'Mishra',

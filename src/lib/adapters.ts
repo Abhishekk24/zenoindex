@@ -55,6 +55,7 @@ export function toUser(raw: unknown): User {
   return {
     id: String(r['id'] ?? ''),
     email: String(r['email'] ?? ''),
+    emailVerified: Boolean(r['emailVerified']),
     displayName: str(r['displayName']) ?? null,
     firstName: str(r['firstName']) ?? null,
     lastName: str(r['lastName']) ?? null,
