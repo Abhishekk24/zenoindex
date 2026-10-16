@@ -57,29 +57,26 @@ export async function snapshotNav(db: Db, client: PublicClient) {
 }
 
 /**
- * USDG per whole token for every active asset, from the factory's price table (valueUsdc of one token), with when it
- * was last set. USDG itself is 1. null price: not set yet. Stale prices are still reported (the app shows the age).
+ * USDG per whole token for every active asset, from the factory's price table, with when it was last set. USDG itself is 1. null price: not set yet. Stale prices are still reported (the app shows the age).
  */
 export async function assetPrices(client: PublicClient, snap: Snapshot) {
   const usdg = snap.protocol.usdg.toLowerCase();
   const assets = snap.assets.filter((a) => a.exists && a.active);
   const factory = snap.protocol.factory;
   const priced = assets.filter((a) => a.mint.toLowerCase() !== usdg);
-  const [values, updated] = await Promise.all([
-    client.multicall({
-      contracts: priced.map((a) => ({ address: factory, abi: ZenoIndexVaultAbi, functionName: "valueUsdc", args: [a.mint, 10n ** BigInt(a.decimals ?? 18)] }) as const),
-    }),
-    client.multicall({
-      contracts: priced.map((a) => ({ address: factory, abi: ZenoIndexVaultAbi, functionName: "priceUpdatedAt", args: [a.mint] }) as const),
-    }),
-  ]);
+  // The raw table, not valueUsdc: that quote reverts (StalePrice) once a price is older than maxPriceAge.
+  const read = (functionName: "priceNum" | "priceDen" | "priceUpdatedAt") =>
+    client.multicall({ contracts: priced.map((a) => ({ address: factory, abi: ZenoIndexVaultAbi, functionName, args: [a.mint] }) as const) });
+  const [nums, dens, updated] = await Promise.all([read("priceNum"), read("priceDen"), read("priceUpdatedAt")]);
+  const ok = (r: { status: string; result?: bigint } | undefined) => (r?.status === "success" ? r.result! : 0n);
   const byMint = new Map(
     priced.map((a, i) => {
-      const v = values[i]!;
-      const at = updated[i]!;
-      const price = v.status === "success" && v.result > 0n ? formatUnits(v.result, PRICE_DECIMALS) : null;
-      const updatedAt = at.status === "success" && at.result > 0n ? new Date(Number(at.result) * 1000).toISOString() : null;
-      return [a.mint.toLowerCase(), { priceUsdg: price, priceUpdatedAt: updatedAt }];
+      const num = ok(nums[i]);
+      const den = ok(dens[i]);
+      const at = ok(updated[i]);
+      // value(amount) = amount * num / den in USDG raw; one whole token = 10^decimals.
+      const price = den > 0n ? formatUnits((10n ** BigInt(a.decimals ?? 18) * num) / den, PRICE_DECIMALS) : null;
+      return [a.mint.toLowerCase(), { priceUsdg: price, priceUpdatedAt: at > 0n ? new Date(Number(at) * 1000).toISOString() : null }];
     }),
   );
   return assets.map((a) => {
