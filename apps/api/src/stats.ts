@@ -1,7 +1,7 @@
 // Basket stats for GET /dtfs/:id: NAV history (daily snapshots), share-price changes, and recent on-chain activity.
-import { MAINNET, VaultAbi } from "@zenoindex/sdk";
+import { MAINNET, VaultAbi, ZenoIndexVaultAbi } from "@zenoindex/sdk";
 import { formatUnits, parseEventLogs, parseUnits, type Address, type PublicClient } from "viem";
-import { snapshot, toDtfRow } from "./chain";
+import { snapshot, toDtfRow, type Snapshot } from "./chain";
 import type { Db } from "./db";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -18,14 +18,15 @@ export type NavPoint = {
 };
 
 /**
- * One row per vault with a valuation (a vault with a stale price has none), at most one per ~day: a restart or
- * deploy within 20h of the last snapshot adds nothing.
+ * One row per vault with a valuation (a vault with a stale price has none) and one per priced asset, at most one per
+ * ~day: a restart or deploy within 20h of the last snapshot adds nothing.
  */
 export async function snapshotNav(db: Db, client: PublicClient) {
   const { rows: projects } = await db.query<{ id: string; chain_id: number; factory_address: string }>(
     "select id, chain_id, factory_address from projects",
   );
   let saved = 0;
+  let assets = 0;
   for (const p of projects) {
     const snap = await snapshot(client, p.factory_address as Address);
     for (const v of snap.vaults) {
@@ -40,15 +41,77 @@ export async function snapshotNav(db: Db, client: PublicClient) {
       );
       saved += rows.length;
     }
+    for (const a of await assetPrices(client, snap)) {
+      if (a.priceUsdg === null) continue;
+      const { rows } = await db.query(
+        `insert into asset_price_snapshots (project_id, asset_address, price)
+         select $1, $2, $3
+         where not exists (select 1 from asset_price_snapshots where project_id = $1 and asset_address = $2 and observed_at > now() - interval '20 hours')
+         returning 1`,
+        [p.id, a.mint, a.priceUsdg],
+      );
+      assets += rows.length;
+    }
   }
-  return saved;
+  return { baskets: saved, assets };
+}
+
+/**
+ * USDG per whole token for every active asset, from the factory's price table (valueUsdc of one token), with when it
+ * was last set. USDG itself is 1. null price: not set yet. Stale prices are still reported (the app shows the age).
+ */
+export async function assetPrices(client: PublicClient, snap: Snapshot) {
+  const usdg = snap.protocol.usdg.toLowerCase();
+  const assets = snap.assets.filter((a) => a.exists && a.active);
+  const factory = snap.protocol.factory;
+  const priced = assets.filter((a) => a.mint.toLowerCase() !== usdg);
+  const [values, updated] = await Promise.all([
+    client.multicall({
+      contracts: priced.map((a) => ({ address: factory, abi: ZenoIndexVaultAbi, functionName: "valueUsdc", args: [a.mint, 10n ** BigInt(a.decimals ?? 18)] }) as const),
+    }),
+    client.multicall({
+      contracts: priced.map((a) => ({ address: factory, abi: ZenoIndexVaultAbi, functionName: "priceUpdatedAt", args: [a.mint] }) as const),
+    }),
+  ]);
+  const byMint = new Map(
+    priced.map((a, i) => {
+      const v = values[i]!;
+      const at = updated[i]!;
+      const price = v.status === "success" && v.result > 0n ? formatUnits(v.result, PRICE_DECIMALS) : null;
+      const updatedAt = at.status === "success" && at.result > 0n ? new Date(Number(at.result) * 1000).toISOString() : null;
+      return [a.mint.toLowerCase(), { priceUsdg: price, priceUpdatedAt: updatedAt }];
+    }),
+  );
+  return assets.map((a) => {
+    const mint = a.mint.toLowerCase();
+    return mint === usdg ? { mint, priceUsdg: "1", priceUpdatedAt: null } : { mint, ...byMint.get(mint)! };
+  });
+}
+
+/** An asset's 24h / 30d price change for GET /assets: real daily snapshots, or (demo stats on, under a week) demo ones. */
+export async function assetStats(db: Db, projectId: string, mint: string, priceUsdg: string | null, demoStats: boolean) {
+  if (priceUsdg === null) return null;
+  const { rows } = await db.query<{ observed_at: Date; price: string }>(
+    "select observed_at, price from asset_price_snapshots where project_id = $1 and asset_address = $2 order by observed_at",
+    [projectId, mint],
+  );
+  const real: NavPoint[] = rows.map((r) => ({
+    observedAt: new Date(r.observed_at).toISOString(),
+    sharePrice: r.price,
+    navValue: "0",
+    totalSupplyRaw: "0",
+    valuationStatus: "accepted",
+  }));
+  const demo = real.length < MIN_REAL_POINTS && demoStats;
+  const points = demo ? demoHistory(mint, { sharePrice: priceUsdg, nav: "0", totalSupplyRaw: "0" }) : real;
+  return listStats({ points, demo });
 }
 
 /** Snapshots every basket now and then every `everyMs` (default 24h). Failures are logged and retried next tick. */
 export function startNavWorker(db: Db, client: PublicClient, everyMs = DAY_MS) {
   const tick = () =>
     snapshotNav(db, client)
-      .then((n) => console.log(`nav worker: saved ${n} snapshot(s)`))
+      .then((n) => console.log(`nav worker: saved ${n.baskets} basket and ${n.assets} asset price snapshot(s)`))
       .catch((e) => console.error(`nav worker: ${e instanceof Error ? e.message : e}`));
   void tick();
   const timer = setInterval(tick, everyMs);

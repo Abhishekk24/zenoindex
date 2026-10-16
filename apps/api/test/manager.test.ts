@@ -349,8 +349,8 @@ describe("basket stats", () => {
   });
 
   it("the worker saves one snapshot per basket per day (restarts add none)", async () => {
-    expect(await snapshotNav(db, fakeClient(rpc))).toBe(1);
-    expect(await snapshotNav(db, fakeClient(rpc))).toBe(0);
+    expect((await snapshotNav(db, fakeClient(rpc))).baskets).toBe(1);
+    expect((await snapshotNav(db, fakeClient(rpc))).baskets).toBe(0);
   });
 
   it("a week of real snapshots replaces the demo", async () => {

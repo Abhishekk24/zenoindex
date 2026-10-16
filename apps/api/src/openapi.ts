@@ -103,6 +103,15 @@ export const openapi = {
         },
       }),
       Chain: s("object", { properties: { chainId: s("integer", { examples: [4663] }), name: str(), network: str(), rpcUrl: str("Public RPC"), explorerUrl: str() } }),
+      ListStats: s("object", {
+        description: "Price change over 24h / 30 days (bps, null without history) and a 30-point sparkline. `demo` while under a week of real daily snapshots.",
+        properties: {
+          demo: s("boolean"),
+          change24hBps: s("integer", { nullable: true }),
+          change30dBps: s("integer", { nullable: true }),
+          sparkline: s("array", { items: str("Price") }),
+        },
+      }),
       Asset: s("object", {
         properties: {
           id: ref("Address"),
@@ -113,20 +122,15 @@ export const openapi = {
           decimals: s("integer"),
           underlyingTransferPolicy: str(undefined, { enum: ["open"] }),
           logoUrl: str("Token logo (Robinhood's asset list); null when it has none, e.g. USDG", { nullable: true }),
+          priceUsdg: str("USDG per whole token from the factory's price table; '1' for USDG; null before a price is set", { nullable: true }),
+          priceUpdatedAt: str("When the price was last set (null for USDG)", { format: "date-time", nullable: true }),
+          stats: { oneOf: [ref("ListStats"), s("null")], description: "24h / 30d price change and sparkline from daily price snapshots; `demo` until a week of them. null for USDG or an unpriced asset." },
         },
       }),
       Dtf: s("object", {
         description: "A basket (vault). `id` is the vault address.",
         properties: {
-          stats: s("object", {
-            description: "List-card stats (in list responses): share-price change over 24h / 30 days (bps, null without history) and a 30-point sparkline. `demo` while the basket has under a week of real daily snapshots.",
-            properties: {
-              demo: s("boolean"),
-              change24hBps: s("integer", { nullable: true }),
-              change30dBps: s("integer", { nullable: true }),
-              sparkline: s("array", { items: str("Share price") }),
-            },
-          }),
+          stats: { ...ref("ListStats"), description: "List-card stats (in list responses)" },
           id: ref("Address"),
           chainId: s("integer"),
           name: str(),

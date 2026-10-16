@@ -3,7 +3,7 @@ import type { Hono } from "hono";
 import { explorerUrl, findVault, holdings, publicRpcUrl, snapshot, toDtfRow } from "../chain";
 import type { AppEnv, Deps } from "../context";
 import { logoOf } from "../logos";
-import { basketSeries, priceDeltas, recentActivity, withStats } from "../stats";
+import { assetPrices, assetStats, basketSeries, priceDeltas, recentActivity, withStats } from "../stats";
 
 const unavailable = { status: "unavailable" as const, items: [] };
 
@@ -21,19 +21,30 @@ export function dtfRoutes(app: Hono<AppEnv>, { db, client, logos, demoStats, log
     const project = c.get("project");
     const [snap, logoMap] = await Promise.all([snapshot(client, project.factory), logos?.(project.chainId) ?? new Map<string, string>()]);
     const usdg = snap.protocol.usdg.toLowerCase();
-    const items = snap.assets.map((a) => ({
-      id: a.mint.toLowerCase(),
-      contractAddress: a.mint.toLowerCase(),
-      chainId: project.chainId,
-      symbol: a.symbol ?? "?",
-      name: a.name ?? a.mint,
-      decimals: a.decimals ?? 18,
-      underlyingTransferPolicy: "open",
-      logoUrl: logoOf(logoMap, a.mint.toLowerCase(), usdg),
-    }));
+    // Price (USDG per token) and its 24h / 30d change, so a manager can compare assets.
+    const prices = new Map((await assetPrices(client, snap)).map((p) => [p.mint, p]));
+    const items = await Promise.all(
+      snap.assets.map(async (a) => {
+        const id = a.mint.toLowerCase();
+        const price = prices.get(id) ?? { priceUsdg: null, priceUpdatedAt: null };
+        return {
+          id,
+          contractAddress: id,
+          chainId: project.chainId,
+          symbol: a.symbol ?? "?",
+          name: a.name ?? a.mint,
+          decimals: a.decimals ?? 18,
+          underlyingTransferPolicy: "open",
+          logoUrl: logoOf(logoMap, id, usdg),
+          priceUsdg: price.priceUsdg,
+          priceUpdatedAt: price.priceUpdatedAt,
+          stats: id === usdg ? null : await assetStats(db, project.id, id, price.priceUsdg, demoStats === true),
+        };
+      }),
+    );
     // Every basket is priced in USDG, so the app needs it even before it's registered as an asset.
     if (!items.some((a) => a.id === usdg)) {
-      items.push({ id: usdg, contractAddress: usdg, chainId: project.chainId, symbol: "USDG", name: "Global Dollar", decimals: USDG_DECIMALS, underlyingTransferPolicy: "open", logoUrl: logoOf(logoMap, usdg, usdg) });
+      items.push({ id: usdg, contractAddress: usdg, chainId: project.chainId, symbol: "USDG", name: "Global Dollar", decimals: USDG_DECIMALS, underlyingTransferPolicy: "open", logoUrl: logoOf(logoMap, usdg, usdg), priceUsdg: "1", priceUpdatedAt: null, stats: null });
     }
     return c.json({ items });
   });
