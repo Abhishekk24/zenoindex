@@ -13,6 +13,9 @@ export type UserRow = {
   last_name: string | null;
   display_name: string | null;
   country: string | null;
+  email: string | null;
+  /** Set when the email came from the sign-in method (Privy verified it); null for one typed in Profile. */
+  email_verified_at: Date | null;
   terms_accepted_at: Date | null;
   privacy_accepted_at: Date | null;
   created_at: Date;
@@ -24,7 +27,8 @@ const iso = (d: Date | string | null) => (d === null ? null : new Date(d).toISOS
 export function publicUser(u: UserRow, chainId: number) {
   return {
     id: u.id,
-    email: null,
+    email: u.email,
+    emailVerified: u.email_verified_at !== null,
     displayName: u.display_name,
     firstName: u.first_name,
     lastName: u.last_name,
@@ -38,12 +42,17 @@ export function publicUser(u: UserRow, chainId: number) {
   };
 }
 
-export async function upsertUserByWallet(db: Db, projectId: string, wallet: string) {
+/** `email` is one the sign-in method verified (Privy): it is stored as verified and replaces a typed-in one. */
+export async function upsertUserByWallet(db: Db, projectId: string, wallet: string, email: string | null = null) {
   const { rows } = await db.query<UserRow>(
-    `insert into users (project_id, wallet_address) values ($1, $2)
-     on conflict (project_id, wallet_address) do update set updated_at = users.updated_at
+    `insert into users (project_id, wallet_address, email, email_verified_at)
+     values ($1, $2, $3, case when $3::text is null then null else now() end)
+     on conflict (project_id, wallet_address) do update set
+       email = coalesce(excluded.email, users.email),
+       email_verified_at = coalesce(excluded.email_verified_at, users.email_verified_at),
+       updated_at = users.updated_at
      returning *`,
-    [projectId, wallet.toLowerCase()],
+    [projectId, wallet.toLowerCase(), email],
   );
   return rows[0]!;
 }

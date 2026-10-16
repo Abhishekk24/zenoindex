@@ -88,7 +88,8 @@ export const openapi = {
       User: s("object", {
         properties: {
           id: str(),
-          email: s("null"),
+          email: str("Verified by the sign-in method (email / Google), or typed in Profile by wallet users", { nullable: true }),
+          emailVerified: s("boolean", { description: "True when the sign-in method verified it; such an email can't be changed with /auth/email" }),
           displayName: str(undefined, { nullable: true }),
           firstName: str(undefined, { nullable: true }),
           lastName: str(undefined, { nullable: true }),
@@ -313,6 +314,16 @@ export const openapi = {
         security: KEY_AND_SESSION,
         requestBody: body(s("object", { required: ["firstName", "lastName", "country"], properties: { firstName: str(), lastName: str(), country: str("2-letter code", { examples: ["IN"] }), displayName: str() } })),
         responses: { 200: ok(userResponse), ...errors(400, 401) },
+      },
+    },
+    "/api/v1/auth/email": {
+      post: {
+        tags: ["Auth"],
+        summary: "Add or change the email (wallet sign-ins)",
+        description: "For notifications. 409 `email_locked` when the email came from the sign-in method (email / Google), which already verified it.",
+        security: KEY_AND_SESSION,
+        requestBody: body(s("object", { required: ["email"], properties: { email: str(undefined, { format: "email" }) } })),
+        responses: { 200: ok(userResponse), ...errors(400, 401, 409) },
       },
     },
     "/api/v1/auth/logout": {

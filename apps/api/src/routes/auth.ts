@@ -88,7 +88,7 @@ export function authRoutes(app: Hono<AppEnv>, { db, client, secureCookies, privy
     if (!found) throw unauthorized("Your sign-in expired. Please sign in again.");
     if (!found.wallet) throw conflict("wallet_not_ready", "Your wallet is still being set up. Please try again in a moment.");
 
-    const user = await upsertUserByWallet(db, project.id, found.wallet);
+    const user = await upsertUserByWallet(db, project.id, found.wallet, found.email);
     const token = await createSession(db, user);
     c.header("Set-Cookie", sessionCookie(token, secureCookies));
     return c.json({ user: publicUser(user, project.chainId), token });
@@ -129,6 +129,18 @@ export function authRoutes(app: Hono<AppEnv>, { db, client, secureCookies, privy
       [user.id, p.firstName, p.lastName, p.country, p.displayName || `${p.firstName} ${p.lastName}`],
     );
     return c.json({ user: publicUser(rows[0]!, c.get("project").chainId) });
+  });
+
+  // Wallet sign-ins have no email; they add one here (for notifications). An email the sign-in method verified stays.
+  app.post("/auth/email", async (c) => {
+    const user = requireUser(c);
+    const { email } = await parseBody(c, z.object({ email: z.email().max(254).transform((s) => s.toLowerCase()) }));
+    const { rows } = await db.query<UserRow>(
+      "update users set email = $2, updated_at = now() where id = $1 and email_verified_at is null returning *",
+      [user.id, email],
+    );
+    if (!rows[0]) throw conflict("email_locked", "Your email comes from the way you signed in and can't be changed here.");
+    return c.json({ user: publicUser(rows[0], c.get("project").chainId) });
   });
 
   app.post("/auth/logout", async (c) => {

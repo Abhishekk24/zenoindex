@@ -5,11 +5,28 @@ import { PrivyClient } from "@privy-io/node";
 import { getAddress, type Address } from "viem";
 
 export type PrivyAuth = {
-  /** null: the token is invalid or expired. `wallet: null`: valid user whose embedded wallet isn't created yet. */
-  walletOf(accessToken: string): Promise<{ wallet: Address | null } | null>;
+  /**
+   * null: the token is invalid or expired. `wallet: null`: valid user whose embedded wallet isn't created yet.
+   * `email`: the address Privy verified (email code or Google), null for a wallet sign-in.
+   */
+  walletOf(accessToken: string): Promise<{ wallet: Address | null; email: string | null } | null>;
 };
 
-type LinkedAccount = { type: string; chain_type?: string; connector_type?: string; address?: string; wallet_index?: number };
+type LinkedAccount = {
+  type: string;
+  chain_type?: string;
+  connector_type?: string;
+  address?: string;
+  wallet_index?: number;
+  /** Set on OAuth accounts (google_oauth, …); an email account carries it as `address`. */
+  email?: string;
+};
+
+/** The email Privy verified for this user: the email account, else the Google (or other OAuth) one. */
+export function accountEmail(linked: LinkedAccount[]): string | null {
+  const email = linked.find((a) => a.type === "email")?.address ?? linked.find((a) => a.type.endsWith("_oauth") && a.email)?.email;
+  return email ? email.trim().toLowerCase() : null;
+}
 
 /**
  * The wallet that is the user's account: the embedded wallet when they have one (email / Google), otherwise the external
@@ -32,7 +49,8 @@ export function privyAuth(appId: string, appSecret: string): PrivyAuth {
       if (!claims) return null;
       // The user's wallets come from Privy's API (needs the app secret), never from the client.
       const user = await client.users()._get(claims.user_id);
-      return { wallet: accountWallet(user.linked_accounts as LinkedAccount[]) };
+      const linked = user.linked_accounts as LinkedAccount[];
+      return { wallet: accountWallet(linked), email: accountEmail(linked) };
     },
   };
 }

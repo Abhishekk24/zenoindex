@@ -56,7 +56,7 @@ Needs Postgres 13+. Migrations run on boot. Health check: `GET /health`.
 |---|---|---|
 | `POST /auth/siwe/nonce` `{walletAddress, chainId?}` | – | returns the EIP-4361 `message` to sign (nonce is single-use, 5 min) |
 | `POST /auth/siwe/verify` `{message, signature}` | – | `{user, token}` + `Set-Cookie: dtf_session` |
-| `GET /auth/me` · `POST /auth/accept-terms` · `POST /auth/profile` · `POST /auth/logout` | ✓ (me: optional) | |
+| `GET /auth/me` · `POST /auth/accept-terms` · `POST /auth/profile` · `POST /auth/email` · `POST /auth/logout` | ✓ (me: optional) | |
 | `GET /chains` · `GET /assets` · `GET /dtfs` · `GET /dtfs/:id` · `GET /compliance/kyc/:wallet/status` | – | read straight from mainnet (10 s cache) |
 | `POST /dtfs/:id/buy/prepare` `{amount, recipient, slippageBps?}` | ✓ | `deposit` tx; the app approves USDG to `transaction.to` first |
 | `POST /dtfs/:id/redeem/prepare` `{shares?, recipient, inKind?}` | ✓ | **next** sell step; repeat until `finalStep: true` |
