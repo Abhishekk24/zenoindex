@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "dev:mobile": "tsx scripts/dev-mobile.ts",
     "start": "tsx src/index.ts",
     "cli": "tsx src/cli.ts",
+    "check:mainnet": "tsx scripts/check-mainnet.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

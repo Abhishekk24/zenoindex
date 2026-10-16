@@ -15,7 +15,7 @@ import {
 import type { Hono } from "hono";
 import { erc20Abi, parseUnits, TransactionNotFoundError, TransactionReceiptNotFoundError, type Address, type Hex } from "viem";
 import { z } from "zod";
-import { isTradable, mintOf } from "../chain";
+import { invalidateSnapshot, isTradable, mintOf } from "../chain";
 import { address, amount6, parseBody, requireUser, txHash, type AppEnv, type Ctx, type Deps } from "../context";
 import type { Db } from "../db";
 import { ApiError, badRequest, conflict, notFound } from "../errors";
@@ -119,7 +119,9 @@ export function tradeRoutes(app: Hono<AppEnv>, { db, client }: Deps) {
     }
     const next =
       outcome === "success" ? ({ status: "confirmed", txHash: hash } as const) : ({ status: "failed", txHash: hash, reason: "transaction reverted" } as const);
-    return (await transition(db, op.id, ["draft_prepared", "submitted"], next)) ?? (await loadOperation(db, c, user));
+    const settled = (await transition(db, op.id, ["draft_prepared", "submitted"], next)) ?? (await loadOperation(db, c, user));
+    if (settled.status === "confirmed") invalidateSnapshot(client, c.get("project").factory);
+    return settled;
   };
 
   app.post("/operations/:id/confirm", async (c) => {

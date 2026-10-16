@@ -3,9 +3,11 @@
 API-key backend for ZenoIndex DTFs on **Robinhood Chain mainnet (4663)**. First client: `zenoIndex-mobile-app`.
 Plan and roadmap: [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
 
+Latest deployment, migration behavior and Expo Go checks: [docs/MAINNET_INTEGRATION.md](docs/MAINNET_INTEGRATION.md).
+
 | Package | What |
 |---|---|
-| `packages/sdk` (`@zenoindex/sdk`) | Generated contract ABIs (from zenoindex-evm@550d0a2, incl. FeeEscrow), mainnet addresses, typed reads, tx builders |
+| `packages/sdk` (`@zenoindex/sdk`) | Generated contract ABIs (from zenoindex-evm@e755a31, documented in README@d3d51b5), mainnet addresses, typed reads, tx builders |
 | `apps/api` (`@zenoindex/api`) | Hono HTTP API at `/api/v1`: API keys, SIWE login, DTF reads, buy/sell tx prep, order tracking |
 
 ## Run locally

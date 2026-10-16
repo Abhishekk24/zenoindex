@@ -12,6 +12,11 @@ export type VaultState = Snapshot["vaults"][number];
 const TTL_MS = 10_000;
 const caches = new WeakMap<PublicClient, Map<string, { at: number; value: Promise<Snapshot> }>>();
 
+/** Confirmed writes must be visible to the very next screen / preparation step. */
+export function invalidateSnapshot(client: PublicClient, factory: Address) {
+  caches.get(client)?.delete(factory);
+}
+
 /** Everything the read endpoints need, read straight from the chain. */
 export function snapshot(client: PublicClient, factory: Address): Promise<Snapshot> {
   // shortcut: per-process 10s cache; move to a shared cache / the indexer when running more than one instance.

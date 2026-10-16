@@ -2,7 +2,7 @@
 // Run with: ZENO_LIVE=1 pnpm test
 import { createPublicClient, http, toFunctionSelector } from "viem";
 import { describe, expect, it } from "vitest";
-import { getAssets, getProtocol, getVault, listVaults, MAINNET, robinhood, VaultAbi, ZenoIndexVaultAbi } from "../src";
+import { AccessMasterAbi, FeeEscrowAbi, getAssets, getProtocol, getVault, listVaults, MAINNET, robinhood, UniswapV4AdapterAbi, VaultAbi, ZenoIndexVaultAbi } from "../src";
 
 const client = createPublicClient({ chain: robinhood, transport: http(process.env.RPC_URL) });
 
@@ -17,6 +17,17 @@ describe.skipIf(!process.env.ZENO_LIVE)("mainnet (read-only)", () => {
       functionName: "vaultImplementation",
     });
     expect(impl.toLowerCase()).toBe(MAINNET.vaultImplementation);
+    expect(p.router.toLowerCase()).toBe(MAINNET.adapter);
+    const [access, escrow, poolManager, authorized] = await client.multicall({ allowFailure: false, contracts: [
+      { address: MAINNET.factory, abi: ZenoIndexVaultAbi, functionName: "accessMaster" },
+      { address: MAINNET.factory, abi: ZenoIndexVaultAbi, functionName: "feeEscrow" },
+      { address: MAINNET.adapter, abi: UniswapV4AdapterAbi, functionName: "poolManager" },
+      { address: MAINNET.adapter, abi: UniswapV4AdapterAbi, functionName: "isAuthorizedCaller", args: [MAINNET.factory] },
+    ] });
+    expect(access.toLowerCase()).toBe(MAINNET.accessMaster);
+    expect(escrow.toLowerCase()).toBe(MAINNET.feeEscrow);
+    expect(poolManager.toLowerCase()).toBe(MAINNET.poolManager);
+    expect(authorized).toBe(true);
   });
 
   it("lists every vault and reads it", async () => {
@@ -40,6 +51,9 @@ describe.skipIf(!process.env.ZENO_LIVE)("mainnet (read-only)", () => {
     for (const [address, abi] of [
       [MAINNET.factory, ZenoIndexVaultAbi],
       [MAINNET.vaultImplementation, VaultAbi],
+      [MAINNET.accessMaster, AccessMasterAbi],
+      [MAINNET.feeEscrow, FeeEscrowAbi],
+      [MAINNET.adapter, UniswapV4AdapterAbi],
     ] as const) {
       const code = (await client.getCode({ address }))!.toLowerCase();
       const missing = abi

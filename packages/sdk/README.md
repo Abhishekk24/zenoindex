@@ -7,7 +7,7 @@ Same pattern as the `evm-launhpad-contract/frontend/sdk/*` packages: generated A
 
 | File | What |
 |---|---|
-| `src/abis.ts` | **Generated** — `ZenoIndexVaultAbi`, `VaultAbi`, `ShareTokenAbi`, `AccessMasterAbi`, `UniswapV4AdapterAbi`. Do not edit. |
+| `src/abis.ts` | **Generated** — `ZenoIndexVaultAbi`, `VaultAbi`, `ShareTokenAbi`, `AccessMasterAbi`, `UniswapV4AdapterAbi`, `FeeEscrowAbi`. Do not edit. |
 | `src/constants.ts` | `robinhood` viem chain (with Multicall3), `MAINNET` addresses + deploy block, `EVM_COMMIT` |
 | `src/reads.ts` | `getProtocol`, `listVaults`, `getVault`, `getAssets`, `previewDeposit`, `swapFloor`, `getRedeemProgress`, `nextRedeemStep`, `sharePrice`; manager: `getManagerView`, `isVaultOperator` |
 | `src/tx.ts` | `buildApprove`, `buildDeposit`, `buildRequestRedeem`, `buildSwapAssetToUsdc`, `buildClaim`, `buildClaimInKind`, `applySlippage`; manager: `buildGenesisDeposit`, `buildSwapUsdcToAsset`, `buildSetTargetAllocations`, `buildExecuteRebalance`, `buildSetPaused`, `buildProposeWriteOff`, `buildProposeReactivate`; FeeEscrow: `buildClaimManagerFees`; factory: `buildCreateVault` |
