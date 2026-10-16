@@ -9,7 +9,7 @@
  * Below the list, Target weights re-weights the basket the same way
  * (POST …/allocations/prepare).
  */
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
@@ -25,7 +25,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CopyIcon, PenIcon } from '../../../components/icons';
 import { ManagerBasketScreen } from '../../../components/manager/ManagerBasketScreen';
-import { TargetWeights } from '../../../components/manager/TargetWeights';
 import { Empty } from '../../../components/ui';
 import { useLoad } from '../../../hooks/useLoad';
 import { useSendDraft } from '../../../hooks/useSendDraft';
@@ -220,19 +219,23 @@ export default function ManagerRebalanceScreen() {
         </View>
       ) : null}
 
-      {data && data.slots.length > 0 ? (
-        <TargetWeights
-          // Reset the sliders when the chain's targets change (after a submit).
-          key={data.slots.map(s => s.targetBps).join(',')}
-          slots={data.slots}
-          disabled={busy !== undefined || stop !== null}
-          onPrepare={weights =>
-            void prepareWith('weights', {
-              name: 'allocations',
-              body: { weights },
+      {dtf ? (
+        <Pressable
+          onPress={() =>
+            router.push({
+              pathname: '/manager/[id]/weights',
+              params: { id: dtf.id },
             })
           }
-        />
+          accessibilityRole="button"
+          style={({ pressed }) => [
+            styles.weightsLink,
+            pressed && { opacity: 0.75 },
+          ]}
+        >
+          <Text style={styles.weightsLinkText}>Edit target weights</Text>
+          <Text style={styles.weightsLinkChevron}>›</Text>
+        </Pressable>
       ) : null}
 
       {draft ? (
@@ -310,6 +313,28 @@ const ACTION_STYLES = {
   },
   warn: { fontFamily: fonts.regular, fontSize: 14, color: colors.gold },
   error: { fontFamily: fonts.regular, fontSize: 13, color: colors.danger },
+  weightsLink: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginHorizontal: space.md,
+    marginBottom: space.lg,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.md,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: 12,
+  },
+  weightsLinkText: {
+    fontFamily: fonts.medium,
+    fontSize: 15,
+    color: colors.text,
+  },
+  weightsLinkChevron: {
+    fontFamily: fonts.regular,
+    fontSize: 20,
+    color: colors.muted,
+  },
 } as const;
 
 const styles = StyleSheet.create({

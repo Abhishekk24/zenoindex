@@ -21,6 +21,11 @@ export type Asset = {
     'open' | 'issuer_allowlist' | 'venue_gated' | 'unknown';
   /** Token logo (Robinhood's asset list); null when there is none, e.g. USDG. */
   logoUrl?: string | null;
+  /** USDG per whole token from the factory's price table; '1' for USDG; null before a price is set. */
+  priceUsdg: string | null;
+  priceUpdatedAt: string | null;
+  /** 24h / 30d price change from daily snapshots; null for USDG or an unpriced asset. */
+  stats: DtfStats | null;
 };
 
 export type Weight = { assetId: string; weightBps: number };

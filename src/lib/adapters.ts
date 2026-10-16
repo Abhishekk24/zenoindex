@@ -89,6 +89,9 @@ export function toAsset(raw: Row): Asset {
         ? raw['oracleStatus']
         : 'unavailable',
     tradable: Boolean(raw['tradable']),
+    priceUsdg: str(raw['priceUsdg']) ?? null,
+    priceUpdatedAt: str(raw['priceUpdatedAt']) ?? null,
+    stats: toStats(raw['stats']) ?? null,
     mode: raw['mode'] === 'zap' ? 'zap' : 'in-kind',
     underlyingTransferPolicy:
       raw['underlyingTransferPolicy'] === 'issuer_allowlist' ||

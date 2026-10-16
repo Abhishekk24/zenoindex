@@ -9,6 +9,7 @@ import { BasketHoldings } from '../../components/basket/BasketHoldings';
 import { BasketPosition } from '../../components/basket/BasketPosition';
 import { BasketStats } from '../../components/basket/BasketStats';
 import { AllocationBar } from '../../components/charts/AllocationBar';
+import { ManagerActions } from '../../components/manager/ManagerActions';
 import { NavChart } from '../../components/charts/NavChart';
 import { TradePanel } from '../../components/TradePanel';
 import {
@@ -23,6 +24,7 @@ import {
 import { useLoad } from '../../hooks/useLoad';
 import { useUser } from '../../hooks/useUser';
 import * as api from '../../lib/api';
+import { useAppMode } from '../../lib/appMode';
 import {
   assetMap,
   isComingSoon,
@@ -49,6 +51,7 @@ export default function BasketDetailScreen() {
       : undefined;
   const user = useUser();
   const wallet = primaryWallet(user);
+  const { mode } = useAppMode();
   const { data, error, loading, reload } = useLoad(
     async () => {
       const [dtf, assets, eligibility] = await Promise.all([
@@ -86,6 +89,7 @@ export default function BasketDetailScreen() {
   return (
     <Screen onRefresh={refresh} refreshing={loading}>
       <BasketHeader dtf={dtf} permissioned={permissioned} />
+      {mode === 'manager' ? <ManagerActions id={dtf.id} /> : null}
       <BasketStats dtf={dtf} baseSymbol={baseSymbol} />
       {wallet ? (
         <BasketPosition dtf={dtf} wallet={wallet} version={version} />

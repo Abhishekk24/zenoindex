@@ -1,6 +1,6 @@
 /**
  * A basket's ⋮ menu in manager mode (design: Baskets card menu): Rebalance,
- * Corporate actions, Fees, Liquidity and Open details.
+ * Target weights, Corporate actions, Fees, Liquidity and Open details.
  */
 import { router, type Href } from 'expo-router';
 import React from 'react';
@@ -14,6 +14,7 @@ import {
   DropletIcon,
   MoreIcon,
   RebalanceIcon,
+  StrategyIcon,
 } from '../icons';
 import type { IconProps } from '../icons';
 import { Popover } from '../ui/Popover';
@@ -30,6 +31,11 @@ const ITEMS: Item[] = [
     label: 'Rebalance',
     Icon: RebalanceIcon,
     href: id => ({ pathname: '/manager/[id]/rebalance', params: { id } }),
+  },
+  {
+    label: 'Target weights',
+    Icon: StrategyIcon,
+    href: id => ({ pathname: '/manager/[id]/weights', params: { id } }),
   },
   {
     label: 'Corporate actions',

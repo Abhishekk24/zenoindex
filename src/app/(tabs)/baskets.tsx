@@ -5,8 +5,8 @@
  * operator) is the signed-in wallet.
  * Investor mode has no Baskets tab; it goes back to Explore.
  */
-import { Redirect, router } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import { Redirect, router, useFocusEffect } from 'expo-router';
+import React, { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { AppHeader } from '../../components/AppHeader';
@@ -45,6 +45,8 @@ export default function ManagerBasketsScreen() {
   const { mode } = useAppMode();
   const [access, setAccess] = useState<Access>('all');
   const { data, error, reload } = useLoad(loadManaged, 'manager-baskets');
+  // The tab stays mounted, so re-read when it comes back into view (e.g. after creating a basket).
+  useFocusEffect(useCallback(() => reload(), [reload]));
   const assets = useMemo(() => assetMap(data?.assets ?? []), [data]);
 
   const visible = useMemo(

@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   BasketsIcon,
+  CoinsIcon,
   CreateIcon,
   ExploreIcon,
   PortfolioIcon,
@@ -17,7 +18,7 @@ import { colors, fonts, tabBarHeight } from '../../theme/tokens';
 
 /**
  * Investor mode: Explore · Portfolio · Profile. Manager mode (Profile →
- * Manager Mode): Baskets · Create · Portfolio · Profile. Hidden tabs keep
+ * Manager Mode): Baskets · Create · Assets · Profile. Hidden tabs keep
  * their routes but get no button (`href: null`).
  */
 export default function TabsLayout() {
@@ -81,11 +82,21 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="assets"
+        options={{
+          title: 'Assets',
+          headerShown: false,
+          tabBarIcon: CoinsIcon,
+          href: manager ? undefined : null,
+        }}
+      />
+      <Tabs.Screen
         name="portfolio"
         options={{
           title: 'Portfolio',
           headerShown: false,
           tabBarIcon: PortfolioIcon,
+          href: manager ? null : undefined,
         }}
       />
       <Tabs.Screen
