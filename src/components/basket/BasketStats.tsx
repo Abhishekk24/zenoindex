@@ -42,7 +42,8 @@ export function BasketStats({
           }
           tone={tone(latest?.sharePriceDeltaBps)}
         />
-        <Stat label={`AUM · ${baseSymbol}`} value={formatDecimal(dtf.aum, 0)} />
+        {/* shortcut: 4 decimals so testers see small total-NAV moves on tiny vaults; drop to 0 once real AUM is large */}
+        <Stat label={`AUM · ${baseSymbol}`} value={formatDecimal(dtf.aum, 4)} />
         <Stat
           label="Since inception"
           value={

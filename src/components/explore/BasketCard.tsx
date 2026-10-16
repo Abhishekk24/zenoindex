@@ -129,7 +129,7 @@ export function BasketCard({
               label="NAV / share"
               value={formatDecimal(dtf.sharePrice, 4)}
             />
-            <BasketStat label="AUM" value={formatDecimal(dtf.aum, 0)} />
+            <BasketStat label="AUM" value={formatDecimal(dtf.aum, 4)} />
             <BasketStat
               label="Today"
               value={day === null ? '—' : formatSignedBps(day)}
