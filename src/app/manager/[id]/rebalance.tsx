@@ -6,7 +6,8 @@
  * invest deposits waiting in a slot, or trade a slot that drifted past its
  * target. Tapping one prepares its transaction, shown as the draft; Sign and
  * submit sends it with the manager's wallet and confirms it with the API.
- * shortcut: no target-weights editor yet (no design); POST …/allocations/prepare is ready for it.
+ * Below the list, Target weights re-weights the basket the same way
+ * (POST …/allocations/prepare).
  */
 import { useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
@@ -24,6 +25,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CopyIcon, PenIcon } from '../../../components/icons';
 import { ManagerBasketScreen } from '../../../components/manager/ManagerBasketScreen';
+import { TargetWeights } from '../../../components/manager/TargetWeights';
 import { Empty } from '../../../components/ui';
 import { useLoad } from '../../../hooks/useLoad';
 import { useSendDraft } from '../../../hooks/useSendDraft';
@@ -89,21 +91,14 @@ export default function ManagerRebalanceScreen() {
   const dtf = data?.dtf;
   const stop = data ? blocked(data) : null;
 
-  const prepare = async (action: api.ManagerAction) => {
+  const prepareWith = async (key: string, req: api.ManagerPrepare) => {
     if (!dtf) return;
-    setSelected(actionKey(action));
+    setSelected(key);
     setDraft(undefined);
     setActionError(undefined);
     setBusy('prepare');
     try {
-      setDraft(
-        await api.prepareManagerTx(
-          dtf,
-          action.kind === 'genesis'
-            ? { name: 'genesis', body: { baselineSharePrice: baseline } }
-            : { name: action.kind, body: { slotIndex: action.slotIndex } },
-        ),
-      );
+      setDraft(await api.prepareManagerTx(dtf, req));
     } catch (e) {
       setActionError(
         e instanceof Error ? e.message : 'Could not prepare the transaction.',
@@ -112,6 +107,14 @@ export default function ManagerRebalanceScreen() {
       setBusy(undefined);
     }
   };
+
+  const prepare = (action: api.ManagerAction) =>
+    prepareWith(
+      actionKey(action),
+      action.kind === 'genesis'
+        ? { name: 'genesis', body: { baselineSharePrice: baseline } }
+        : { name: action.kind, body: { slotIndex: action.slotIndex } },
+    );
 
   const submit = async () => {
     if (!draft) return;
@@ -215,6 +218,21 @@ export default function ManagerRebalanceScreen() {
           )}
           {actionError ? <Text style={styles.error}>{actionError}</Text> : null}
         </View>
+      ) : null}
+
+      {data && data.slots.length > 0 ? (
+        <TargetWeights
+          // Reset the sliders when the chain's targets change (after a submit).
+          key={data.slots.map(s => s.targetBps).join(',')}
+          slots={data.slots}
+          disabled={busy !== undefined || stop !== null}
+          onPrepare={weights =>
+            void prepareWith('weights', {
+              name: 'allocations',
+              body: { weights },
+            })
+          }
+        />
       ) : null}
 
       {draft ? (
