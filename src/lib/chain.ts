@@ -10,6 +10,7 @@ import {
   erc20Abi,
   http,
   parseAbi,
+  parseEventLogs,
   type Chain,
   type Hex,
   type PublicClient,
@@ -225,4 +226,23 @@ export async function waitForReceipt(
     timeout: timeoutMs,
   });
   return { status: receipt.status === 'success' ? 'success' : 'reverted' };
+}
+
+const VAULT_CREATED = parseAbi([
+  'event VaultCreated(uint64 indexed vaultId, address indexed clone, address manager)',
+]);
+
+/** The basket (vault clone) a confirmed factory createVault transaction made. */
+export async function createdVaultOf(
+  chainId: number,
+  txHash: string,
+): Promise<string | undefined> {
+  const client = await publicClientOf(chainId);
+  const receipt = await client.getTransactionReceipt({ hash: txHash as Hex });
+  const [log] = parseEventLogs({
+    abi: VAULT_CREATED,
+    eventName: 'VaultCreated',
+    logs: receipt.logs,
+  });
+  return log?.args.clone.toLowerCase();
 }

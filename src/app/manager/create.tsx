@@ -3,7 +3,8 @@
  * tab; full screen with ‹ back.
  *
  * 1 Identity · 2 Constituents · 3 Fees & Access · 4 Review ("Prep creation")
- * · 5 Deploy ("Submit") · 6 Configure (no design yet: coming soon). The
+ * · 5 Deploy ("Submit") · 6 Configure (the created basket: seed it, open it in
+ * Manager, or finish). The
  * network is Robinhood Chain, preset: there is nothing to choose. Continue checks the current step first.
  *
  * Assets come from GET /manager/create; Prep creation asks the API for the
@@ -41,6 +42,8 @@ import { Stripes } from '../../components/ui';
 import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
 import { useLoad } from '../../hooks/useLoad';
 import { useSendDraft } from '../../hooks/useSendDraft';
+import * as api from '../../lib/api';
+import { createdVaultOf } from '../../lib/chain';
 import { shortAddress } from '../../lib/format';
 import { useWallet } from '../../lib/wallet';
 import {
@@ -81,6 +84,19 @@ async function pickImage(): Promise<string | undefined> {
 
 const REVIEW = 3;
 const DEPLOY = 4;
+const CONFIGURE = 5;
+
+/** The API reads baskets through a short cache, so a just-created one can take a few seconds to appear. */
+async function waitForDashboard(id: string, tries = 8) {
+  for (let i = 0; ; i++) {
+    try {
+      return await api.getManagerDashboard(id);
+    } catch (e) {
+      if (i + 1 >= tries) throw e;
+      await new Promise(r => setTimeout(r, 2500));
+    }
+  }
+}
 
 /** 0x8f…0000, as the Deploy design shows calldata. */
 const shortHex = (hex: string) =>
@@ -97,6 +113,10 @@ export default function CreateBasketScreen() {
   const [draft, setDraft] = useState<CreationDraft>();
   const [preparing, setPreparing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  /** The created basket's address (Configure step). */
+  const [created, setCreated] = useState<string>();
+  const [seeding, setSeeding] = useState<'' | 'wait' | 'send'>('');
+  const [seeded, setSeeded] = useState(false);
   const { address } = useWallet();
   const sendDraft = useSendDraft();
   const { data: options, error: optionsError } = useLoad(
@@ -147,12 +167,20 @@ export default function CreateBasketScreen() {
     if (!draft) return;
     setSubmitting(true);
     try {
-      await sendDraft(draft.tx);
-      Alert.alert(
-        'Basket created',
-        'Seed it from Rebalance (genesis, 1 USDG) before anyone can invest.',
-      );
-      router.replace('/baskets');
+      const op = await sendDraft(draft.tx);
+      const id = op.txHash
+        ? await createdVaultOf(draft.tx.transaction.chainId, op.txHash)
+        : undefined;
+      if (!id) {
+        Alert.alert(
+          'Basket created',
+          'Seed it from Rebalance (genesis, 1 USDG) before anyone can invest.',
+        );
+        router.replace('/baskets');
+        return;
+      }
+      setCreated(id);
+      go(CONFIGURE);
     } catch (e) {
       Alert.alert(
         'Create failed',
@@ -160,6 +188,30 @@ export default function CreateBasketScreen() {
       );
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  /** Genesis: the 1 USDG seed that opens the basket to investors. */
+  const seed = async () => {
+    if (!created) return;
+    setSeeding('wait');
+    try {
+      const { dtf } = await waitForDashboard(created);
+      setSeeding('send');
+      await sendDraft(
+        await api.prepareManagerTx(dtf, {
+          name: 'genesis',
+          body: { baselineSharePrice: '1' },
+        }),
+      );
+      setSeeded(true);
+    } catch (e) {
+      Alert.alert(
+        'Could not seed',
+        e instanceof Error ? e.message : 'Transaction failed.',
+      );
+    } finally {
+      setSeeding('');
     }
   };
 
@@ -432,11 +484,79 @@ export default function CreateBasketScreen() {
             </View>
           )}
 
-          {step === 5 && (
-            <Text style={styles.soon}>
-              Coming soon. This step isn&apos;t designed yet.
-            </Text>
-          )}
+          {step === CONFIGURE &&
+            (created ? (
+              <View style={styles.review}>
+                <ReviewRow label="Status" value="Created on-chain" />
+                <ReviewRow label="Basket" value={shortAddress(created)} />
+                <ReviewRow label="Name" value={form.name} />
+                <ReviewRow label="Symbol" value={form.symbol} />
+                <ReviewRow
+                  label="Seed (genesis)"
+                  value={seeded ? 'Done · open to investors' : 'Not yet'}
+                />
+                <View style={styles.configure}>
+                  <Text style={styles.noteText}>
+                    {seeded
+                      ? 'Investors can buy in now. Deposits wait in each asset until you invest them from Rebalance.'
+                      : 'Nobody can invest until the basket is seeded: a 1 USDG genesis deposit from your wallet sets the starting share price at 1 USDG.'}
+                  </Text>
+                  {!seeded ? (
+                    <Pressable
+                      onPress={seed}
+                      disabled={seeding !== ''}
+                      accessibilityRole="button"
+                      accessibilityState={{ busy: seeding !== '' }}
+                      style={({ pressed }) => [
+                        styles.submit,
+                        styles.wide,
+                        seeding !== '' && styles.disabled,
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <Text style={styles.submitText}>
+                        {seeding === 'wait'
+                          ? 'Finding your basket…'
+                          : seeding === 'send'
+                            ? 'Waiting for confirmation…'
+                            : 'Seed the basket (1 USDG)'}
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                  <Pressable
+                    onPress={() =>
+                      router.replace({
+                        pathname: '/manager/[id]/rebalance',
+                        params: { id: created },
+                      })
+                    }
+                    accessibilityRole="button"
+                    style={({ pressed }) => [
+                      styles.primary,
+                      styles.wide,
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Text style={styles.primaryText}>Open in Manager</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => router.replace('/baskets')}
+                    accessibilityRole="button"
+                    style={({ pressed }) => [
+                      styles.previous,
+                      styles.wide,
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Text style={styles.previousText}>Done</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : (
+              <Text style={styles.soon}>
+                Submit the prepared transaction on Deploy first.
+              </Text>
+            ))}
         </View>
 
         {step === 0 && (optionsError || (options && !options.canCreate)) ? (
@@ -463,12 +583,13 @@ export default function CreateBasketScreen() {
         <View style={styles.nav}>
           <Pressable
             onPress={() => setStep(s => s - 1)}
-            disabled={step === 0}
+            // Once created there is nothing to go back to: Deploy would re-submit.
+            disabled={step === 0 || !!created}
             accessibilityRole="button"
-            accessibilityState={{ disabled: step === 0 }}
+            accessibilityState={{ disabled: step === 0 || !!created }}
             style={({ pressed }) => [
               styles.previous,
-              step === 0 && styles.disabled,
+              (step === 0 || !!created) && styles.disabled,
               pressed && styles.pressed,
             ]}
           >
@@ -673,6 +794,12 @@ const styles = StyleSheet.create({
     color: colors.muted,
     paddingHorizontal: space.lg,
   },
+  configure: {
+    gap: space.md,
+    paddingHorizontal: space.lg,
+    paddingTop: space.xl,
+  },
+  wide: { alignItems: 'center' },
   note: {
     flexDirection: 'row',
     gap: space.md,
