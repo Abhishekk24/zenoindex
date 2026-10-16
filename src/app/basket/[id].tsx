@@ -89,7 +89,9 @@ export default function BasketDetailScreen() {
   return (
     <Screen onRefresh={refresh} refreshing={loading}>
       <BasketHeader dtf={dtf} permissioned={permissioned} />
-      {mode === 'manager' ? <ManagerActions id={dtf.id} /> : null}
+      {mode === 'manager' ? (
+        <ManagerActions dtf={dtf} onSeeded={refresh} />
+      ) : null}
       <BasketStats dtf={dtf} baseSymbol={baseSymbol} />
       {wallet ? (
         <BasketPosition dtf={dtf} wallet={wallet} version={version} />
