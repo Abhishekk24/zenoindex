@@ -569,7 +569,10 @@ export function costBasisOf(
       : null;
     if (tx.action === 'invest') {
       if (!tx.amountRaw) continue;
-      t.cost = add(t.cost, fromRaw(tx.amountRaw, dtf.baseAssetDecimals));
+      // Net of the entry fee, so a fresh deposit isn't shown as a loss.
+      // shortcut: uses today's fee rate, not the rate at deposit time; upgrade when the API records the fee paid per transaction.
+      const paid = fromRaw(tx.amountRaw, dtf.baseAssetDecimals);
+      t.cost = add(t.cost, sub(paid, mulBps(paid, dtf.fees.entryBps)));
       // Without the minted amount the share count is unknown from here on.
       t.shares = moved && t.shares !== null ? add(t.shares, moved) : null;
     } else if (moved && t.shares !== null && compare(t.shares, '0') > 0) {

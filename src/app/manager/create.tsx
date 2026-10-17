@@ -14,7 +14,6 @@
  */
 import React, { useMemo, useState } from 'react';
 import {
-  Alert,
   Image,
   Pressable,
   ScrollView,
@@ -38,7 +37,7 @@ import {
   TextField,
 } from '../../components/manager/create/Fields';
 import { BackButton } from '../../components/manager/ManagerBasketScreen';
-import { Stripes } from '../../components/ui';
+import { alert, Stripes } from '../../components/ui';
 import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
 import { useLoad } from '../../hooks/useLoad';
 import { useSendDraft } from '../../hooks/useSendDraft';
@@ -154,10 +153,7 @@ export default function CreateBasketScreen() {
       setDraft(await prepareCreation(form));
       go(DEPLOY);
     } catch (e) {
-      Alert.alert(
-        'Could not prepare',
-        e instanceof Error ? e.message : 'Try again.',
-      );
+      alert('Could not prepare', e instanceof Error ? e.message : 'Try again.');
     } finally {
       setPreparing(false);
     }
@@ -172,7 +168,7 @@ export default function CreateBasketScreen() {
         ? await createdVaultOf(draft.tx.transaction.chainId, op.txHash)
         : undefined;
       if (!id) {
-        Alert.alert(
+        alert(
           'Basket created',
           'Seed it from Rebalance (genesis, 1 USDG) before anyone can invest.',
         );
@@ -182,7 +178,7 @@ export default function CreateBasketScreen() {
       setCreated(id);
       go(CONFIGURE);
     } catch (e) {
-      Alert.alert(
+      alert(
         'Create failed',
         e instanceof Error ? e.message : 'Transaction failed.',
       );
@@ -206,7 +202,7 @@ export default function CreateBasketScreen() {
       );
       setSeeded(true);
     } catch (e) {
-      Alert.alert(
+      alert(
         'Could not seed',
         e instanceof Error ? e.message : 'Transaction failed.',
       );
@@ -282,7 +278,7 @@ export default function CreateBasketScreen() {
                     pickImage()
                       .then(uri => uri && update({ imageUri: uri }))
                       .catch(() =>
-                        Alert.alert(
+                        alert(
                           'Couldn’t open your photos',
                           'Check Zeno’s photo access in Settings and try again.',
                         ),

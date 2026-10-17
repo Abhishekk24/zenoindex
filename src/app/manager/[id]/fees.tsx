@@ -10,12 +10,12 @@
  */
 import { useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { BottomDrawer } from '../../../components/manager/BottomDrawer';
 import { ManagerBasketScreen } from '../../../components/manager/ManagerBasketScreen';
 import { ManagerTable } from '../../../components/manager/ManagerTable';
-import { Button } from '../../../components/ui';
+import { alert, Button } from '../../../components/ui';
 import { useLoad } from '../../../hooks/useLoad';
 import { useSendDraft } from '../../../hooks/useSendDraft';
 import * as api from '../../../lib/api';
@@ -57,10 +57,10 @@ export default function ManagerFeesScreen() {
     setClaiming(true);
     try {
       await sendDraft(await api.prepareFeeClaim(dtf.chainId));
-      Alert.alert('Fees claimed', 'Your fees were sent to your wallet.');
+      alert('Fees claimed', 'Your fees were sent to your wallet.');
       reload();
     } catch (e) {
-      Alert.alert(
+      alert(
         'Claim failed',
         e instanceof Error ? e.message : 'Could not claim fees.',
       );

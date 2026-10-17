@@ -24,3 +24,4 @@ export { Title } from './Title';
 export { TokenLogo } from './TokenLogo';
 export { UnderlineTabs } from './UnderlineTabs';
 export type { BadgeTone, TabOption } from './types';
+export { alert, DialogHost } from './Dialog';

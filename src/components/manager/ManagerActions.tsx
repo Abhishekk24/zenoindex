@@ -6,7 +6,7 @@
  */
 import { router, type Href } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useSendDraft } from '../../hooks/useSendDraft';
 import * as api from '../../lib/api';
@@ -19,7 +19,7 @@ import {
   StrategyIcon,
 } from '../icons';
 import type { IconProps } from '../icons';
-import { Button } from '../ui';
+import { alert, Button } from '../ui';
 
 type Action = {
   label: string;
@@ -75,10 +75,10 @@ export function ManagerActions({
           body: { baselineSharePrice: '1' },
         }),
       );
-      Alert.alert('Basket seeded', 'Investors can buy in now.');
+      alert('Basket seeded', 'Investors can buy in now.');
       onSeeded();
     } catch (e) {
-      Alert.alert(
+      alert(
         'Could not seed',
         e instanceof Error ? e.message : 'Transaction failed.',
       );

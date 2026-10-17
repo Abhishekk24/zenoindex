@@ -23,6 +23,7 @@ import { WagmiProvider } from 'wagmi';
 
 import { RootStack } from '../components/navigation/RootStack';
 import { ModeSwitchOverlay } from '../components/ModeSwitchOverlay';
+import { DialogHost } from '../components/ui';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { appKit, privyProps, wagmiAdapter } from '../config/wallet';
 import { SessionProvider } from '../lib/session';
@@ -76,6 +77,7 @@ export default function RootLayout() {
                   <RootStack />
                   <OfflineBanner />
                   <ModeSwitchOverlay />
+                  <DialogHost />
                 </SessionProvider>
               </ThemeProvider>
               {/* The wallet picker. AppKitProvider only holds state; without

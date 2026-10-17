@@ -13,7 +13,6 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   Share,
   StyleSheet,
@@ -25,7 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CopyIcon, PenIcon } from '../../../components/icons';
 import { ManagerBasketScreen } from '../../../components/manager/ManagerBasketScreen';
-import { Empty } from '../../../components/ui';
+import { alert, Empty } from '../../../components/ui';
 import { useLoad } from '../../../hooks/useLoad';
 import { useSendDraft } from '../../../hooks/useSendDraft';
 import * as api from '../../../lib/api';
@@ -123,7 +122,7 @@ export default function ManagerRebalanceScreen() {
       await sendDraft(draft);
       setDraft(undefined);
       setSelected(undefined);
-      Alert.alert('Done', 'The transaction is confirmed on-chain.');
+      alert('Done', 'The transaction is confirmed on-chain.');
       reload();
     } catch (e) {
       setActionError(e instanceof Error ? e.message : 'Transaction failed.');

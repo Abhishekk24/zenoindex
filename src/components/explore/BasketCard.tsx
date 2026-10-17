@@ -60,28 +60,31 @@ export function BasketCard({
         </View>
 
         <View style={styles.body}>
-          <Text style={styles.name} numberOfLines={1}>
-            {dtf.name}
-          </Text>
-          <Text style={styles.meta} numberOfLines={1}>
-            {dtf.symbol} · {shortAddress(dtf.manager)}
-          </Text>
+          <View style={styles.head}>
+            <View style={styles.titles}>
+              <Text style={styles.name} numberOfLines={1}>
+                {dtf.name}
+              </Text>
+              <Text style={styles.meta} numberOfLines={1}>
+                {dtf.symbol} · {shortAddress(dtf.manager)}
+              </Text>
+            </View>
+            {/* Sits in the striped corner; leaves room for the ⋮ accessory. */}
+            <Sparkline
+              values={dtf.stats?.sparkline ?? []}
+              style={[styles.spark, accessory ? styles.sparkWithMenu : null]}
+            />
+          </View>
 
           {/* The figure people compare baskets by: how the share price did lately. */}
           <View style={styles.performance}>
-            <View>
-              <Text style={[styles.returnValue, { color: trendColor(month) }]}>
-                {month === null ? '—' : formatSignedBps(month)}
-              </Text>
-              <View style={styles.returnLabelRow}>
-                <Text style={styles.returnLabel}>Past 30 days</Text>
-                {dtf.stats?.demo ? <Text style={styles.demo}>Demo</Text> : null}
-              </View>
+            <Text style={[styles.returnValue, { color: trendColor(month) }]}>
+              {month === null ? '—' : formatSignedBps(month)}
+            </Text>
+            <View style={styles.returnLabelRow}>
+              <Text style={styles.returnLabel}>Past 30 days</Text>
+              {dtf.stats?.demo ? <Text style={styles.demo}>Demo</Text> : null}
             </View>
-            <Sparkline
-              values={dtf.stats?.sparkline ?? []}
-              style={styles.spark}
-            />
           </View>
 
           <View style={styles.constituents}>
@@ -211,12 +214,9 @@ const styles = StyleSheet.create({
   soon: { borderColor: colors.lineStrong },
   statusText: { fontFamily: fonts.regular, fontSize: 13 },
   rule: { height: 1, backgroundColor: colors.line, marginVertical: 18 },
-  performance: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 16,
-    marginTop: 18,
-  },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  titles: { flex: 1 },
+  performance: { marginTop: 18 },
   returnValue: {
     fontFamily: fonts.medium,
     fontSize: 30,
@@ -240,6 +240,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 1,
   },
-  spark: { flex: 1 },
+  spark: { width: '40%' },
+  sparkWithMenu: { marginRight: 24 },
   stats: { flexDirection: 'row', paddingHorizontal: 6 },
 });

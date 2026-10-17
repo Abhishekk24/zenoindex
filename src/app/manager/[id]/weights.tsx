@@ -8,17 +8,10 @@
  */
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import {
-  Alert,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { ManagerBasketScreen } from '../../../components/manager/ManagerBasketScreen';
-import { Button, TokenLogo } from '../../../components/ui';
+import { alert, Button, TokenLogo } from '../../../components/ui';
 import { useLoad } from '../../../hooks/useLoad';
 import { useSendDraft } from '../../../hooks/useSendDraft';
 import * as api from '../../../lib/api';
@@ -137,13 +130,13 @@ export default function ManagerWeightsScreen() {
           },
         }),
       );
-      Alert.alert(
+      alert(
         'Weights updated',
         'Open Rebalance to trade toward the new targets.',
       );
       router.back();
     } catch (e) {
-      Alert.alert(
+      alert(
         'Update failed',
         e instanceof Error ? e.message : 'Transaction failed.',
       );
@@ -159,7 +152,7 @@ export default function ManagerWeightsScreen() {
         l => `${l.symbol}: ${pctOf(l.onChainBps)}% → ${pctOf(bpsOf(l.pct))}%`,
       )
       .join('\n');
-    Alert.alert(
+    alert(
       'Update target weights?',
       `${summary}\n\nAssets at 0% are sold down and removed. Trades run from Rebalance afterwards.`,
       [
