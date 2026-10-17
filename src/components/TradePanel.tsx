@@ -326,12 +326,22 @@ export function TradePanel({
               ? { gas: BigInt(draft.transaction.gas) }
               : {}),
           }),
-          pollUntil(() => findVaultTx(chainId, to, signer!, fromBlock), {
-            signal: watch.signal,
-            timeoutMs: WALLET_TIMEOUT_MS,
-            timeout:
-              'No answer from your wallet. If you signed, check your wallet’s activity before trying again so you don’t pay twice.',
-          }),
+          pollUntil(
+            () =>
+              findVaultTx(
+                chainId,
+                to,
+                signer!,
+                fromBlock,
+                draft.transaction.data,
+              ),
+            {
+              signal: watch.signal,
+              timeoutMs: WALLET_TIMEOUT_MS,
+              timeout:
+                'No answer from your wallet. If you signed, check your wallet’s activity before trying again so you don’t pay twice.',
+            },
+          ),
         ]),
       );
     } finally {

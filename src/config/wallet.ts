@@ -6,12 +6,12 @@ import type { PrivyProviderProps } from '@privy-io/expo';
 import { createAppKit } from '@reown/appkit-react-native';
 import Constants from 'expo-constants';
 import * as Linking from 'expo-linking';
-import { WagmiAdapter } from '@reown/appkit-wagmi-react-native';
 import { mainnet } from 'viem/chains';
 
 import { colors } from '../theme/tokens';
 import { robinhood } from './chains';
 import { appKitStorage } from './storage';
+import { WalletAdapter } from './walletAdapter';
 
 const appId = process.env.EXPO_PUBLIC_PRIVY_APP_ID;
 const clientId = process.env.EXPO_PUBLIC_PRIVY_CLIENT_ID;
@@ -47,11 +47,11 @@ export const SIWE_ORIGIN = {
 // EVM connector of its own, so AppKit connects and Privy signs the user in.
 // Polyfills for both load first in /entrypoint.js.
 const caipNetworkId = `eip155:${robinhood.id}` as const;
-const walletConnectRpc = `https://rpc.walletconnect.org/v1/?chainId=${caipNetworkId}&projectId=${projectId}`;
 
 const robinhoodNetwork = {
   ...robinhood,
-  rpcUrls: { default: { http: [walletConnectRpc] } },
+  // Custom-chain reads use the direct RPC from chains.ts. WalletConnect is
+  // still used to connect external wallets and request their signatures.
   chainNamespace: 'eip155' as const,
   caipNetworkId,
 };
@@ -66,7 +66,7 @@ const ethereumNetwork = {
 };
 const networks = [ethereumNetwork, robinhoodNetwork] as const;
 
-const wagmiAdapter = new WagmiAdapter({ projectId, networks });
+const wagmiAdapter = new WalletAdapter({ projectId, networks });
 
 export const appKit = createAppKit({
   projectId,

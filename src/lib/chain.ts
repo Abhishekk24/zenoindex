@@ -145,7 +145,7 @@ export async function erc20Allowance(
 
 /** Latest block number, read before a send so the chain can be watched from there. */
 export async function blockNumber(chainId: number): Promise<bigint> {
-  return (await publicClientOf(chainId)).getBlockNumber();
+  return (await publicClientOf(chainId)).getBlockNumber({ cacheTime: 0 });
 }
 
 /** Vault events that name the wallet they were sent for (src/Vault.sol). */
@@ -158,28 +158,40 @@ const VAULT_USER_EVENTS = parseAbi([
 ]);
 
 /**
- * The hash of the first transaction since `fromBlock` in which `vault`
- * emitted an event for `user`, or null. Used when the wallet's reply is lost
- * but the transaction itself went through.
+ * Recover a lost wallet reply only from a transaction matching the current
+ * draft, mined after the block observed before sending it. Earlier redeem
+ * legs can emit events for the same user and must not settle the next leg.
  */
 export async function findVaultTx(
   chainId: number,
   vault: string,
   user: string,
   fromBlock: bigint,
+  expectedData: Hex,
 ): Promise<string | null> {
   const client = await publicClientOf(chainId);
   const logs = await client.getLogs({
     address: vault as Hex,
     events: VAULT_USER_EVENTS,
-    fromBlock,
+    fromBlock: fromBlock + 1n,
   });
-  const match = logs.find(
+  const matches = logs.filter(
     log =>
       (log.args as { user?: string }).user?.toLowerCase() ===
       user.toLowerCase(),
   );
-  return match?.transactionHash ?? null;
+  for (const hash of new Set(matches.map(log => log.transactionHash))) {
+    if (!hash) continue;
+    const tx = await client.getTransaction({ hash });
+    if (
+      tx.from.toLowerCase() === user.toLowerCase() &&
+      tx.to?.toLowerCase() === vault.toLowerCase() &&
+      tx.input.toLowerCase() === expectedData.toLowerCase()
+    ) {
+      return hash;
+    }
+  }
+  return null;
 }
 
 /**

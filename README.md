@@ -16,9 +16,26 @@ npm run lint
 
 Add packages with `npx expo install <package>` so they match the SDK.
 
-The app talks to the web app's `/api/v1`; set `EXPO_PUBLIC_API_URL` in `.env`
-(see `src/lib/env.ts`). Development builds show **Skip sign-in (dev)** on the
-sign-in screen to enter as the sample investor without a session.
+The app talks to `zenoIndex-backend` at `/api/v1`; copy `.env.example` to `.env`
+and fill in the publishable API key, Privy app/client IDs and Reown project ID.
+Set `EXPO_PUBLIC_API_URL` to the hosted API or a phone-reachable local API.
+Sign-in uses Privy (email, Google or an external wallet); the backend verifies
+its access token and returns a Zeno session.
+
+For a local API against the latest mainnet contracts, run from the sibling
+backend repository:
+
+```bash
+pnpm --filter @zenoindex/api dev:mobile http://<computer-LAN-IP>:8788
+```
+
+Then set `EXPO_PUBLIC_API_URL` to that URL and reload Expo Go. This API uses a
+separate local database and the mobile app's existing publishable key. The
+phone and computer must be on a mutually reachable network. Localhost on a
+physical phone points at the phone itself.
+
+The mainnet integration and phone acceptance checklist are documented in
+`../zenoIndex-backend/docs/MAINNET_INTEGRATION.md`.
 
 `ios/` and `android/` are generated (`npx expo prebuild`) and not committed;
 configure native behaviour in `app.json`.
@@ -48,12 +65,12 @@ src/components/
   auth/ explore/ search/ basket/ portfolio/ profile/   screen-specific parts
   charts/                   NavChart, AllocationBar
 src/hooks/                  useLoad, useSession, useUser, useSlide, useKeyboardHeight
-src/lib/api.ts              the data boundary: the web app's /api/v1
+src/lib/api.ts              the data boundary: zenoIndex-backend /api/v1
 src/lib/http.ts             fetch, session cookie, error messages
 src/lib/session.tsx         SessionProvider (context in sessionContext.ts)
 src/lib/decimal.ts          BigInt decimal-string math; money is never a JS float
 src/lib/format.ts, money.ts display formatting ($ amounts in money.ts)
-src/lib/types.ts            API shapes copied from @dtf/core-api
+src/lib/types.ts            mobile API shapes
 src/theme/                  tokens (colours, spacing, fonts) and navigation theme
 ```
 
@@ -63,10 +80,14 @@ src/theme/                  tokens (colours, spacing, fonts) and navigation them
 
 - Expo SDK 57 migration verified.
 - Generic device wallet flow uses Reown AppKit + Wagmi.
-- Robinhood Chain Testnet is currently configured with chain ID `46630`.
-- Wallet connection is available from Profile → Wallets.
-- Connected EVM address and chain ID are validated before linking.
-- Reown social/email wallet login is disabled because Zeno authentication is handled separately through email sign-in.
+- Transactions use Robinhood Chain **mainnet**, chain ID `4663`, with USDG (6 decimals).
+- Email / Google sign-in uses a Privy embedded Ethereum wallet; wallet sign-in uses Reown AppKit.
+- Privy authenticates all sign-ins, including external wallets via SIWE. Reown connects external wallets and requests their signatures; Robinhood RPC reads use the direct URL in `src/config/chains.ts`.
+- The backend prepares unsigned transactions and verifies mined transactions against each prepared operation.
+- Creation, seed approval/deposit, investing, deploying allocations, rebalancing, redeeming and fee claims are integrated.
+- Redeeming signs a request, one swap per stock, and a final USDG claim.
+- Wallet reply recovery requires a matching sender, target and calldata in a later block, so earlier redemption steps cannot complete the next one.
+- Expo Go wallet callbacks use `exp://…/--/wc-return`; native builds use `zeno://wc-return`.
 - Solana Kit + Wallet UI dependencies are installed as the foundation for the Solana/Seeker flow.
 
 ### Device-specific wallet architecture
@@ -84,12 +105,14 @@ Solana Device / Seeker:
 
 - Device detection
 - Solana Mobile Wallet Adapter integration
-- Native wallet testing
-- Confirm final production network configuration
-- Contract transaction integration
+- Physical-phone wallet handoff and live transaction acceptance on the latest deployment
 
 ### Verification
 
 ```bash
 npm run typecheck
+npm run lint
+npm test
 npx expo export --platform web
+npx expo export --platform android
+```
