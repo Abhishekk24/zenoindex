@@ -6,7 +6,12 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AssetMap, isComingSoon, symbolOf } from '../../lib/basket';
-import { formatDecimal, formatSignedBps, shortAddress } from '../../lib/format';
+import {
+  formatBps,
+  formatDecimal,
+  formatSignedBps,
+  shortAddress,
+} from '../../lib/format';
 import type { Dtf } from '../../lib/types';
 import { colors, fonts, radius } from '../../theme/tokens';
 import { Sparkline } from '../charts/Sparkline';
@@ -45,7 +50,6 @@ export function BasketCard({
       : tickers;
   const comingSoon = isComingSoon(dtf);
   const month = dtf.stats?.change30dBps ?? null;
-  const day = dtf.stats?.change24hBps ?? null;
 
   return (
     <View>
@@ -69,21 +73,39 @@ export function BasketCard({
                 {dtf.symbol} · {shortAddress(dtf.manager)}
               </Text>
             </View>
-            {/* Sits in the striped corner; leaves room for the ⋮ accessory. */}
-            <Sparkline
-              values={dtf.stats?.sparkline ?? []}
-              style={[styles.spark, accessory ? styles.sparkWithMenu : null]}
-            />
+            {/* Top right; moves left of the manager ⋮ menu when there is one. */}
+            <View
+              style={[
+                styles.status,
+                comingSoon ? styles.soon : styles.active,
+                accessory ? styles.statusWithMenu : null,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.statusText,
+                  { color: comingSoon ? colors.muted : colors.green },
+                ]}
+              >
+                {comingSoon ? 'Coming soon' : 'Active'}
+              </Text>
+            </View>
           </View>
 
-          {/* The figure people compare baskets by: how the share price did lately. */}
-          <View style={styles.performance}>
-            <Text style={[styles.returnValue, { color: trendColor(month) }]}>
-              {month === null ? '—' : formatSignedBps(month)}
-            </Text>
-            <View style={styles.returnLabelRow}>
-              <Text style={styles.returnLabel}>Past 30 days</Text>
-              {dtf.stats?.demo ? <Text style={styles.demo}>Demo</Text> : null}
+          {/* The last 30 days of the share price, with its change. */}
+          <View style={styles.trend}>
+            <Sparkline
+              values={dtf.stats?.sparkline ?? []}
+              height={40}
+              style={styles.spark}
+            />
+            <View style={styles.trendFigures}>
+              <Text style={[styles.trendValue, { color: trendColor(month) }]}>
+                {month === null ? '—' : formatSignedBps(month)}
+              </Text>
+              <Text style={styles.trendLabel}>
+                {dtf.stats?.demo ? '30d · Demo' : '30d'}
+              </Text>
             </View>
           </View>
 
@@ -111,18 +133,6 @@ export function BasketCard({
             <Text style={styles.count}>
               {tickers.length} constituent{tickers.length === 1 ? '' : 's'}
             </Text>
-            <View
-              style={[styles.status, comingSoon ? styles.soon : styles.active]}
-            >
-              <Text
-                style={[
-                  styles.statusText,
-                  { color: comingSoon ? colors.muted : colors.green },
-                ]}
-              >
-                {comingSoon ? 'Coming soon' : 'Active'}
-              </Text>
-            </View>
           </View>
 
           <View style={styles.rule} />
@@ -134,9 +144,8 @@ export function BasketCard({
             />
             <BasketStat label="AUM" value={formatDecimal(dtf.aum, 4)} />
             <BasketStat
-              label="Today"
-              value={day === null ? '—' : formatSignedBps(day)}
-              color={day === null ? undefined : trendColor(day)}
+              label="Mgmt fee"
+              value={formatBps(dtf.fees.managementBps)}
             />
           </View>
         </View>
@@ -176,7 +185,7 @@ const styles = StyleSheet.create({
   constituents: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 22,
+    marginTop: 16,
   },
   avatars: { flexDirection: 'row' },
   avatar: {
@@ -210,37 +219,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 4,
   },
+  statusWithMenu: { marginRight: 40 },
   active: { borderColor: colors.greenLine },
   soon: { borderColor: colors.lineStrong },
   statusText: { fontFamily: fonts.regular, fontSize: 13 },
   rule: { height: 1, backgroundColor: colors.line, marginVertical: 18 },
-  head: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  head: { flexDirection: 'row', alignItems: 'flex-start', gap: 16 },
   titles: { flex: 1 },
-  performance: { marginTop: 18 },
-  returnValue: {
-    fontFamily: fonts.medium,
-    fontSize: 30,
-    lineHeight: 34,
-    letterSpacing: -0.5,
-  },
-  returnLabelRow: {
+  trend: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 14,
+    marginTop: 22,
+  },
+  spark: { flex: 1 },
+  trendFigures: { alignItems: 'flex-end', minWidth: 64 },
+  trendValue: { fontFamily: fonts.medium, fontSize: 15 },
+  trendLabel: {
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: colors.muted,
     marginTop: 2,
   },
-  returnLabel: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted },
-  demo: {
-    fontFamily: fonts.medium,
-    fontSize: 11,
-    color: colors.gold,
-    borderWidth: 1,
-    borderColor: colors.goldStrong,
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-  },
-  spark: { width: '40%' },
-  sparkWithMenu: { marginRight: 24 },
   stats: { flexDirection: 'row', paddingHorizontal: 6 },
 });
