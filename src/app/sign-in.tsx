@@ -40,7 +40,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getAddress } from 'viem';
-import { useAccountEffect, useChainId, useSignMessage } from 'wagmi';
+import { mainnet } from 'viem/chains';
+import { useAccountEffect, useSignMessage } from 'wagmi';
 
 import {
   type CodeError,
@@ -105,7 +106,6 @@ export default function SignInScreen() {
   const { open, disconnect } = useAppKit();
   const { isOpen: pickerOpen } = useAppKitState();
   const { address, isConnected } = useAppKitAccount();
-  const walletChainId = useChainId();
   const { signMessageAsync } = useSignMessage();
   // Set when the user starts a sign-in: once a wallet connects, ask it to sign
   // straight away rather than waiting for a second tap.
@@ -241,10 +241,12 @@ export default function SignInScreen() {
     setError(undefined);
     try {
       // Privy's SIWE message for this wallet; Privy checks the signature.
+      // Always Ethereum (see config/wallet.ts): the wallet's current chain may
+      // be Robinhood, which Privy can't verify a signature on.
       const message = await generateSiweMessage({
         from: SIWE_ORIGIN,
         wallet: {
-          chainId: `eip155:${walletChainId}`,
+          chainId: `eip155:${mainnet.id}`,
           address: getAddress(wallet),
         },
       });
@@ -262,7 +264,9 @@ export default function SignInScreen() {
         }),
       ]).finally(() => clearTimeout(timer));
       // Signed in to Privy: `finishing` takes over and opens the Zeno session.
-      await loginWithSiwe({ signature });
+      // Privy otherwise checks against the last message it generated, which a
+      // second attempt (re-tap, reconnect) may have replaced.
+      await loginWithSiwe({ signature, messageOverride: message });
     } catch (e) {
       // No answer: drop the connection so the next try starts a fresh one.
       if (e instanceof Error && e.message === SIGN_TIMEOUT) await disconnect();
