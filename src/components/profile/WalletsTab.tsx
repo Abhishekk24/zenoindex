@@ -1,5 +1,4 @@
 import { usePrivy, type PrivyUser } from '@privy-io/expo';
-import { useAppKit } from '@reown/appkit-react-native';
 import * as Clipboard from 'expo-clipboard';
 import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -19,7 +18,9 @@ import type { User } from '../../lib/types';
 import { primaryWallet } from '../../lib/user';
 import { useWallet } from '../../lib/wallet';
 import { colors, fonts, space, type } from '../../theme/tokens';
+import { disconnectWallet } from '../../wallets/externalWallet';
 import { Badge, Body, Button, Card, LinkText, Row } from '../ui';
+import { chooseWallet } from '../wallet/WalletPicker';
 import { DepositSheet } from './DepositSheet';
 
 /**
@@ -67,7 +68,6 @@ function signInLabel(user: PrivyUser | null): string | null {
  */
 export function WalletsTab({ user }: { user: User }) {
   const { address, isExternal } = useWallet();
-  const { open } = useAppKit();
   const { user: privyUser } = usePrivy();
   const signedIn = primaryWallet(user);
   const { data: balances } = useLoad(
@@ -149,11 +149,19 @@ export function WalletsTab({ user }: { user: User }) {
         </Body>
       )}
       {isExternal ? (
-        <Button
-          label={address ? 'Manage connected wallet' : 'Connect wallet'}
-          variant="ghost"
-          onPress={() => open()}
-        />
+        address ? (
+          <Button
+            label="Disconnect wallet"
+            variant="ghost"
+            onPress={() => void disconnectWallet()}
+          />
+        ) : (
+          <Button
+            label="Connect wallet"
+            variant="ghost"
+            onPress={() => void chooseWallet()}
+          />
+        )
       ) : null}
     </Card>
   );

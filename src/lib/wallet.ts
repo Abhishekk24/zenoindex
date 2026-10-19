@@ -4,28 +4,18 @@
  *
  * - email / Google → the Privy embedded wallet. It signs inside the app on any
  *   chain in config/wallet.ts: nothing to open, no network to switch by hand.
- * - wallet sign-in → the external wallet connected through Reown AppKit.
- *   Requests travel over WalletConnect, so the wallet app is brought to the
- *   front for each one (lib/walletLink.ts) and the network is switched first.
+ * - wallet sign-in → the external wallet connected over WalletConnect
+ *   (src/wallets/externalWallet.ts). Each request opens the wallet app, and the
+ *   wallet is asked to switch network first.
+ *
+ * Both come from useWallets(), one interface for every wallet type.
  */
-import {
-  useEmbeddedEthereumWallet,
-  usePrivy,
-  type PrivyUser,
-} from '@privy-io/expo';
-import { useAccount } from '@reown/appkit-react-native';
-import { numberToHex, type Hex } from 'viem';
-import { useChainId, useSendTransaction, useSwitchChain } from 'wagmi';
+import { usePrivy, type PrivyUser } from '@privy-io/expo';
+import type { Hex } from 'viem';
 
-import { withWalletOpen } from './walletLink';
+import { useWallets, type WalletTx } from '../wallets/useWallets';
 
-export type WalletTx = {
-  chainId: number;
-  to: Hex;
-  data: Hex;
-  value?: bigint;
-  gas?: bigint;
-};
+export type { WalletTx };
 
 /**
  * True when the account is an external wallet: a Privy user who signed in with
@@ -44,71 +34,27 @@ export function signsWithExternalWallet(user: PrivyUser | null): boolean {
 }
 
 export function useWallet() {
-  const privySession = !signsWithExternalWallet(usePrivy().user);
-  const { wallets } = useEmbeddedEthereumWallet();
-  const embedded = wallets[0];
-  // AppKit's account, not wagmi's (wagmi can report another account of the session).
-  const external = useAccount();
-  const walletChainId = useChainId();
-  const { sendTransactionAsync } = useSendTransaction();
-  const { switchChainAsync } = useSwitchChain();
-
-  const externalAddress = external.isConnected ? external.address : undefined;
+  const isExternal = signsWithExternalWallet(usePrivy().user);
+  const wallets = useWallets();
+  const wallet = wallets.find(w =>
+    isExternal ? w.type === 'external' : w.type === 'embedded',
+  );
 
   return {
     /** undefined while the embedded wallet is being created or no external wallet is connected. */
-    address: privySession ? embedded?.address : externalAddress,
-    /** External wallets are connected and managed in AppKit's modal. */
-    isExternal: !privySession,
+    address: wallet?.address,
+    /** External wallets are connected from the wallet picker (Profile → Wallets). */
+    isExternal,
 
-    async sendTransaction(tx: WalletTx): Promise<Hex> {
-      if (privySession) {
-        if (!embedded) {
-          throw new Error(
-            'Your wallet is still being set up. Try again in a moment.',
-          );
-        }
-        const provider = await embedded.getProvider();
-        await provider.request({
-          method: 'wallet_switchEthereumChain',
-          params: [{ chainId: numberToHex(tx.chainId) }],
-        });
-        return (await provider.request({
-          method: 'eth_sendTransaction',
-          params: [
-            {
-              from: embedded.address,
-              to: tx.to,
-              data: tx.data,
-              value: numberToHex(tx.value ?? 0n),
-              ...(tx.gas ? { gas: numberToHex(tx.gas) } : {}),
-            },
-          ],
-        })) as Hex;
+    sendTransaction(tx: WalletTx): Promise<Hex> {
+      if (!wallet) {
+        throw new Error(
+          isExternal
+            ? 'Connect your wallet first.'
+            : 'Your wallet is still being set up. Try again in a moment.',
+        );
       }
-
-      if (!externalAddress) {
-        throw new Error('Connect your wallet first.');
-      }
-      if (walletChainId !== tx.chainId) {
-        try {
-          await switchChainAsync({ chainId: tx.chainId });
-        } catch {
-          throw new Error(
-            'Your wallet couldn’t switch to Robinhood Chain. Add the network in your wallet, then try again.',
-          );
-        }
-      }
-      return withWalletOpen(() =>
-        sendTransactionAsync({
-          account: externalAddress as Hex,
-          chainId: tx.chainId,
-          to: tx.to,
-          data: tx.data,
-          value: tx.value ?? 0n,
-          ...(tx.gas ? { gas: tx.gas } : {}),
-        }),
-      );
+      return wallet.sendTransaction(tx);
     },
   };
 }

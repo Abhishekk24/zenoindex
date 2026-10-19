@@ -5,8 +5,9 @@
  * - Email: Send code → "Check your email" step (EmailCodeStep) → Privy checks
  *   the code. Google: Privy's OAuth page, returning via the app's scheme.
  *   Privy then creates the user's embedded wallet.
- * - Connect wallet: AppKit's picker connects an external wallet (MetaMask &
- *   co.), which signs Privy's Sign-In with Ethereum message — a signature
+ * - Connect wallet: our wallet picker (components/wallet/WalletPicker)
+ *   connects an external wallet over WalletConnect (MetaMask, Rainbow, … any
+ *   WalletConnect wallet), which signs Privy's Sign-In with Ethereum message — a signature
  *   only, no transaction.
  *
  * The backend then exchanges Privy's access token for a Zeno session on the
@@ -20,14 +21,9 @@ import {
   useLoginWithSiwe,
   usePrivy,
 } from '@privy-io/expo';
-import {
-  useAccount as useAppKitAccount,
-  useAppKit,
-  useAppKitState,
-} from '@reown/appkit-react-native';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Image,
   ImageBackground,
@@ -39,9 +35,8 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getAddress } from 'viem';
+import { getAddress, type Hex } from 'viem';
 import { mainnet } from 'viem/chains';
-import { useAccountEffect, useSignMessage } from 'wagmi';
 
 import {
   type CodeError,
@@ -56,14 +51,21 @@ import {
 } from '../components/auth/palette';
 import { PrimaryButton } from '../components/auth/PrimaryButton';
 import { GoogleIcon } from '../components/icons';
+import { chooseWallet as openWalletPicker } from '../components/wallet/WalletPicker';
 import { SIWE_ORIGIN } from '../config/wallet';
 import { useKeyboardHeight } from '../hooks/useKeyboardHeight';
 import { useSession } from '../hooks/useSession';
 import * as api from '../lib/api';
 import { shortAddress } from '../lib/format';
 import { signsWithExternalWallet } from '../lib/wallet';
-import { withWalletOpen } from '../lib/walletLink';
 import { colors, fonts } from '../theme/tokens';
+import {
+  disconnectWallet,
+  signMessage,
+  switchChain,
+  useExternalWallet,
+  walletTrace,
+} from '../wallets/externalWallet';
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -103,13 +105,12 @@ export default function SignInScreen() {
   const { sendCode: sendPrivyCode, loginWithCode } = useLoginWithEmail();
   const { login: loginWithOAuth } = useLoginWithOAuth();
   const { generateSiweMessage, loginWithSiwe } = useLoginWithSiwe();
-  const { open, disconnect } = useAppKit();
-  const { isOpen: pickerOpen } = useAppKitState();
-  const { address, isConnected } = useAppKitAccount();
-  const { signMessageAsync } = useSignMessage();
-  // Set when the user starts a sign-in: once a wallet connects, ask it to sign
-  // straight away rather than waiting for a second tap.
-  const signInOnConnect = useRef(false);
+  // The external wallet (WalletConnect): one source of truth for its address.
+  const externalWallet = useExternalWallet();
+  const address =
+    externalWallet.status === 'connected' ? externalWallet.address : undefined;
+  const isConnected = address !== undefined;
+  const pickerOpen = externalWallet.status === 'connecting';
   // Only offer "Sign in with 0x…" for a wallet connected on this screen: a
   // connection restored from an earlier run may be dead on the wallet's side,
   // and its signature request would never arrive.
@@ -240,9 +241,21 @@ export default function SignInScreen() {
     setBusy(true);
     setError(undefined);
     try {
+      // Sign-in is on Ethereum (see config/wallet.ts): Privy can't verify a
+      // signature made on another chain (Robinhood, Base, …). The wallet is
+      // asked to switch first and shows its own "switch network" prompt.
+      try {
+        await switchChain(mainnet.id);
+      } catch (e) {
+        throw new Error(
+          (e as Error).message === 'Cancelled in your wallet.'
+            ? 'Switch your wallet to Ethereum to sign in.'
+            : (e as Error).message,
+        );
+      }
+
       // Privy's SIWE message for this wallet; Privy checks the signature.
-      // Always Ethereum (see config/wallet.ts): the wallet's current chain may
-      // be Robinhood, which Privy can't verify a signature on.
+      walletTrace('Privy: getting the sign-in message');
       const message = await generateSiweMessage({
         from: SIWE_ORIGIN,
         wallet: {
@@ -252,9 +265,7 @@ export default function SignInScreen() {
       });
       let timer: ReturnType<typeof setTimeout> | undefined;
       const signature = await Promise.race([
-        withWalletOpen(() =>
-          signMessageAsync({ account: wallet as `0x${string}`, message }),
-        ),
+        signMessage(message, getAddress(wallet) as Hex),
         // A wallet that lost this session never answers; don't wait forever.
         new Promise<never>((_, reject) => {
           timer = setTimeout(
@@ -263,36 +274,30 @@ export default function SignInScreen() {
           );
         }),
       ]).finally(() => clearTimeout(timer));
+      walletTrace('Privy: checking the signature');
       // Signed in to Privy: `finishing` takes over and opens the Zeno session.
       // Privy otherwise checks against the last message it generated, which a
       // second attempt (re-tap, reconnect) may have replaced.
       await loginWithSiwe({ signature, messageOverride: message });
+      walletTrace('Privy: signed in, opening the Zeno session');
     } catch (e) {
       // No answer: drop the connection so the next try starts a fresh one.
-      if (e instanceof Error && e.message === SIGN_TIMEOUT) await disconnect();
+      if (e instanceof Error && e.message === SIGN_TIMEOUT) {
+        await disconnectWallet();
+      }
       setError(walletErrorMessage(e));
     } finally {
       setBusy(false);
     }
   };
 
+  /** Picks and connects a wallet, then asks it to sign in straight away. */
   const chooseWallet = async () => {
     setError(undefined);
     setConnectedHere(true);
-    // With a wallet still connected, open() shows that wallet's account view
-    // instead of the picker — disconnect first so another one can be chosen.
-    if (isConnected) await disconnect();
-    signInOnConnect.current = true;
-    open();
+    const connected = await openWalletPicker();
+    if (connected) await walletSignIn(connected);
   };
-
-  useAccountEffect({
-    onConnect({ address: connected }) {
-      if (!signInOnConnect.current) return;
-      signInOnConnect.current = false;
-      void walletSignIn(connected);
-    },
-  });
 
   return (
     <View style={styles.root}>

@@ -10,25 +10,24 @@ import {
   SpaceGrotesk_700Bold,
 } from '@expo-google-fonts/space-grotesk';
 import { PrivyProvider } from '@privy-io/expo';
-import { AppKit, AppKitProvider } from '@reown/appkit-react-native';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useFonts } from 'expo-font';
 import { ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect } from 'react';
-import { LogBox, StyleSheet, View } from 'react-native';
+import { LogBox, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { WagmiProvider } from 'wagmi';
 
 import { RootStack } from '../components/navigation/RootStack';
 import { ModeSwitchOverlay } from '../components/ModeSwitchOverlay';
 import { DialogHost } from '../components/ui';
 import { OfflineBanner } from '../components/OfflineBanner';
-import { appKit, privyProps, wagmiAdapter } from '../config/wallet';
+import { WalletPickerHost } from '../components/wallet/WalletPicker';
+import { privyProps } from '../config/wallet';
 import { SessionProvider } from '../lib/session';
 import { navigationTheme } from '../theme/navigationTheme';
 import { fonts } from '../theme/tokens';
+import { walletConnectProvider } from '../wallets/externalWallet';
 
 // Hold the splash screen until the fonts are ready.
 SplashScreen.preventAutoHideAsync();
@@ -43,7 +42,8 @@ LogBox.ignoreLogs([
   'No callback found for "privy:iframe:ready"',
 ]);
 
-const queryClient = new QueryClient();
+// Start WalletConnect now: it restores a wallet connected in an earlier launch.
+void walletConnectProvider().catch(() => {});
 
 export default function RootLayout() {
   // Loaded at runtime so they also work in Expo Go. The keys are the family
@@ -65,31 +65,17 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={styles.root}>
-      {/* Privy (email / Google) outside; inside, the Reown docs' order for
-          external wallets: AppKitProvider → WagmiProvider → QueryClientProvider. */}
       <PrivyProvider {...privyProps}>
-        <AppKitProvider instance={appKit}>
-          <WagmiProvider config={wagmiAdapter.wagmiConfig}>
-            <QueryClientProvider client={queryClient}>
-              <ThemeProvider value={navigationTheme}>
-                <SessionProvider>
-                  <StatusBar style="light" />
-                  <RootStack />
-                  <OfflineBanner />
-                  <ModeSwitchOverlay />
-                  <DialogHost />
-                </SessionProvider>
-              </ThemeProvider>
-              {/* The wallet picker. AppKitProvider only holds state; without
-                  this the picker never appears. Wrapped in a full-screen
-                  absolute layer (Reown docs, Expo Android) that lets touches
-                  through to the app while the picker is closed. */}
-              <View style={styles.appKit} pointerEvents="box-none">
-                <AppKit />
-              </View>
-            </QueryClientProvider>
-          </WagmiProvider>
-        </AppKitProvider>
+        <ThemeProvider value={navigationTheme}>
+          <SessionProvider>
+            <StatusBar style="light" />
+            <RootStack />
+            <OfflineBanner />
+            <ModeSwitchOverlay />
+            <DialogHost />
+            <WalletPickerHost />
+          </SessionProvider>
+        </ThemeProvider>
       </PrivyProvider>
     </GestureHandlerRootView>
   );
@@ -97,5 +83,4 @@ export default function RootLayout() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  appKit: { ...StyleSheet.absoluteFill },
 });

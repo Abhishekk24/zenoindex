@@ -31,8 +31,8 @@ import {
 } from '../lib/format';
 import type { Dtf, Operation, TradePreview, TxDraft } from '../lib/types';
 import { useWallet } from '../lib/wallet';
-import { openConnectedWallet } from '../lib/walletLink';
 import { colors, fonts, space, type } from '../theme/tokens';
+import { openWalletApp } from '../wallets/externalWallet';
 import {
   Badge,
   Body,
@@ -608,7 +608,7 @@ export function TradePanel({
             <Button
               label="Open wallet"
               variant="outline"
-              onPress={() => void openConnectedWallet()}
+              onPress={() => void openWalletApp()}
             />
           ) : null}
           <Button
