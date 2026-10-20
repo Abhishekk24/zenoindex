@@ -9,6 +9,8 @@ export const colors = {
   surface: '#0c0f0e',
   surface2: '#141817',
   surface3: '#1b201e',
+  /** Notices (ui/Notice): a dark green panel, like the sign-in inputs. */
+  notice: '#08150f',
   line: 'rgba(255, 255, 255, 0.08)',
   lineStrong: 'rgba(255, 255, 255, 0.16)',
   lineControl: 'rgba(255, 255, 255, 0.22)',

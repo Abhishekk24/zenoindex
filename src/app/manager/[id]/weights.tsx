@@ -16,6 +16,7 @@ import { useLoad } from '../../../hooks/useLoad';
 import { useSendDraft } from '../../../hooks/useSendDraft';
 import * as api from '../../../lib/api';
 import { shortAddress } from '../../../lib/format';
+import { loadCreateOptions } from '../../../manager/createBasket';
 import { colors, fonts, series, space } from '../../../theme/tokens';
 
 type Line = {
@@ -31,13 +32,17 @@ type Line = {
 
 const FULL = 10_000;
 
+/** The basket's slots, and the priced assets it can add (as in Create). */
 async function load(id: string) {
   const [dashboard, options] = await Promise.all([
     api.getManagerDashboard(id),
-    api.getCreateOptions(),
+    loadCreateOptions(),
   ]);
   return { dashboard, options };
 }
+
+/** Asset ids are addresses; the API doesn't always agree on their case. */
+const sameAsset = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
 /** 2550 bps -> "25.5"; 3000 -> "30". */
 const pctOf = (bps: number) => String(bps / 100);
@@ -48,9 +53,9 @@ function initialLines(
   data: Awaited<ReturnType<typeof load>>,
   add: string | undefined,
 ): Line[] {
-  const known = new Map(data.options.assets.map(a => [a.id, a]));
+  const known = new Map(data.options.assets.map(a => [a.id.toLowerCase(), a]));
   const lines: Line[] = data.dashboard.slots.map(s => {
-    const a = known.get(s.assetId);
+    const a = known.get(s.assetId.toLowerCase());
     return {
       assetId: s.assetId,
       symbol: s.symbol ?? a?.symbol ?? shortAddress(s.assetId),
@@ -61,13 +66,15 @@ function initialLines(
     };
   });
   const extra =
-    add && !lines.some(l => l.assetId === add) ? known.get(add) : undefined;
+    add && !lines.some(l => sameAsset(l.assetId, add))
+      ? known.get(add.toLowerCase())
+      : undefined;
   if (extra) {
     lines.push({
       assetId: extra.id,
       symbol: extra.symbol,
       name: extra.name,
-      logoUrl: extra.logoUrl,
+      logoUrl: extra.logoUrl ?? null,
       onChainBps: 0,
       pct: '0',
     });
@@ -97,8 +104,10 @@ export default function ManagerWeightsScreen() {
   const dtf = data?.dashboard.dtf;
   const total = lines.reduce((sum, l) => sum + bpsOf(l.pct), 0);
   const changed = lines.some(l => bpsOf(l.pct) !== l.onChainBps);
+  // Any priced asset not already in the basket; the base asset (USDG) isn't
+  // a constituent.
   const candidates = (data?.options.assets ?? []).filter(
-    a => a.selectable && !lines.some(l => l.assetId === a.id),
+    a => a.mode === 'in-kind' && !lines.some(l => sameAsset(l.assetId, a.id)),
   );
 
   const setPct = (assetId: string, pct: string) =>
@@ -290,7 +299,7 @@ export default function ManagerWeightsScreen() {
                             assetId: a.id,
                             symbol: a.symbol,
                             name: a.name,
-                            logoUrl: a.logoUrl,
+                            logoUrl: a.logoUrl ?? null,
                             onChainBps: 0,
                             pct: '0',
                           },

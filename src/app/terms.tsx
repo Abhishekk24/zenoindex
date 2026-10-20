@@ -30,6 +30,7 @@ export default function TermsScreen() {
   const insets = useSafeAreaInsets();
   const user = useUser();
   const { setUser, signOut } = useSession();
+  const [signingOut, setSigningOut] = useState(false);
   const [terms, setTerms] = useState(false);
   const [privacy, setPrivacy] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -137,7 +138,16 @@ export default function TermsScreen() {
           disabled={!terms || !privacy}
           loading={busy}
         />
-        <Button label="Sign out" variant="ghost" onPress={signOut} />
+        <Button
+          label="Sign out"
+          variant="ghost"
+          onPress={() => {
+            setSigningOut(true);
+            signOut().finally(() => setSigningOut(false));
+          }}
+          loading={signingOut}
+          disabled={signingOut}
+        />
       </View>
     </View>
   );

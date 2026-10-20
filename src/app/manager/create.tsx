@@ -118,10 +118,12 @@ export default function CreateBasketScreen() {
   const [seeded, setSeeded] = useState(false);
   const { address } = useWallet();
   const sendDraft = useSendDraft();
-  const { data: options, error: optionsError } = useLoad(
-    loadCreateOptions,
-    'create-options',
-  );
+  const {
+    data: options,
+    error: optionsError,
+    loading: optionsLoading,
+    reload: reloadOptions,
+  } = useLoad(loadCreateOptions, 'create-options');
   const assets = options?.assets ?? [];
 
   const update = (patch: Partial<CreateForm>) => {
@@ -319,6 +321,9 @@ export default function CreateBasketScreen() {
           {step === 1 && (
             <ConstituentsStep
               assets={assets}
+              loading={optionsLoading}
+              loadError={optionsError}
+              onRetry={reloadOptions}
               form={form}
               update={update}
               providerLabel={providerLabel === '—' ? 'Provider' : providerLabel}

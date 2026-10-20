@@ -13,6 +13,7 @@ import {
   ProfileIcon,
 } from '../../components/icons';
 import { TabBarBackground } from '../../components/navigation/TabBarBackground';
+import { TabBlurTarget } from '../../components/navigation/TabBlur';
 import { useAppMode } from '../../lib/appMode';
 import { colors, fonts, tabBarHeight } from '../../theme/tokens';
 
@@ -27,6 +28,12 @@ export default function TabsLayout() {
   const manager = mode === 'manager';
   return (
     <Tabs
+      // Each screen is what the tab bar blurs on Android (TabBlur).
+      screenLayout={({ route, navigation, children }) => (
+        <TabBlurTarget routeKey={route.key} navigation={navigation}>
+          {children}
+        </TabBlurTarget>
+      )}
       screenOptions={{
         headerStyle: { backgroundColor: colors.bg },
         headerShadowVisible: false,

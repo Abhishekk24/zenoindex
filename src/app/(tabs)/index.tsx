@@ -14,6 +14,10 @@ import { AppHeader } from '../../components/AppHeader';
 import { BasketCard } from '../../components/explore/BasketCard';
 import { ChipRow } from '../../components/explore/ChipRow';
 import {
+  ExploreBelowPanels,
+  FilterPanel,
+} from '../../components/explore/FilterPanel';
+import {
   Chip,
   Empty,
   LoadState,
@@ -148,96 +152,105 @@ export default function ExploreScreen() {
       </View>
 
       {panel === 'strategy' && (
-        <ChipRow>
-          {strategies.map(s => (
-            <Chip
-              key={s}
-              label={humanize(s)}
-              selected={strategy === s}
-              onPress={() => setStrategy(strategy === s ? undefined : s)}
-            />
-          ))}
-        </ChipRow>
+        <FilterPanel>
+          <ChipRow>
+            {strategies.map(s => (
+              <Chip
+                key={s}
+                label={humanize(s)}
+                selected={strategy === s}
+                onPress={() => setStrategy(strategy === s ? undefined : s)}
+              />
+            ))}
+          </ChipRow>
+        </FilterPanel>
       )}
       {panel === 'manager' && (
+        <FilterPanel>
+          <ChipRow>
+            {managers.map(m => (
+              <Chip
+                key={m}
+                label={shortAddress(m)}
+                selected={manager === m}
+                onPress={() => setManager(manager === m ? undefined : m)}
+              />
+            ))}
+          </ChipRow>
+        </FilterPanel>
+      )}
+      <ExploreBelowPanels style={styles.below}>
         <ChipRow>
-          {managers.map(m => (
+          {SORTS.map(s => (
             <Chip
-              key={m}
-              label={shortAddress(m)}
-              selected={manager === m}
-              onPress={() => setManager(manager === m ? undefined : m)}
+              key={s.value}
+              label={s.label}
+              selected={sort === s.value}
+              onPress={() => setSort(s.value)}
             />
           ))}
         </ChipRow>
-      )}
-      <ChipRow>
-        {SORTS.map(s => (
-          <Chip
-            key={s.value}
-            label={s.label}
-            selected={sort === s.value}
-            onPress={() => setSort(s.value)}
-          />
-        ))}
-      </ChipRow>
-      {filtered && (
-        <Pressable
-          onPress={clear}
-          accessibilityRole="button"
-          style={styles.clear}
-        >
-          <Text style={styles.clearText}>
-            {visible.length} of {dtfs.length} · Clear filters
-          </Text>
-        </Pressable>
-      )}
+        {filtered && (
+          <FilterPanel>
+            <Pressable
+              onPress={clear}
+              accessibilityRole="button"
+              style={styles.clear}
+            >
+              <Text style={styles.clearText}>
+                {visible.length} of {dtfs.length} · Clear filters
+              </Text>
+            </Pressable>
+          </FilterPanel>
+        )}
 
-      {!data ? (
-        <LoadState error={error} onRetry={reload} />
-      ) : (
-        <Screen tabBar onRefresh={reload} refreshing={loading}>
-          <SwipeTabContent
-            index={ACCESS.findIndex(a => a.value === access)}
-            count={ACCESS.length}
-            onIndexChange={i => setAccess(ACCESS[i]!.value)}
-          >
-            <View style={styles.list}>
-              {dtfs.length === 0 ? (
-                <Empty
-                  title="No baskets are listed yet"
-                  body="Listed baskets appear here as soon as a manager publishes one."
-                />
-              ) : visible.length === 0 ? (
-                <Empty
-                  title="No baskets match these filters"
-                  body="Try another tab, or adjust the search, manager or strategy filters."
-                />
-              ) : (
-                visible.map(dtf => (
-                  <BasketCard
-                    key={dtf.id}
-                    dtf={dtf}
-                    assets={assets}
-                    onPress={() =>
-                      router.push({
-                        pathname: '/basket/[id]',
-                        params: { id: dtf.id },
-                      })
-                    }
+        {!data ? (
+          <LoadState error={error} onRetry={reload} />
+        ) : (
+          <Screen tabBar onRefresh={reload} refreshing={loading}>
+            <SwipeTabContent
+              index={ACCESS.findIndex(a => a.value === access)}
+              count={ACCESS.length}
+              onIndexChange={i => setAccess(ACCESS[i]!.value)}
+            >
+              <View style={styles.list}>
+                {dtfs.length === 0 ? (
+                  <Empty
+                    title="No baskets are listed yet"
+                    body="Listed baskets appear here as soon as a manager publishes one."
                   />
-                ))
-              )}
-            </View>
-          </SwipeTabContent>
-        </Screen>
-      )}
+                ) : visible.length === 0 ? (
+                  <Empty
+                    title="No baskets match these filters"
+                    body="Try another tab, or adjust the search, manager or strategy filters."
+                  />
+                ) : (
+                  visible.map(dtf => (
+                    <BasketCard
+                      key={dtf.id}
+                      dtf={dtf}
+                      assets={assets}
+                      onPress={() =>
+                        router.push({
+                          pathname: '/basket/[id]',
+                          params: { id: dtf.id },
+                        })
+                      }
+                    />
+                  ))
+                )}
+              </View>
+            </SwipeTabContent>
+          </Screen>
+        )}
+      </ExploreBelowPanels>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
+  below: { flex: 1 },
   list: { gap: space.lg },
   tabs: { marginTop: space.lg, paddingHorizontal: space.md },
   clear: { paddingHorizontal: space.lg, paddingTop: space.md },

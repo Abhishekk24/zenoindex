@@ -12,6 +12,7 @@ export { IconButton } from './IconButton';
 export { Label } from './Label';
 export { LinkText } from './LinkText';
 export { LoadState } from './LoadState';
+export { Notice, type NoticeAction, type NoticeContent } from './Notice';
 export { Mono } from './Mono';
 export { Row } from './Row';
 export { Screen } from './Screen';

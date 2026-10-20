@@ -51,6 +51,7 @@ import {
 } from '../components/auth/palette';
 import { PrimaryButton } from '../components/auth/PrimaryButton';
 import { GoogleIcon } from '../components/icons';
+import { Notice, type NoticeContent } from '../components/ui';
 import { chooseWallet as openWalletPicker } from '../components/wallet/WalletPicker';
 import { SIWE_ORIGIN } from '../config/wallet';
 import { useKeyboardHeight } from '../hooks/useKeyboardHeight';
@@ -60,21 +61,56 @@ import { shortAddress } from '../lib/format';
 import { signsWithExternalWallet } from '../lib/wallet';
 import { colors, fonts } from '../theme/tokens';
 import {
-  disconnectWallet,
+  cancelWalletRequest,
+  externalWallet as currentExternalWallet,
+  openWalletApp,
   signMessage,
   switchChain,
   useExternalWallet,
+  walletName,
+  WalletError,
   walletTrace,
+  warmUp,
 } from '../wallets/externalWallet';
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const SIGN_TIMEOUT_MS = 2 * 60_000;
-const SIGN_TIMEOUT =
-  'No answer from your wallet. Connect your wallet again and retry.';
+/** "your wallet" → "Your wallet"; "MetaMask" unchanged. */
+const capitalized = (text: string) =>
+  text.charAt(0).toUpperCase() + text.slice(1);
+
+/**
+ * Wallet sign-in, step by step (after the wallet is connected):
+ * - switch: the wallet moves to Ethereum, which Privy checks the signature
+ *   on (a wallet already there answers without a prompt).
+ * - message: Privy writes the sign-in message (< 1 s).
+ * - sign: the user signs it in the wallet (user's tap).
+ * - verify: Privy checks the signature (< 2 s).
+ * Then `finishing` opens the Zeno session (POST /auth/privy, < 2 s).
+ * Wallet steps give up after 2 min (wallets/externalWallet.ts), Privy's after
+ * PRIVY_TIMEOUT_MS, the backend's after 20 s (lib/http.ts).
+ */
+type WalletStep = 'switch' | 'message' | 'sign' | 'verify';
+
+const PRIVY_TIMEOUT_MS = 30_000;
+const PRIVY_TIMEOUT =
+  'Privy didn’t respond. Check your connection and try again.';
+
+/** Rejects with `message` if `work` takes longer than `ms`. */
+function withTimeout<T>(work: Promise<T>, ms: number, message: string) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    work,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(message)), ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
 
 /** Turns wallet/viem errors into something short for the user. */
 function walletErrorMessage(e: unknown): string {
+  // Wallet errors already say what happened and in which app.
+  if (e instanceof WalletError) return e.message;
   const text = e instanceof Error ? e.message : '';
   if (/reject|denied|cancel/i.test(text)) return 'Signature cancelled.';
   return text || 'Wallet sign-in failed.';
@@ -111,13 +147,16 @@ export default function SignInScreen() {
     externalWallet.status === 'connected' ? externalWallet.address : undefined;
   const isConnected = address !== undefined;
   const pickerOpen = externalWallet.status === 'connecting';
-  // Only offer "Sign in with 0x…" for a wallet connected on this screen: a
-  // connection restored from an earlier run may be dead on the wallet's side,
-  // and its signature request would never arrive.
-  const [connectedHere, setConnectedHere] = useState(false);
+  // The connection made on this screen. "Sign in with 0x…" (a retry) only
+  // signs over that one: an older connection may be gone on the wallet's
+  // side, and its signature request would never be shown.
+  const [connectedTopic, setConnectedTopic] = useState<string>();
 
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
+  const [walletStep, setWalletStep] = useState<WalletStep>();
+  // What went wrong with the wallet, and what the user can do next.
+  const [notice, setNotice] = useState<NoticeContent>();
   const [error, setError] = useState<string>();
   const [step, setStep] = useState<'email' | 'code'>('email');
   const [codeError, setCodeError] = useState<CodeError>();
@@ -129,6 +168,12 @@ export default function SignInScreen() {
   // rather than sending the user back to enter a code that no longer works.
   const [exchangeFailed, setExchangeFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
+
+  // Opens the WalletConnect relay now, so a wallet opens at once when picked
+  // (opening it on demand cost ~2.4 s on device).
+  useEffect(() => {
+    void warmUp();
+  }, []);
 
   const validEmail = EMAIL.test(email.trim());
   const walletAddress = wallets[0]?.address;
@@ -149,9 +194,11 @@ export default function SignInScreen() {
     let live = true;
     (async () => {
       try {
+        walletTrace('Zeno: opening the session');
         const token = await privy.getAccessToken();
         if (!token) throw new Error('Sign-in expired. Please try again.');
         const user = await api.privyLogin(token);
+        walletTrace('Zeno: signed in');
         if (live) setUser(user);
       } catch (e) {
         if (!live) return;
@@ -240,64 +287,182 @@ export default function SignInScreen() {
   const walletSignIn = async (wallet: string) => {
     setBusy(true);
     setError(undefined);
+    setNotice(undefined);
     try {
-      // Sign-in is on Ethereum (see config/wallet.ts): Privy can't verify a
-      // signature made on another chain (Robinhood, Base, …). The wallet is
-      // asked to switch first and shows its own "switch network" prompt.
+      // Sign-in is on Ethereum: the SIWE message says chain 1, and Privy can't
+      // check a signature made on another chain (Robinhood after trading) —
+      // smart-account wallets sign per network (Fahmin, ebb742d). Always
+      // asked: the network known from connecting may not be the wallet's.
+      setWalletStep('switch');
       try {
-        await switchChain(mainnet.id);
+        await switchChain(mainnet.id, { always: true });
       } catch (e) {
-        throw new Error(
-          (e as Error).message === 'Cancelled in your wallet.'
-            ? 'Switch your wallet to Ethereum to sign in.'
-            : (e as Error).message,
-        );
+        if (e instanceof WalletError && e.kind === 'rejected') {
+          setNotice({
+            tone: 'error',
+            title: 'Network switch declined',
+            message: `Zeno signs you in on Ethereum. It doesn’t move any funds or change where you trade.`,
+            actions: [
+              {
+                label: 'Try again',
+                onPress: () => void walletSignIn(wallet),
+              },
+            ],
+          });
+          return;
+        }
+        throw e;
       }
 
       // Privy's SIWE message for this wallet; Privy checks the signature.
+      setWalletStep('message');
       walletTrace('Privy: getting the sign-in message');
-      const message = await generateSiweMessage({
-        from: SIWE_ORIGIN,
-        wallet: {
-          chainId: `eip155:${mainnet.id}`,
-          address: getAddress(wallet),
-        },
-      });
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      const signature = await Promise.race([
-        signMessage(message, getAddress(wallet) as Hex),
-        // A wallet that lost this session never answers; don't wait forever.
-        new Promise<never>((_, reject) => {
-          timer = setTimeout(
-            () => reject(new Error(SIGN_TIMEOUT)),
-            SIGN_TIMEOUT_MS,
-          );
+      const message = await withTimeout(
+        generateSiweMessage({
+          from: SIWE_ORIGIN,
+          wallet: {
+            chainId: `eip155:${mainnet.id}`,
+            address: getAddress(wallet),
+          },
         }),
-      ]).finally(() => clearTimeout(timer));
+        PRIVY_TIMEOUT_MS,
+        PRIVY_TIMEOUT,
+      );
+      setWalletStep('sign');
+      const signature = await signMessage(message, getAddress(wallet) as Hex);
+      setWalletStep('verify');
       walletTrace('Privy: checking the signature');
       // Signed in to Privy: `finishing` takes over and opens the Zeno session.
       // Privy otherwise checks against the last message it generated, which a
       // second attempt (re-tap, reconnect) may have replaced.
-      await loginWithSiwe({ signature, messageOverride: message });
+      await withTimeout(
+        loginWithSiwe({ signature, messageOverride: message }),
+        PRIVY_TIMEOUT_MS,
+        PRIVY_TIMEOUT,
+      );
       walletTrace('Privy: signed in, opening the Zeno session');
     } catch (e) {
-      // No answer: drop the connection so the next try starts a fresh one.
-      if (e instanceof Error && e.message === SIGN_TIMEOUT) {
-        await disconnectWallet();
-      }
-      setError(walletErrorMessage(e));
+      setNotice(signInNotice(e, wallet));
     } finally {
       setBusy(false);
+      setWalletStep(undefined);
     }
   };
+
+  const wallet = walletName(externalWallet.app);
+  const stepLabel = (step: WalletStep) =>
+    ({
+      switch: `Switch network in ${wallet}…`,
+      message: 'Preparing sign-in…',
+      sign: `Sign in ${wallet}…`,
+      verify: 'Checking your signature…',
+    })[step];
 
   /** Picks and connects a wallet, then asks it to sign in straight away. */
   const chooseWallet = async () => {
     setError(undefined);
-    setConnectedHere(true);
-    const connected = await openWalletPicker();
-    if (connected) await walletSignIn(connected);
+    setNotice(undefined);
+    const picked = await openWalletPicker();
+    if (picked.status === 'cancelled') {
+      const name = walletName(picked.app);
+      setNotice({
+        tone: 'error',
+        title: 'Connection cancelled',
+        message: `You cancelled before ${name} connected.`,
+        actions: [{ label: 'Connect wallet', onPress: chooseWallet }],
+      });
+      return;
+    }
+    if (picked.status !== 'connected') return;
+    setConnectedTopic(currentExternalWallet().topic);
+    await walletSignIn(picked.address);
   };
+
+  /**
+   * A failed wallet sign-in, told plainly. A timed-out or lost connection was
+   * already dropped (externalWallet), so those offer a fresh connect.
+   */
+  function signInNotice(e: unknown, address: string): NoticeContent {
+    const signAgain = {
+      label: 'Try again',
+      onPress: () => void walletSignIn(address),
+    };
+    const reconnect = { label: 'Connect again', onPress: chooseWallet };
+    if (!(e instanceof WalletError)) {
+      // Privy or the backend.
+      return {
+        tone: 'error',
+        title: 'Couldn’t sign you in',
+        message: walletErrorMessage(e),
+        actions: [signAgain],
+      };
+    }
+    switch (e.kind) {
+      case 'cancelled':
+        return {
+          tone: 'error',
+          title: 'Sign-in cancelled',
+          message: `You stopped waiting for ${wallet}.`,
+          actions: [signAgain],
+        };
+      case 'rejected':
+        return {
+          tone: 'error',
+          title: 'Sign-in declined',
+          message: `You declined to sign in ${wallet}. Signing is free and doesn’t move any funds.`,
+          actions: [signAgain],
+        };
+      case 'timeout':
+        return {
+          tone: 'error',
+          title: `No response from ${wallet}`,
+          message: 'The sign-in request timed out.',
+          actions: [reconnect],
+        };
+      case 'expired':
+        return {
+          tone: 'error',
+          title: 'Connection lost',
+          message: `${capitalized(wallet)} is no longer connected to Zeno.`,
+          actions: [reconnect],
+        };
+      case 'offline':
+        return {
+          tone: 'error',
+          title: 'You’re offline',
+          message: 'Check your connection and try again.',
+          actions: [signAgain],
+        };
+      default:
+        return {
+          tone: 'error',
+          title: 'Couldn’t sign you in',
+          message: e.message,
+          actions: [signAgain],
+        };
+    }
+  }
+
+  // Back in Zeno twice without signing: the wallet was likely closed.
+  const stalledNotice: NoticeContent | undefined =
+    (walletStep === 'switch' || walletStep === 'sign') && externalWallet.stalled
+      ? {
+          tone: 'warning',
+          title: `${capitalized(wallet)} closed before you answered`,
+          message: `The sign-in request is still waiting in ${wallet}.`,
+          actions: [
+            ...(externalWallet.app?.scheme
+              ? [
+                  {
+                    label: `Open ${wallet}`,
+                    onPress: () => void openWalletApp(),
+                  },
+                ]
+              : []),
+            { label: 'Cancel', onPress: cancelWalletRequest },
+          ],
+        }
+      : undefined;
 
   return (
     <View style={styles.root}>
@@ -401,12 +566,15 @@ export default function SignInScreen() {
                 onPress={googleSignIn}
                 disabled={busy || pickerOpen}
               />
-              {isConnected && address && connectedHere ? (
+              {isConnected &&
+              address &&
+              connectedTopic &&
+              externalWallet.topic === connectedTopic ? (
                 <>
                   <LightButton
                     label={
-                      busy
-                        ? 'Check your wallet to sign…'
+                      walletStep
+                        ? stepLabel(walletStep)
                         : `Sign in with ${shortAddress(address)}`
                     }
                     onPress={() => walletSignIn(address)}
@@ -424,8 +592,8 @@ export default function SignInScreen() {
               ) : (
                 <LightButton
                   label={
-                    busy
-                      ? 'Check your wallet to sign…'
+                    walletStep
+                      ? stepLabel(walletStep)
                       : pickerOpen
                         ? 'Choose a wallet…'
                         : 'Connect wallet'
@@ -437,6 +605,11 @@ export default function SignInScreen() {
             </>
           )}
           {error ? <Text style={styles.error}>{error}</Text> : null}
+          {(stalledNotice ?? notice) ? (
+            <View style={styles.notice}>
+              <Notice {...(stalledNotice ?? notice)!} />
+            </View>
+          ) : null}
           <Text style={styles.footer}>
             {/* Terms and Privacy Policy open the in-app reader (legal/[doc]). */}
             By continuing you agree to the{' '}
@@ -537,6 +710,7 @@ const styles = StyleSheet.create({
     color: colors.muted,
   },
   linkButton: { paddingVertical: 10, alignSelf: 'center' },
+  notice: { marginTop: 14 },
   link: { fontFamily: fonts.medium, fontSize: 13, color: colors.green },
   error: {
     fontFamily: fonts.regular,

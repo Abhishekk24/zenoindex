@@ -27,15 +27,34 @@ type EmbeddedWallet = ReturnType<
   typeof useEmbeddedEthereumWallet
 >['wallets'][number];
 
+/** The longest a request to Privy's embedded wallet may take. */
+const EMBEDDED_TIMEOUT_MS = 60_000;
+
+/** Fails with a clear message instead of waiting on Privy forever. */
+function inTime<T>(work: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    work,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error('Your wallet didn’t respond. Try again.')),
+        EMBEDDED_TIMEOUT_MS,
+      );
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
+
 async function switchEmbeddedChain(
   wallet: EmbeddedWallet,
   chainId: number,
 ): Promise<void> {
-  const provider = await wallet.getProvider();
-  await provider.request({
-    method: 'wallet_switchEthereumChain',
-    params: [{ chainId: numberToHex(chainId) }],
-  });
+  const provider = await inTime(wallet.getProvider());
+  await inTime(
+    provider.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: numberToHex(chainId) }],
+    }),
+  );
 }
 
 /**
@@ -47,19 +66,21 @@ async function sendEmbeddedTransaction(
   tx: WalletTx,
 ): Promise<Hex> {
   await switchEmbeddedChain(wallet, tx.chainId);
-  const provider = await wallet.getProvider();
-  return (await provider.request({
-    method: 'eth_sendTransaction',
-    params: [
-      {
-        from: wallet.address,
-        to: tx.to,
-        data: tx.data,
-        value: numberToHex(tx.value ?? 0n),
-        ...(tx.gas ? { gas: numberToHex(tx.gas) } : {}),
-      },
-    ],
-  })) as Hex;
+  const provider = await inTime(wallet.getProvider());
+  return (await inTime(
+    provider.request({
+      method: 'eth_sendTransaction',
+      params: [
+        {
+          from: wallet.address,
+          to: tx.to,
+          data: tx.data,
+          value: numberToHex(tx.value ?? 0n),
+          ...(tx.gas ? { gas: numberToHex(tx.gas) } : {}),
+        },
+      ],
+    }),
+  )) as Hex;
 }
 
 export function useWallets(): ConnectedWallet[] {

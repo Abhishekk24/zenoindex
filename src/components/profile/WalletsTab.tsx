@@ -1,7 +1,7 @@
 import { usePrivy, type PrivyUser } from '@privy-io/expo';
 import * as Clipboard from 'expo-clipboard';
 import React, { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { robinhood } from '../../config/chains';
 import { useLoad } from '../../hooks/useLoad';
@@ -19,7 +19,7 @@ import { primaryWallet } from '../../lib/user';
 import { useWallet } from '../../lib/wallet';
 import { colors, fonts, space, type } from '../../theme/tokens';
 import { disconnectWallet } from '../../wallets/externalWallet';
-import { Badge, Body, Button, Card, LinkText, Row } from '../ui';
+import { Badge, Body, Button, Card, LinkText, Notice, Row } from '../ui';
 import { chooseWallet } from '../wallet/WalletPicker';
 import { DepositSheet } from './DepositSheet';
 
@@ -70,16 +70,31 @@ export function WalletsTab({ user }: { user: User }) {
   const { address, isExternal } = useWallet();
   const { user: privyUser } = usePrivy();
   const signedIn = primaryWallet(user);
-  const { data: balances } = useLoad(
+  const {
+    data: balances,
+    loading: balancesLoading,
+    error: balancesError,
+    reload: reloadBalances,
+  } = useLoad(
     async () => (signedIn ? loadBalances(signedIn) : null),
     `balances#${signedIn ?? 'none'}`,
   );
   const [copied, setCopied] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
   const [depositing, setDepositing] = useState(false);
   const mismatch =
     address !== undefined &&
     !user.wallets.some(w => w.address.toLowerCase() === address.toLowerCase());
   const kind = isExternal ? 'External wallet' : signInLabel(privyUser);
+
+  const disconnect = async () => {
+    setDisconnecting(true);
+    try {
+      await disconnectWallet();
+    } finally {
+      setDisconnecting(false);
+    }
+  };
 
   const copy = async () => {
     if (!signedIn) return;
@@ -140,6 +155,18 @@ export function WalletsTab({ user }: { user: User }) {
             value={formatRaw(balances.gas.raw, 18, 6)}
           />
         </View>
+      ) : balancesLoading && signedIn ? (
+        <View style={styles.loading} accessibilityLiveRegion="polite">
+          <ActivityIndicator color={colors.gold} size="small" />
+          <Text style={styles.muted}>Loading balances…</Text>
+        </View>
+      ) : balancesError ? (
+        <Notice
+          tone="error"
+          title="Couldn’t load your balances"
+          message={balancesError}
+          actions={[{ label: 'Try again', onPress: reloadBalances }]}
+        />
       ) : null}
       {mismatch && (
         <Body muted>
@@ -153,7 +180,9 @@ export function WalletsTab({ user }: { user: User }) {
           <Button
             label="Disconnect wallet"
             variant="ghost"
-            onPress={() => void disconnectWallet()}
+            onPress={() => void disconnect()}
+            loading={disconnecting}
+            disabled={disconnecting}
           />
         ) : (
           <Button
@@ -169,6 +198,7 @@ export function WalletsTab({ user }: { user: User }) {
 
 const styles = StyleSheet.create({
   item: { gap: space.sm },
+  loading: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   line: {
     flexDirection: 'row',
     justifyContent: 'space-between',

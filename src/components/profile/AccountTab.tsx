@@ -2,6 +2,7 @@ import * as Application from 'expo-application';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
   Pressable,
   StyleSheet,
   Switch,
@@ -29,6 +30,7 @@ const DOCS: LegalDocId[] = ['terms', 'privacy'];
  */
 export function AccountTab({ user }: { user: User }) {
   const { signOut, setUser } = useSession();
+  const [signingOut, setSigningOut] = useState(false);
   const { mode, switchingTo } = useAppMode();
   const [error, setError] = useState<string>();
   // Email edit (wallet sign-ins; a verified one comes from the sign-in method and is read-only).
@@ -173,15 +175,26 @@ export function AccountTab({ user }: { user: User }) {
       <Pressable
         onPress={() => {
           setError(undefined);
-          signOut().catch(e =>
-            setError(e instanceof Error ? e.message : 'Sign-out failed.'),
-          );
+          setSigningOut(true);
+          signOut()
+            .catch(e =>
+              setError(e instanceof Error ? e.message : 'Sign-out failed.'),
+            )
+            .finally(() => setSigningOut(false));
         }}
+        disabled={signingOut}
         accessibilityRole="button"
+        accessibilityState={{ busy: signingOut }}
         style={({ pressed }) => [styles.signOut, pressed && styles.pressed]}
       >
-        <SignOutIcon color={colors.red} />
-        <Text style={styles.signOutText}>Sign out</Text>
+        {signingOut ? (
+          <ActivityIndicator color={colors.red} size="small" />
+        ) : (
+          <SignOutIcon color={colors.red} />
+        )}
+        <Text style={styles.signOutText}>
+          {signingOut ? 'Signing out…' : 'Sign out'}
+        </Text>
       </Pressable>
       {Application.nativeApplicationVersion ? (
         <Text style={styles.version}>

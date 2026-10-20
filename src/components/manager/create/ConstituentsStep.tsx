@@ -2,11 +2,19 @@
  * Create step 2, Constituents (design): base asset, search-and-add target
  * assets, a weight slider per asset (whole percents, capped so the total can't
  * pass 100%), and the running total (must reach 100% with at least 2 assets
- * to continue).
+ * to continue). Focusing the search lists every asset still available; typing
+ * narrows it.
  */
 import Slider from '@react-native-community/slider';
 import React, { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
 import {
   assetOf,
@@ -15,6 +23,7 @@ import {
   type CreateForm,
 } from '../../../manager/createBasket';
 import { colors, fonts, space } from '../../../theme/tokens';
+import { Notice } from '../../ui';
 import { FIELD_BG, SelectField } from './Fields';
 
 const BLUE = '#5aa9e6';
@@ -25,9 +34,17 @@ export function ConstituentsStep({
   providerLabel,
   baseError,
   assets,
+  loading,
+  loadError,
+  onRetry,
 }: {
   /** Assets a basket can hold (GET /manager/create). */
   assets: CreateAsset[];
+  /** The assets are still loading. */
+  loading?: boolean;
+  /** Loading the assets failed. */
+  loadError?: string;
+  onRetry?: () => void;
   form: CreateForm;
   update: (patch: Partial<CreateForm>) => void;
   /** e.g. "Robinhood" → "Robinhood token" over the table. */
@@ -36,6 +53,7 @@ export function ConstituentsStep({
 }) {
   const [query, setQuery] = useState('');
   const [picked, setPicked] = useState<string>();
+  const [focused, setFocused] = useState(false);
 
   const taken = useMemo(
     () => new Set([form.baseAssetId, ...form.constituents.map(c => c.assetId)]),
@@ -43,17 +61,18 @@ export function ConstituentsStep({
   );
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q || picked) return [];
+    if (picked || (!q && !focused)) return [];
     return assets
       .filter(
         a =>
           a.mode === 'in-kind' &&
           !taken.has(a.id) &&
-          (a.name.toLowerCase().includes(q) ||
+          (!q ||
+            a.name.toLowerCase().includes(q) ||
             a.symbol.toLowerCase().includes(q)),
       )
-      .slice(0, 5);
-  }, [query, picked, taken, assets]);
+      .slice(0, 8);
+  }, [query, picked, focused, taken, assets]);
 
   const add = () => {
     const id = picked ?? (matches.length === 1 ? matches[0]!.id : undefined);
@@ -110,6 +129,8 @@ export function ConstituentsStep({
               setQuery(text);
               setPicked(undefined);
             }}
+            // Stays open after a blur, so tapping an asset isn't lost.
+            onFocus={() => setFocused(true)}
             placeholder="Search and select asset"
             placeholderTextColor={colors.dim}
             selectionColor={colors.gold}
@@ -132,6 +153,26 @@ export function ConstituentsStep({
             <Text style={styles.addText}>Add</Text>
           </Pressable>
         </View>
+        {loading ? (
+          <View style={styles.loading} accessibilityLiveRegion="polite">
+            <ActivityIndicator color={colors.gold} />
+            <Text style={styles.loadingText}>Loading assets…</Text>
+          </View>
+        ) : loadError ? (
+          <Notice
+            tone="error"
+            title="Couldn’t load the assets"
+            message={loadError}
+            actions={onRetry ? [{ label: 'Try again', onPress: onRetry }] : []}
+          />
+        ) : !assets.some(a => a.mode === 'in-kind') ? (
+          <Notice
+            tone="warning"
+            title="No assets to add yet"
+            message="None of the assets can be added to a basket right now. Try again later."
+            actions={onRetry ? [{ label: 'Try again', onPress: onRetry }] : []}
+          />
+        ) : null}
         {matches.length > 0 ? (
           <View style={styles.matches}>
             {matches.map(a => (
@@ -279,15 +320,35 @@ const styles = StyleSheet.create({
   },
   match: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: space.md,
     paddingHorizontal: 16,
     paddingVertical: 13,
     borderBottomWidth: 1,
     borderBottomColor: colors.line,
   },
   matchPressed: { backgroundColor: colors.surface3 },
-  matchName: { fontFamily: fonts.regular, fontSize: 15, color: colors.text },
-  matchSymbol: { fontFamily: fonts.mono, fontSize: 13, color: colors.muted },
+  // Long names wrap; the symbol keeps its place on the right.
+  matchName: {
+    flex: 1,
+    fontFamily: fonts.regular,
+    fontSize: 15,
+    lineHeight: 20,
+    color: colors.text,
+  },
+  matchSymbol: {
+    flexShrink: 0,
+    fontFamily: fonts.mono,
+    fontSize: 13,
+    color: colors.muted,
+  },
+  loading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    paddingVertical: space.sm,
+  },
+  loadingText: { fontFamily: fonts.regular, fontSize: 14, color: colors.muted },
   table: {
     borderRadius: 12,
     borderWidth: 1,

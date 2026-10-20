@@ -32,7 +32,7 @@ import {
 import type { Dtf, Operation, TradePreview, TxDraft } from '../lib/types';
 import { useWallet } from '../lib/wallet';
 import { colors, fonts, space, type } from '../theme/tokens';
-import { openWalletApp } from '../wallets/externalWallet';
+import { cancelWalletRequest, openWalletApp } from '../wallets/externalWallet';
 import {
   Badge,
   Body,
@@ -42,8 +42,10 @@ import {
   Field,
   Label,
   LinkText,
+  Notice,
   Row,
   Segmented,
+  type NoticeContent,
 } from './ui';
 import { TradeProgress, type ProgressStep } from './trade/TradeProgress';
 import { useLoad } from '../hooks/useLoad';
@@ -67,6 +69,11 @@ const WALLET_TIMEOUT_MS = 5 * 60_000;
  * are back in Zeno, or after this long if the wallet never took them away.
  */
 const WALLET_PROMPT_AFTER_MS = 15_000;
+
+/** An error's message for the user; `fallback` when it has none. */
+function messageOf(e: unknown, fallback: string): string {
+  return e instanceof Error && e.message ? e.message : fallback;
+}
 
 /** The user stopped waiting for a wallet request (Cancel). */
 class WalletWaitCancelled extends Error {
@@ -133,12 +140,12 @@ export function TradePanel({
   const [result, setResult] = useState<{
     inputs: string;
     preview?: TradePreview;
-    error?: string;
+    problem?: NoticeContent;
   }>();
   const inputs = `${side}|${amount}`;
   const current = result?.inputs === inputs ? result : undefined;
   const preview = current?.preview;
-  const error = current?.error;
+  const problem = current?.problem;
 
   const unit = side === 'invest' ? baseSymbol : dtf.symbol;
   const valid = isDecimal(amount) && isPositive(amount);
@@ -181,7 +188,7 @@ export function TradePanel({
     if (!signer || !linked) {
       setResult({
         inputs,
-        error: walletNeeded,
+        problem: { tone: 'warning', message: walletNeeded },
       });
       return;
     }
@@ -195,7 +202,11 @@ export function TradePanel({
     } catch (e) {
       setResult({
         inputs,
-        error: e instanceof Error ? e.message : 'Could not prepare a preview.',
+        problem: {
+          tone: 'error',
+          title: 'Couldn’t prepare a preview',
+          message: messageOf(e, 'Try again in a moment.'),
+        },
       });
     } finally {
       setBusy(false);
@@ -311,7 +322,7 @@ export function TradePanel({
     // Watched on-chain as well as answered by the wallet, so a lost reply
     // can't leave the app waiting on a transaction that already landed (and
     // tempt a second, duplicate deposit).
-    const fromBlock = await blockNumber(chainId);
+    const fromBlock = blockNumber(chainId);
     const watch = new AbortController();
     let txHash: string;
     try {
@@ -327,12 +338,12 @@ export function TradePanel({
               : {}),
           }),
           pollUntil(
-            () =>
+            async () =>
               findVaultTx(
                 chainId,
                 to,
                 signer!,
-                fromBlock,
+                await fromBlock,
                 draft.transaction.data,
               ),
             {
@@ -402,7 +413,16 @@ export function TradePanel({
       setOperation(undefined);
       setResult({
         inputs,
-        error: e instanceof Error ? e.message : 'Transaction failed.',
+        problem: {
+          tone: 'error',
+          title:
+            e instanceof WalletWaitCancelled
+              ? 'Stopped waiting for your wallet'
+              : side === 'invest'
+                ? 'The investment didn’t go through'
+                : 'The redemption didn’t go through',
+          message: messageOf(e, 'Transaction failed.'),
+        },
       });
       setStep('idle');
     } finally {
@@ -455,11 +475,11 @@ export function TradePanel({
       ) : (
         <>
           <Segmented options={SIDES} value={side} onChange={setSide} />
-          {notice ? <Badge label={notice} tone="gold" /> : null}
+          {notice ? <Notice tone="warning" message={notice} /> : null}
           {priceStale ? (
-            <Badge
-              label="Price may be out of date — amounts can differ"
-              tone="danger"
+            <Notice
+              tone="warning"
+              message="The price may be out of date, so amounts can differ."
             />
           ) : null}
           {!linked ? <Body muted>{walletNeeded}</Body> : null}
@@ -512,9 +532,7 @@ export function TradePanel({
             disabled={!valid || belowMinimum || overBalance || !linked}
             loading={busy && step === 'idle'}
           />
-          {error ? (
-            <Text style={[type.small, { color: colors.danger }]}>{error}</Text>
-          ) : null}
+          {problem ? <Notice {...problem} /> : null}
         </>
       )}
 
@@ -614,7 +632,11 @@ export function TradePanel({
           <Button
             label="Cancel"
             variant="ghost"
-            onPress={() => pendingWallet.current?.cancel()}
+            onPress={() => {
+              // Stops the wallet request itself too, not just this spinner.
+              if (isExternal) cancelWalletRequest();
+              pendingWallet.current?.cancel();
+            }}
           />
         </View>
       ) : null}

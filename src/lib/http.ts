@@ -112,9 +112,26 @@ export type ApiRequest = {
   timeoutMs?: number;
 };
 
+/**
+ * One line per request, release builds too, so a device's API calls can be
+ * read with `adb logcat -s ReactNativeJS`: method, path, status, time, and the
+ * API's error code and message. Never headers (the session) or bodies.
+ */
+function logRequest(
+  method: string,
+  path: string,
+  started: number,
+  outcome: string,
+): void {
+  console.log(
+    `[api] ${method} ${path} → ${outcome} (${Date.now() - started} ms)`,
+  );
+}
+
 async function request<T>(path: string, init: ApiRequest = {}): Promise<T> {
   const method = init.method ?? 'GET';
   if (USE_MOCK_DATA) return mocked<T>(method, path, init.body);
+  const started = Date.now();
   const controller = new AbortController();
   const timer = setTimeout(
     () => controller.abort(),
@@ -142,7 +159,9 @@ async function request<T>(path: string, init: ApiRequest = {}): Promise<T> {
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
     });
   } catch (e) {
-    if (e instanceof Error && e.name === 'AbortError') {
+    const timedOut = e instanceof Error && e.name === 'AbortError';
+    logRequest(method, path, started, timedOut ? 'timed out' : 'network error');
+    if (timedOut) {
       throw new ApiError(
         0,
         'timeout',
@@ -168,6 +187,7 @@ async function request<T>(path: string, init: ApiRequest = {}): Promise<T> {
     try {
       body = JSON.parse(text) as Record<string, unknown>;
     } catch {
+      logRequest(method, path, started, `${response.status} not JSON`);
       // Not our API answering (e.g. a tunnel's "offline" page or a proxy's
       // HTML error): say so plainly instead of surfacing a parser error.
       throw new ApiError(
@@ -186,6 +206,12 @@ async function request<T>(path: string, init: ApiRequest = {}): Promise<T> {
       message?: string;
       retryable?: boolean;
     };
+    logRequest(
+      method,
+      path,
+      started,
+      `${response.status} ${error.code ?? ''}: ${error.message ?? ''}`,
+    );
     if (response.status === 401) {
       await saveSession(null);
       // Only a request that carried a session can mean "it expired" (not e.g. a rejected sign-in signature).
@@ -198,6 +224,7 @@ async function request<T>(path: string, init: ApiRequest = {}): Promise<T> {
       error.retryable ?? response.status >= 500,
     );
   }
+  logRequest(method, path, started, String(response.status));
   return body as T;
 }
 

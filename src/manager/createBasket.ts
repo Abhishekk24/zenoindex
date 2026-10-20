@@ -3,8 +3,9 @@
  * the summary the Review step shows. Choices and rules follow the web form
  * (programmable-dtf-infra apps/dtf-app/components/create-basket-form.tsx).
  *
- * Assets and the create transaction come from the API (GET /manager/create,
- * POST /manager/create/prepare → factory createVault). On-chain a basket has a
+ * The assets come from GET /assets (each with its price); who may create,
+ * the base asset and the limits from GET /manager/create; the transaction
+ * from POST /manager/create/prepare → factory createVault. On-chain a basket has a
  * name, symbol, weights, an entry and an exit fee; the signer becomes its
  * manager. The strategy / dividend / minimum-investment choices below aren't
  * stored on-chain yet.
@@ -23,18 +24,31 @@ export type CreateAsset = {
   logoUrl?: string | null;
 };
 
-/** Who may create, and the assets to pick (unpriced ones left out: createVault would revert). */
+/**
+ * Who may create (and the limits), plus the assets a basket can hold: every
+ * asset with a price — createVault reverts on one without. The list comes
+ * from GET /assets, the same one the Assets tab shows.
+ */
 export async function loadCreateOptions() {
-  const options = await api.getCreateOptions();
-  const assets: CreateAsset[] = options.assets
-    .filter(a => a.selectable)
+  const [options, all] = await Promise.all([
+    api.getCreateOptions(),
+    api.listAssets(),
+  ]);
+  const base = options.baseAssetId?.toLowerCase();
+  const assets: CreateAsset[] = all
+    .filter(a => a.priceUsdg !== null)
     .map(a => ({
       id: a.id,
       name: a.name,
       symbol: a.symbol,
-      mode: a.id === options.baseAssetId ? 'zap' : 'in-kind',
-      logoUrl: a.logoUrl,
+      mode: a.id === base ? 'zap' : 'in-kind',
+      logoUrl: a.logoUrl ?? null,
     }));
+  console.log(
+    `[create] ${assets.length} of ${all.length} assets priced: ${assets
+      .map(a => a.symbol)
+      .join(', ')}; base ${base}; canCreate ${options.canCreate}`,
+  );
   return { ...options, assets };
 }
 

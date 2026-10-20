@@ -4,8 +4,10 @@
  * "Other wallet" for any other WalletConnect wallet. Picking one opens it to
  * approve the connection; the sheet then shows that wallet waiting.
  *
- * `chooseWallet()` opens it and resolves with the connected address, or null if
- * the user closes it. WalletPickerHost is mounted once at the root.
+ * `chooseWallet()` opens it and resolves with how it ended: connected, the
+ * connection cancelled, or the sheet closed without trying. Connection
+ * problems are shown in the sheet (ui/Notice) so the user can retry or pick
+ * another wallet. WalletPickerHost is mounted once at the root.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useState, useSyncExternalStore } from 'react';
@@ -25,9 +27,13 @@ import type { Hex } from 'viem';
 
 import { colors, fonts, radius, space, type } from '../../theme/tokens';
 import {
-  cancelConnect,
+  cancelWalletRequest,
   connectWallet,
   openWalletApp,
+  toWalletError,
+  useExternalWallet,
+  walletName,
+  warmUp,
 } from '../../wallets/externalWallet';
 import {
   OTHER_WALLET,
@@ -36,8 +42,14 @@ import {
 } from '../../wallets/registry';
 import { ChevronRightIcon, MoreIcon } from '../icons';
 import { Button } from '../ui';
+import { Notice, type NoticeContent } from '../ui/Notice';
 
-type Request = { resolve: (address: Hex | null) => void } | null;
+export type PickResult =
+  | { status: 'connected'; address: Hex; app: WalletApp }
+  | { status: 'cancelled'; app: WalletApp }
+  | { status: 'closed' };
+
+type Request = { resolve: (result: PickResult) => void } | null;
 
 let request: Request = null;
 const listeners = new Set<() => void>();
@@ -49,9 +61,9 @@ const set = (next: Request) => {
 /** The wallet app last connected from this phone, marked "Last used". */
 const LAST_WALLET_KEY = '@zeno/last-wallet-app';
 
-/** Opens the picker; resolves with the connected address, or null if closed. */
-export function chooseWallet(): Promise<Hex | null> {
-  request?.resolve(null);
+/** Opens the picker; resolves with how it ended. */
+export function chooseWallet(): Promise<PickResult> {
+  request?.resolve({ status: 'closed' });
   return new Promise(resolve => set({ resolve }));
 }
 
@@ -64,13 +76,16 @@ export function WalletPickerHost() {
   const [installed, setInstalled] = useState<Set<string>>(new Set());
   const [lastUsed, setLastUsed] = useState<string | null>(null);
   const [connecting, setConnecting] = useState<WalletApp>();
-  const [error, setError] = useState<string>();
+  const [notice, setNotice] = useState<NoticeContent>();
+  const { stalled } = useExternalWallet();
 
   // Which wallet apps are on this phone (schemes declared in app.json / plugin),
   // and which one was used last.
   useEffect(() => {
     if (!open) return;
     let active = true;
+    // Opens the relay socket now, so the connection request goes out at once.
+    void warmUp();
     Promise.all(
       WALLET_APPS.map(async app =>
         app.scheme &&
@@ -89,29 +104,40 @@ export function WalletPickerHost() {
     };
   }, [open]);
 
-  const close = (address: Hex | null) => {
-    open?.resolve(address);
+  const close = (result: PickResult) => {
+    open?.resolve(result);
     set(null);
     setConnecting(undefined);
-    setError(undefined);
+    setNotice(undefined);
   };
 
   const pick = async (app: WalletApp) => {
-    setError(undefined);
+    setNotice(undefined);
     setConnecting(app);
     try {
       const address = await connectWallet(app);
       await AsyncStorage.setItem(LAST_WALLET_KEY, app.id).catch(() => {});
-      close(address);
+      close({ status: 'connected', address, app });
     } catch (e) {
+      const error = toWalletError(e, 'The wallet didn’t connect.');
+      // Cancelled: the sheet already closed and sign-in says so.
+      if (error.kind === 'cancelled') return;
       setConnecting(undefined);
-      setError(e instanceof Error ? e.message : 'The wallet didn’t connect.');
+      setNotice(connectNotice(error, app, () => void pick(app)));
     }
   };
 
+  /** Only the Cancel button stops a connection in progress. */
   const cancel = () => {
-    cancelConnect();
-    close(null);
+    const app = connecting;
+    cancelWalletRequest();
+    close(app ? { status: 'cancelled', app } : { status: 'closed' });
+  };
+
+  // Back and a tap above the sheet close the list, but never a connection in
+  // progress: coming back from the wallet with a back gesture would cancel it.
+  const dismiss = () => {
+    if (!connecting) close({ status: 'closed' });
   };
 
   // On this phone first, the last one used at the top; the rest in list order.
@@ -147,17 +173,17 @@ export function WalletPickerHost() {
       transparent
       animationType="slide"
       statusBarTranslucent
-      onRequestClose={cancel}
+      onRequestClose={dismiss}
     >
       <Pressable
         style={styles.backdrop}
-        onPress={cancel}
+        onPress={dismiss}
         accessibilityLabel="Close"
       />
       <View style={[styles.sheet, { paddingBottom: insets.bottom + space.lg }]}>
         <View style={styles.handle} />
         {connecting ? (
-          <Waiting app={connecting} onCancel={cancel} />
+          <Waiting app={connecting} stalled={!!stalled} onCancel={cancel} />
         ) : (
           <>
             <View style={styles.header}>
@@ -167,7 +193,7 @@ export function WalletPickerHost() {
                 back to Zeno.
               </Text>
             </View>
-            {error ? <Text style={styles.error}>{error}</Text> : null}
+            {notice ? <Notice {...notice} /> : null}
             <ScrollView
               style={styles.list}
               contentContainerStyle={styles.listContent}
@@ -211,8 +237,63 @@ export function WalletPickerHost() {
   );
 }
 
+/** A failed connection, told plainly, with what the user can do next. */
+function connectNotice(
+  error: ReturnType<typeof toWalletError>,
+  app: WalletApp,
+  retry: () => void,
+): NoticeContent {
+  const name = walletName(app);
+  const tryAgain = { label: 'Try again', onPress: retry };
+  switch (error.kind) {
+    case 'rejected':
+      return {
+        tone: 'error',
+        title: 'Connection declined',
+        message: `You declined the connection in ${name}. Try again, or choose another wallet below.`,
+        actions: [tryAgain],
+      };
+    case 'timeout':
+      return {
+        tone: 'error',
+        title: `No response from ${name}`,
+        message: 'The connection request timed out.',
+        actions: [tryAgain],
+      };
+    case 'not-installed':
+      return {
+        tone: 'error',
+        title: `${name} isn’t installed`,
+        message: 'Install it, or choose another wallet below.',
+        actions: [],
+      };
+    case 'offline':
+      return {
+        tone: 'error',
+        title: 'You’re offline',
+        message: 'Check your connection and try again.',
+        actions: [tryAgain],
+      };
+    default:
+      return {
+        tone: 'error',
+        title: `Couldn’t connect ${name}`,
+        message: error.message,
+        actions: [tryAgain],
+      };
+  }
+}
+
 /** The chosen wallet's logo in a spinning ring while the user approves. */
-function Waiting({ app, onCancel }: { app: WalletApp; onCancel: () => void }) {
+function Waiting({
+  app,
+  stalled,
+  onCancel,
+}: {
+  app: WalletApp;
+  stalled: boolean;
+  onCancel: () => void;
+}) {
   const reduced = useReducedMotion();
   const name = app.id === OTHER_WALLET.id ? 'your wallet' : app.name;
   return (
@@ -231,14 +312,27 @@ function Waiting({ app, onCancel }: { app: WalletApp; onCancel: () => void }) {
           Approve the connection, then come back to Zeno.
         </Text>
       </View>
-      <View style={styles.waitingActions}>
-        {app.scheme ? (
-          <Button
-            label={`Open ${app.name}`}
-            variant="outline"
-            onPress={() => void openWalletApp()}
+      {stalled ? (
+        // Came back twice without approving: the wallet was likely closed.
+        <View style={styles.stalled}>
+          <Notice
+            tone="warning"
+            title={`${name[0]!.toUpperCase()}${name.slice(1)} closed before you answered`}
+            message={`The connection request is still waiting in ${name}.`}
+            actions={
+              app.scheme
+                ? [
+                    {
+                      label: `Open ${name}`,
+                      onPress: () => void openWalletApp(),
+                    },
+                  ]
+                : []
+            }
           />
-        ) : null}
+        </View>
+      ) : null}
+      <View style={styles.waitingActions}>
         <Button label="Cancel" variant="ghost" onPress={onCancel} />
       </View>
     </View>
@@ -287,7 +381,6 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontFamily: fonts.medium },
   muted: { color: colors.muted },
   center: { textAlign: 'center' },
-  error: { ...type.small, color: colors.danger },
   list: { flexGrow: 0 },
   listContent: { gap: space.lg },
   section: { gap: space.sm },
@@ -365,5 +458,6 @@ const styles = StyleSheet.create({
     animationTimingFunction: 'linear',
   },
   waitingText: { gap: space.sm, alignItems: 'center' },
+  stalled: { alignSelf: 'stretch' },
   waitingActions: { alignSelf: 'stretch', gap: space.xs },
 });
