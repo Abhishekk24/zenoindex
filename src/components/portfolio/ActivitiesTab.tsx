@@ -1,23 +1,33 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { openInAppBrowser } from '../../lib/browser';
 import { explorerTxUrl } from '../../lib/chain';
 import { fromRaw } from '../../lib/decimal';
 import { formatDate, formatRaw, humanize } from '../../lib/format';
 import { usd } from '../../lib/money';
 import type { Dtf, WalletTransaction } from '../../lib/types';
 import { colors, fonts, space } from '../../theme/tokens';
-import { Chip, Empty, LinkText } from '../ui';
+import { Empty, OptionBar } from '../ui';
 import { listStyles } from './listStyles';
 
 type Filter = 'all' | 'invest' | 'redeem' | 'pending';
 
-const FILTERS: { value: Filter; label: string }[] = [
+const FILTERS = [
   { value: 'all', label: 'All' },
   { value: 'invest', label: 'Invest' },
   { value: 'redeem', label: 'Redeem' },
   { value: 'pending', label: 'Pending' },
-];
+] as const;
+
+const STATUS: Record<
+  WalletTransaction['status'],
+  { label: string; color: string }
+> = {
+  confirmed: { label: 'Confirmed', color: colors.green },
+  pending: { label: 'Pending', color: colors.gold },
+  reverted: { label: 'Failed', color: colors.red },
+};
 
 function matches(tx: WalletTransaction, filter: Filter): boolean {
   if (filter === 'all') return true;
@@ -25,7 +35,11 @@ function matches(tx: WalletTransaction, filter: Filter): boolean {
   return filter === 'invest' ? tx.action === 'invest' : tx.action !== 'invest';
 }
 
-/** The wallet's invests and redeems, newest first, with a type filter. */
+/**
+ * The wallet's invests and redeems, newest first (design): a Status bar,
+ * then per activity its type and date, basket and amount, shares and status.
+ * Tapping one opens it on the block explorer.
+ */
 export function ActivitiesTab({
   activity,
   dtfs,
@@ -39,70 +53,56 @@ export function ActivitiesTab({
 
   return (
     <View>
-      <View style={styles.filters}>
-        {FILTERS.map(f => (
-          <Chip
-            key={f.value}
-            label={f.label}
-            selected={filter === f.value}
-            onPress={() => setFilter(f.value)}
-          />
-        ))}
-      </View>
+      <OptionBar
+        label="Status"
+        options={FILTERS}
+        value={filter}
+        onChange={setFilter}
+        style={styles.filters}
+      />
       {shown.length === 0 ? (
         <Empty title="Nothing here yet" />
       ) : (
         shown.map((tx, i) => {
           const dtf = dtfs.get(tx.dtfId);
           const invest = tx.action === 'invest';
+          const status = STATUS[tx.status];
           const url = tx.txHash
             ? explorerTxUrl(tx.chainId || dtf?.chainId || 0, tx.txHash)
             : null;
           return (
-            <View
+            <Pressable
               key={tx.id}
-              style={[
+              onPress={url ? () => void openInAppBrowser(url) : undefined}
+              disabled={!url}
+              accessibilityRole={url ? 'link' : undefined}
+              accessibilityHint={url ? 'Opens it on the explorer' : undefined}
+              style={({ pressed }) => [
                 listStyles.row,
                 styles.item,
                 i === shown.length - 1 && listStyles.last,
+                pressed && styles.pressed,
               ]}
             >
-              <View style={styles.top}>
-                <View style={styles.tags}>
-                  <View
+              <View style={styles.line}>
+                <View
+                  style={[
+                    styles.tag,
+                    invest ? styles.tagGreen : styles.tagNeutral,
+                  ]}
+                >
+                  <Text
                     style={[
-                      styles.tag,
-                      invest ? styles.tagGreen : styles.tagNeutral,
+                      styles.tagText,
+                      { color: invest ? colors.green : colors.textSecondary },
                     ]}
                   >
-                    <Text
-                      style={[
-                        styles.tagText,
-                        {
-                          color: invest ? colors.green : colors.textSecondary,
-                        },
-                      ]}
-                    >
-                      {humanize(tx.action)}
-                    </Text>
-                  </View>
-                  {tx.status !== 'confirmed' ? (
-                    <Text
-                      style={[
-                        styles.status,
-                        {
-                          color:
-                            tx.status === 'reverted' ? colors.red : colors.gold,
-                        },
-                      ]}
-                    >
-                      {tx.status === 'reverted' ? 'Failed' : 'Pending'}
-                    </Text>
-                  ) : null}
+                    {humanize(tx.action)}
+                  </Text>
                 </View>
                 <Text style={styles.date}>{formatDate(tx.occurredAt)}</Text>
               </View>
-              <View style={styles.bottom}>
+              <View style={styles.line}>
                 <Text
                   style={[listStyles.title, listStyles.fill]}
                   numberOfLines={1}
@@ -115,7 +115,7 @@ export function ActivitiesTab({
                     : '—'}
                 </Text>
               </View>
-              <View style={styles.bottom}>
+              <View style={styles.line}>
                 <Text style={[styles.date, listStyles.fill]}>
                   {tx.shareAmountRaw
                     ? `${invest ? '+' : '−'}${formatRaw(
@@ -125,9 +125,11 @@ export function ActivitiesTab({
                       )} ${dtf?.symbol ?? ''}`
                     : ''}
                 </Text>
-                {url ? <LinkText label="Explorer" size={12} url={url} /> : null}
+                <Text style={[styles.status, { color: status.color }]}>
+                  {status.label}
+                </Text>
               </View>
-            </View>
+            </Pressable>
           );
         })
       )}
@@ -136,20 +138,15 @@ export function ActivitiesTab({
 }
 
 const styles = StyleSheet.create({
-  filters: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: space.sm,
-    paddingVertical: space.sm,
-  },
+  filters: { marginVertical: space.sm },
   item: { flexDirection: 'column', alignItems: 'stretch', gap: space.sm },
-  top: {
+  pressed: { opacity: 0.75 },
+  line: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: space.md,
   },
-  tags: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  bottom: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   tag: {
     borderWidth: 1,
     borderRadius: 6,
@@ -162,7 +159,7 @@ const styles = StyleSheet.create({
   },
   tagNeutral: { borderColor: colors.lineStrong },
   tagText: { fontFamily: fonts.regular, fontSize: 11 },
-  status: { fontFamily: fonts.medium, fontSize: 11 },
+  status: { fontFamily: fonts.medium, fontSize: 12 },
   date: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted },
   amount: { fontFamily: fonts.semibold, fontSize: 14, color: colors.text },
 });

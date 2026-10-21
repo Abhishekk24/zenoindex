@@ -2,9 +2,8 @@ import { router } from 'expo-router';
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { compare, ratioBps, sub } from '../../lib/decimal';
-import { formatDecimal, formatRaw, formatSignedBps } from '../../lib/format';
-import { signedUsd, usd } from '../../lib/money';
+import { compare, sub } from '../../lib/decimal';
+import { formatDecimal, formatRaw } from '../../lib/format';
 import type { Position } from '../../lib/portfolio';
 import type { Dtf } from '../../lib/types';
 import { colors, fonts, space } from '../../theme/tokens';
@@ -77,17 +76,14 @@ export function HoldingsTab({
                   },
                 ]}
               >
+                {/* P&L since entry, as the design: "▲ 0.00", "▼ -10.79". */}
                 {pnl === null
                   ? '—'
-                  : `${up ? '▲' : '▼'} ${signedUsd(pnl)}${
-                      compare(basis!, '0') > 0
-                        ? ` · ${formatSignedBps(ratioBps(pnl, basis!))}`
-                        : ''
-                    }`}
+                  : `${up ? '▲' : '▼'} ${formatDecimal(pnl, 2)}`}
               </Text>
             </Pressable>
             <View style={styles.bottom}>
-              <Text style={styles.value}>{usd(p.value)}</Text>
+              <Text style={styles.value}>{formatDecimal(p.value, 2)}</Text>
               <View style={styles.actions}>
                 <SmallButton
                   label="Redeem"

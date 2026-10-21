@@ -16,20 +16,9 @@ export function BasketCardSkeleton() {
         <Stripes height={84} stripe={2} gap={7} opacity={0.12} />
       </View>
       <View style={styles.body}>
-        <View style={styles.head}>
-          <View style={styles.titles}>
-            <View style={[styles.bar, styles.name]} />
-            <View style={[styles.bar, styles.meta]} />
-          </View>
-          <View style={styles.pill} />
-        </View>
-
-        <View style={styles.trend}>
-          <View style={styles.graph} />
-          <View style={styles.figures}>
-            <View style={[styles.bar, styles.figure]} />
-            <View style={[styles.bar, styles.figureLabel]} />
-          </View>
+        <View style={styles.titles}>
+          <View style={[styles.bar, styles.name]} />
+          <View style={[styles.bar, styles.meta]} />
         </View>
 
         <View style={styles.constituents}>
@@ -37,6 +26,13 @@ export function BasketCardSkeleton() {
             <View key={i} style={[styles.avatar, i > 0 && styles.overlap]} />
           ))}
           <View style={[styles.bar, styles.count]} />
+          <View style={styles.flex} />
+          <View style={styles.pill} />
+        </View>
+
+        <View style={styles.trend}>
+          <View style={styles.graph} />
+          <View style={[styles.bar, styles.figure]} />
         </View>
 
         <View style={styles.rule} />
@@ -72,8 +68,7 @@ const styles = StyleSheet.create({
   },
   body: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 20 },
   bar: { height: 8, borderRadius: 4, backgroundColor: colors.surface3 },
-  head: { flexDirection: 'row', alignItems: 'flex-start', gap: 16 },
-  titles: { flex: 1, gap: 10 },
+  titles: { gap: 10 },
   name: { width: '60%', height: 16, borderRadius: 6 },
   meta: { width: '38%' },
   pill: {
@@ -87,7 +82,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    marginTop: 22,
+    marginTop: 18,
   },
   graph: {
     flex: 1,
@@ -96,14 +91,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface3,
     opacity: 0.6,
   },
-  figures: { alignItems: 'flex-end', minWidth: 64, gap: 6 },
-  figure: { width: 48, height: 10 },
-  figureLabel: { width: 24 },
+  figure: { width: 72, height: 10 },
   constituents: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 16,
+    marginTop: 18,
   },
+  flex: { flex: 1 },
   avatar: {
     width: 28,
     height: 28,

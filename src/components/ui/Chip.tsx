@@ -23,7 +23,7 @@ export function Chip({
       <Text
         style={[
           type.small,
-          { color: selected ? colors.gold : colors.textSecondary },
+          { color: selected ? colors.text : colors.textSecondary },
         ]}
       >
         {label}
@@ -41,5 +41,9 @@ const styles = StyleSheet.create({
     minHeight: 34,
     justifyContent: 'center',
   },
-  selected: { borderColor: colors.goldLine, backgroundColor: colors.goldSoft },
+  // Selected: filled green (Explore design).
+  selected: {
+    borderColor: colors.primaryGreen,
+    backgroundColor: colors.primaryGreen,
+  },
 });

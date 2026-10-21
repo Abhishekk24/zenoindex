@@ -23,4 +23,5 @@ export { RebalanceIcon } from './RebalanceIcon';
 export { SearchIcon } from './SearchIcon';
 export { SignOutIcon } from './SignOutIcon';
 export { StrategyIcon } from './StrategyIcon';
+export { WalletIcon } from './WalletIcon';
 export type { IconProps, TabIconProps } from './types';

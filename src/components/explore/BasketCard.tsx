@@ -64,51 +64,18 @@ export function BasketCard({
         </View>
 
         <View style={styles.body}>
-          <View style={styles.head}>
-            <View style={styles.titles}>
-              <Text style={styles.name} numberOfLines={1}>
-                {dtf.name}
-              </Text>
-              <Text style={styles.meta} numberOfLines={1}>
-                {dtf.symbol} · {shortAddress(dtf.manager)}
-              </Text>
-            </View>
-            {/* Top right; moves left of the manager ⋮ menu when there is one. */}
-            <View
-              style={[
-                styles.status,
-                comingSoon ? styles.soon : styles.active,
-                accessory ? styles.statusWithMenu : null,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.statusText,
-                  { color: comingSoon ? colors.muted : colors.green },
-                ]}
-              >
-                {comingSoon ? 'Coming soon' : 'Active'}
-              </Text>
-            </View>
+          <View
+            style={[styles.titles, accessory ? styles.titlesWithMenu : null]}
+          >
+            <Text style={styles.name} numberOfLines={1}>
+              {dtf.name}
+            </Text>
+            <Text style={styles.meta} numberOfLines={1}>
+              {dtf.symbol} · {shortAddress(dtf.manager)}
+            </Text>
           </View>
 
-          {/* The last 30 days of the share price, with its change. */}
-          <View style={styles.trend}>
-            <Sparkline
-              values={dtf.stats?.sparkline ?? []}
-              height={40}
-              style={styles.spark}
-            />
-            <View style={styles.trendFigures}>
-              <Text style={[styles.trendValue, { color: trendColor(month) }]}>
-                {month === null ? '—' : formatSignedBps(month)}
-              </Text>
-              <Text style={styles.trendLabel}>
-                {dtf.stats?.demo ? '30d · Demo' : '30d'}
-              </Text>
-            </View>
-          </View>
-
+          {/* Constituents, with the basket's status on the same row. */}
           <View style={styles.constituents}>
             <View style={styles.avatars}>
               {shown.map(({ ticker, logo }, i) => (
@@ -130,8 +97,33 @@ export function BasketCard({
                 </View>
               ))}
             </View>
-            <Text style={styles.count}>
+            <Text style={styles.count} numberOfLines={1}>
               {tickers.length} constituent{tickers.length === 1 ? '' : 's'}
+            </Text>
+            <View
+              style={[styles.status, comingSoon ? styles.soon : styles.active]}
+            >
+              <Text
+                style={[
+                  styles.statusText,
+                  { color: comingSoon ? colors.muted : colors.green },
+                ]}
+              >
+                {comingSoon ? 'Coming soon' : 'Active'}
+              </Text>
+            </View>
+          </View>
+
+          {/* The last 30 days of the share price, with its change. */}
+          <View style={styles.trend}>
+            <Sparkline
+              values={dtf.stats?.sparkline ?? []}
+              height={40}
+              style={styles.spark}
+            />
+            <Text style={[styles.trendValue, { color: trendColor(month) }]}>
+              {month === null ? '—' : formatSignedBps(month)} · 30D
+              {dtf.stats?.demo ? ' · Demo' : ''}
             </Text>
           </View>
 
@@ -185,7 +177,7 @@ const styles = StyleSheet.create({
   constituents: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 16,
+    marginTop: 18,
   },
   avatars: { flexDirection: 'row' },
   avatar: {
@@ -208,6 +200,7 @@ const styles = StyleSheet.create({
   },
   count: {
     flex: 1,
+    marginRight: 12,
     fontFamily: fonts.regular,
     fontSize: 13,
     color: colors.muted,
@@ -219,27 +212,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 4,
   },
-  statusWithMenu: { marginRight: 40 },
   active: { borderColor: colors.greenLine },
   soon: { borderColor: colors.lineStrong },
   statusText: { fontFamily: fonts.regular, fontSize: 13 },
   rule: { height: 1, backgroundColor: colors.line, marginVertical: 18 },
-  head: { flexDirection: 'row', alignItems: 'flex-start', gap: 16 },
-  titles: { flex: 1 },
+  titles: {},
+  titlesWithMenu: { paddingRight: 40 },
   trend: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    marginTop: 22,
+    marginTop: 18,
   },
   spark: { flex: 1 },
-  trendFigures: { alignItems: 'flex-end', minWidth: 64 },
-  trendValue: { fontFamily: fonts.medium, fontSize: 15 },
-  trendLabel: {
-    fontFamily: fonts.regular,
-    fontSize: 11,
-    color: colors.muted,
-    marginTop: 2,
-  },
+  trendValue: { fontFamily: fonts.medium, fontSize: 13 },
   stats: { flexDirection: 'row', paddingHorizontal: 6 },
 });

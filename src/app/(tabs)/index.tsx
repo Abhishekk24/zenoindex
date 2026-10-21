@@ -2,9 +2,11 @@
  * Explore (home): browse, search and filter baskets (design: Explore mockup;
  * web: /products, product-explore.tsx).
  *
- * Header actions: strategy and manager filters open their chips inline under
- * the tabs (a gold ring marks an applied filter); search opens /search.
- * Other screens can open a filter here via ?panel=strategy|manager.
+ * Tabs: All · Open · Permissioned list the baskets as they are; Custom holds
+ * the filters — strategy chips and the Sort bar (design).
+ * Header actions: strategy opens Custom; manager opens its chips under the
+ * tabs (a gold ring marks an applied filter); search opens /search.
+ * Other screens can open these via ?panel=strategy|manager.
  */
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import React, { useMemo, useState } from 'react';
@@ -22,6 +24,7 @@ import {
   Chip,
   Empty,
   LoadState,
+  OptionBar,
   Screen,
   SwipeTabContent,
   UnderlineTabs,
@@ -35,35 +38,35 @@ import type { Dtf } from '../../lib/types';
 import { humanize, shortAddress } from '../../lib/format';
 import { colors, fonts, space } from '../../theme/tokens';
 
-type Access = 'all' | 'open' | 'permissioned';
-type Panel = 'strategy' | 'manager' | null;
-type Sort = 'listed' | 'return30d' | 'aum' | 'nav' | 'name';
+type Access = 'all' | 'open' | 'permissioned' | 'custom';
+type Panel = 'manager' | null;
+type Sort = 'aum' | 'return30d' | 'newest' | 'fee';
 
-const SORTS: { value: Sort; label: string }[] = [
-  { value: 'listed', label: 'Listed' },
-  { value: 'return30d', label: 'Best 30 days' },
-  { value: 'aum', label: 'Largest AUM' },
-  { value: 'nav', label: 'NAV / share' },
-  { value: 'name', label: 'Name' },
-];
+const SORTS = [
+  { value: 'aum', label: 'AUM' },
+  { value: 'return30d', label: 'Return' },
+  { value: 'newest', label: 'Newest' },
+  { value: 'fee', label: 'Fee' },
+] as const;
 
-/** Orders baskets for the chosen sort; 'listed' keeps the API's order. */
+/**
+ * Orders baskets for the Custom tab's sort. The API gives no creation date,
+ * so Newest keeps the API's own order (agreed until it sends one).
+ */
 function sortBaskets(dtfs: Dtf[], sort: Sort): Dtf[] {
-  if (sort === 'listed') return dtfs;
+  if (sort === 'newest') return dtfs;
   return [...dtfs].sort((a, b) => {
     switch (sort) {
       case 'aum':
         return compare(b.aum, a.aum);
-      case 'nav':
-        return compare(b.sharePrice, a.sharePrice);
-      case 'return30d':
-        // Baskets without enough history sort last.
+      case 'fee':
+        return a.fees.managementBps - b.fees.managementBps;
+      default:
+        // Return: best 30 days first; baskets without history last.
         return (
           (b.stats?.change30dBps ?? -Infinity) -
           (a.stats?.change30dBps ?? -Infinity)
         );
-      default:
-        return a.name.localeCompare(b.name);
     }
   });
 }
@@ -72,6 +75,7 @@ const ACCESS = [
   { value: 'all', label: 'All' },
   { value: 'open', label: 'Open' },
   { value: 'permissioned', label: 'Permissioned' },
+  { value: 'custom', label: 'Custom' },
 ] as const;
 
 /** Baskets plus the asset list (for symbols and access policy). */
@@ -81,18 +85,20 @@ async function loadExplore() {
 }
 
 function asPanel(value: string | undefined): Panel {
-  return value === 'strategy' || value === 'manager' ? value : null;
+  return value === 'manager' ? value : null;
 }
 
 export default function ExploreScreen() {
   const params = useLocalSearchParams<{ panel?: string; at?: string }>();
   const { data, error, loading, reload } = useLoad(loadExplore, 'explore');
   const { mode } = useAppMode();
-  const [access, setAccess] = useState<Access>('all');
+  const [access, setAccess] = useState<Access>(
+    params.panel === 'strategy' ? 'custom' : 'all',
+  );
   const [manager, setManager] = useState<string>();
   const [strategy, setStrategy] = useState<string>();
   const [panel, setPanel] = useState<Panel>(asPanel(params.panel));
-  const [sort, setSort] = useState<Sort>('listed');
+  const [sort, setSort] = useState<Sort>('aum');
 
   // Arriving from another screen's filter button: open that panel. Tracked
   // during render (not in an effect) so it applies on the same frame.
@@ -100,7 +106,8 @@ export default function ExploreScreen() {
   const [handled, setHandled] = useState(request);
   if (request !== handled) {
     setHandled(request);
-    if (asPanel(params.panel)) setPanel(asPanel(params.panel));
+    if (params.panel === 'strategy') setAccess('custom');
+    else if (asPanel(params.panel)) setPanel(asPanel(params.panel));
   }
 
   const assets = useMemo(() => assetMap(data?.assets ?? []), [data]);
@@ -114,26 +121,28 @@ export default function ExploreScreen() {
     [dtfs],
   );
 
+  // Strategy and sort belong to the Custom tab; the manager filter to all.
+  const custom = access === 'custom';
   const visible = useMemo(() => {
     const shown = dtfs.filter(dtf => {
       const permissioned = isPermissioned(dtf, assets);
       if (access === 'open' && permissioned) return false;
       if (access === 'permissioned' && !permissioned) return false;
       if (manager && dtf.manager !== manager) return false;
-      if (strategy && strategyOf(dtf) !== strategy) return false;
+      if (custom && strategy && strategyOf(dtf) !== strategy) return false;
       return true;
     });
-    return sortBaskets(shown, sort);
-  }, [dtfs, assets, access, manager, strategy, sort]);
+    return custom ? sortBaskets(shown, sort) : shown;
+  }, [dtfs, assets, access, custom, manager, strategy, sort]);
 
-  const filtered = Boolean(manager || strategy);
+  const filtered = Boolean(manager || (custom && strategy));
   const clear = () => {
     setManager(undefined);
     setStrategy(undefined);
     setPanel(null);
   };
-  const toggle = (next: Exclude<Panel, null>) =>
-    setPanel(current => (current === next ? null : next));
+  const toggleManager = () =>
+    setPanel(current => (current === 'manager' ? null : 'manager'));
 
   // Manager mode has no Explore tab: its home is Baskets.
   if (mode === 'manager') return <Redirect href="/baskets" />;
@@ -142,30 +151,16 @@ export default function ExploreScreen() {
     <View style={styles.root}>
       <AppHeader
         title="Explore baskets"
-        strategyActive={Boolean(strategy) || panel === 'strategy'}
+        strategyActive={custom}
         managerActive={Boolean(manager) || panel === 'manager'}
-        onStrategy={() => toggle('strategy')}
-        onManager={() => toggle('manager')}
+        onStrategy={() => setAccess('custom')}
+        onManager={toggleManager}
       />
 
       <View style={styles.tabs}>
         <UnderlineTabs options={ACCESS} value={access} onChange={setAccess} />
       </View>
 
-      {panel === 'strategy' && (
-        <FilterPanel>
-          <ChipRow>
-            {strategies.map(s => (
-              <Chip
-                key={s}
-                label={humanize(s)}
-                selected={strategy === s}
-                onPress={() => setStrategy(strategy === s ? undefined : s)}
-              />
-            ))}
-          </ChipRow>
-        </FilterPanel>
-      )}
       {panel === 'manager' && (
         <FilterPanel>
           <ChipRow>
@@ -181,16 +176,27 @@ export default function ExploreScreen() {
         </FilterPanel>
       )}
       <ExploreBelowPanels style={styles.below}>
-        <ChipRow>
-          {SORTS.map(s => (
-            <Chip
-              key={s.value}
-              label={s.label}
-              selected={sort === s.value}
-              onPress={() => setSort(s.value)}
+        {custom && (
+          <FilterPanel>
+            <ChipRow>
+              {strategies.map(s => (
+                <Chip
+                  key={s}
+                  label={humanize(s)}
+                  selected={strategy === s}
+                  onPress={() => setStrategy(strategy === s ? undefined : s)}
+                />
+              ))}
+            </ChipRow>
+            <OptionBar
+              label="Sort"
+              options={SORTS}
+              value={sort}
+              onChange={setSort}
+              style={styles.sort}
             />
-          ))}
-        </ChipRow>
+          </FilterPanel>
+        )}
         {filtered && (
           <FilterPanel>
             <Pressable
@@ -262,6 +268,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   below: { flex: 1 },
   list: { gap: space.lg },
+  sort: { marginHorizontal: space.lg, marginTop: space.md },
   tabs: { marginTop: space.lg, paddingHorizontal: space.md },
   clear: { paddingHorizontal: space.lg, paddingTop: space.md },
   clearText: { fontFamily: fonts.medium, fontSize: 13, color: colors.gold },

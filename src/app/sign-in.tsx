@@ -21,11 +21,9 @@ import {
   useLoginWithSiwe,
   usePrivy,
 } from '@privy-io/expo';
-import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
 import {
-  Image,
   ImageBackground,
   Pressable,
   ScrollView,
@@ -72,6 +70,9 @@ import {
   walletTrace,
   warmUp,
 } from '../wallets/externalWallet';
+
+/** Before "Resend code" shows on the code step (design: "Resend in 0:42"). */
+const RESEND_AFTER_SECONDS = 60;
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -472,24 +473,24 @@ export default function SignInScreen() {
         resizeMode="cover"
         style={StyleSheet.absoluteFill}
       />
-      <Image
-        source={require('../../assets/images/zeno-logo.png')}
-        style={[styles.logo, { top: insets.top + 20 }]}
-        accessibilityLabel="Zeno"
-      />
       <ScrollView
         style={styles.fill}
         contentContainerStyle={[
           styles.scroll,
           {
-            paddingBottom:
-              keyboardHeight > 0 ? keyboardHeight + 10 : insets.bottom + 10,
+            // The sheet sits on the bottom edge; above the keyboard when open.
+            paddingBottom: keyboardHeight,
           },
         ]}
         keyboardShouldPersistTaps="handled"
         bounces={false}
       >
-        <View style={styles.card}>
+        <View
+          style={[
+            styles.card,
+            { paddingBottom: (keyboardHeight > 0 ? 0 : insets.bottom) + 28 },
+          ]}
+        >
           {finishing ? (
             <>
               <Text style={styles.title}>Sign in</Text>
@@ -521,8 +522,11 @@ export default function SignInScreen() {
               email={email.trim()}
               error={codeError}
               busy={codeBusy}
+              resendAfterSeconds={RESEND_AFTER_SECONDS}
               onVerify={verifyEmailCode}
               onResend={resendEmailCode}
+              onGoogle={googleSignIn}
+              onWallet={chooseWallet}
               onChangeEmail={() => {
                 setCodeError(undefined);
                 setStep('email');
@@ -610,36 +614,6 @@ export default function SignInScreen() {
               <Notice {...(stalledNotice ?? notice)!} />
             </View>
           ) : null}
-          <Text style={styles.footer}>
-            {/* Terms and Privacy Policy open the in-app reader (legal/[doc]). */}
-            By continuing you agree to the{' '}
-            <Text
-              style={styles.footerLink}
-              accessibilityRole="link"
-              onPress={() =>
-                router.push({
-                  pathname: '/legal/[doc]',
-                  params: { doc: 'terms' },
-                })
-              }
-            >
-              Terms
-            </Text>
-            {'\n'}and{' '}
-            <Text
-              style={styles.footerLink}
-              accessibilityRole="link"
-              onPress={() =>
-                router.push({
-                  pathname: '/legal/[doc]',
-                  params: { doc: 'privacy' },
-                })
-              }
-            >
-              Privacy Policy
-            </Text>
-            .
-          </Text>
         </View>
       </ScrollView>
     </View>
@@ -649,18 +623,14 @@ export default function SignInScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   fill: { flex: 1 },
-  logo: { position: 'absolute', right: 24, width: 67, height: 18 },
-  scroll: {
-    flexGrow: 1,
-    justifyContent: 'flex-end',
-    paddingHorizontal: 10,
-  },
+  scroll: { flexGrow: 1, justifyContent: 'flex-end' },
+  // A sheet on the bottom edge, top corners rounded (design).
   card: {
     backgroundColor: CARD_BG,
-    borderRadius: 24,
-    paddingHorizontal: 30,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 27,
     paddingTop: 32,
-    paddingBottom: 28,
   },
   title: {
     fontFamily: fonts.medium,
@@ -718,18 +688,5 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: colors.danger,
     marginTop: 14,
-  },
-  footer: {
-    fontFamily: fonts.regular,
-    fontSize: 12,
-    lineHeight: 20,
-    color: colors.muted,
-    textAlign: 'center',
-    marginTop: 28,
-  },
-  footerLink: {
-    fontFamily: fonts.medium,
-    color: colors.text,
-    textDecorationLine: 'underline',
   },
 });

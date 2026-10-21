@@ -2,8 +2,9 @@
  * The session's onboarding stage decides which routes exist:
  *
  *   signedOut → sign-in (email code, Google or wallet)
- *   terms     → terms
- *   profile   → complete-profile
+ *   terms,
+ *   profile   → complete-profile (agree to the terms and fill in the profile,
+ *               one screen)
  *   ready     → (tabs): Explore · Portfolio · Profile, search, basket/[id],
  *               position/[id], edit-profile, manager/* (manager mode)
  *
@@ -38,10 +39,7 @@ export function RootStack() {
       <Stack.Protected guard={stage === 'signedOut'}>
         <Stack.Screen name="sign-in" options={{ headerShown: false }} />
       </Stack.Protected>
-      <Stack.Protected guard={stage === 'terms'}>
-        <Stack.Screen name="terms" options={{ headerShown: false }} />
-      </Stack.Protected>
-      <Stack.Protected guard={stage === 'profile'}>
+      <Stack.Protected guard={stage === 'terms' || stage === 'profile'}>
         <Stack.Screen
           name="complete-profile"
           options={{ headerShown: false }}
