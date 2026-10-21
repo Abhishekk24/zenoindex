@@ -7,14 +7,7 @@
  */
 import Slider from '@react-native-community/slider';
 import React, { useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import {
   assetOf,
@@ -23,7 +16,7 @@ import {
   type CreateForm,
 } from '../../../manager/createBasket';
 import { colors, fonts, space } from '../../../theme/tokens';
-import { Notice } from '../../ui';
+import { Notice, Skeleton, SkeletonBar } from '../../ui';
 import { FIELD_BG, SelectField } from './Fields';
 
 const BLUE = '#5aa9e6';
@@ -154,10 +147,15 @@ export function ConstituentsStep({
           </Pressable>
         </View>
         {loading ? (
-          <View style={styles.loading} accessibilityLiveRegion="polite">
-            <ActivityIndicator color={colors.gold} />
-            <Text style={styles.loadingText}>Loading assets…</Text>
-          </View>
+          <Skeleton style={styles.matches}>
+            {[0, 1, 2].map(i => (
+              <View key={i} style={styles.match}>
+                <SkeletonBar width="55%" height={10} round={5} />
+                <View style={styles.spacer} />
+                <SkeletonBar width={40} />
+              </View>
+            ))}
+          </Skeleton>
         ) : loadError ? (
           <Notice
             tone="error"
@@ -226,12 +224,20 @@ export function ConstituentsStep({
                     <Text style={styles.removeText}>×</Text>
                   </Pressable>
                 </View>
+                {/* One 0–100 scale for every asset, so a weight sits in the
+                    same place whatever the others are; upperLimit stops the
+                    thumb at what's left. A scale that shrank with the others
+                    moved this thumb (and reset it on Android) while another
+                    slider was dragged. */}
                 <Slider
                   value={weight}
                   minimumValue={0}
-                  maximumValue={Math.max(room, 1)}
+                  maximumValue={100}
+                  upperLimit={room}
                   step={1}
-                  onValueChange={value => setWeight(c.assetId, value)}
+                  onValueChange={value =>
+                    setWeight(c.assetId, Math.min(value, room))
+                  }
                   minimumTrackTintColor={colors.gold}
                   maximumTrackTintColor={colors.lineStrong}
                   thumbTintColor={colors.gold}
@@ -342,13 +348,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.muted,
   },
-  loading: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.sm,
-    paddingVertical: space.sm,
-  },
-  loadingText: { fontFamily: fonts.regular, fontSize: 14, color: colors.muted },
   table: {
     borderRadius: 12,
     borderWidth: 1,

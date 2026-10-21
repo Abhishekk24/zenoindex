@@ -10,22 +10,21 @@
  * legal/[doc] and wc-return are open at every stage.
  */
 import { Stack } from 'expo-router';
-import React from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import * as SplashScreen from 'expo-splash-screen';
+import React, { useEffect } from 'react';
 
 import { useSession } from '../../hooks/useSession';
 import { colors } from '../../theme/tokens';
 
 export function RootStack() {
   const { stage, booted } = useSession();
-  if (!booted) {
-    // /auth/me is still being answered; hold a spinner under the splash.
-    return (
-      <View style={styles.boot}>
-        <ActivityIndicator color={colors.gold} />
-      </View>
-    );
-  }
+  // The splash stays up until /auth/me says where to go (fonts are loaded by
+  // now, see _layout), then the right screen shows straight away: no
+  // spinner in between. /auth/me gives up after 20 s (lib/http).
+  useEffect(() => {
+    if (booted) void SplashScreen.hideAsync();
+  }, [booted]);
+  if (!booted) return null;
   return (
     <Stack
       screenOptions={{
@@ -109,12 +108,3 @@ export function RootStack() {
     </Stack>
   );
 }
-
-const styles = StyleSheet.create({
-  boot: {
-    flex: 1,
-    backgroundColor: colors.bg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});

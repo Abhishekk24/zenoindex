@@ -55,7 +55,13 @@ export default function PositionScreen() {
       </Screen>
     );
   }
-  if (!data) return <LoadState error={error} onRetry={reload} />;
+  if (!data) {
+    return (
+      <Screen>
+        <LoadState error={error} onRetry={reload} />
+      </Screen>
+    );
+  }
 
   const dtf = data.dtfs.get(id);
   const position = data.portfolio.positions.find(p => p.dtfId === id);

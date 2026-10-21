@@ -12,7 +12,7 @@
  * wallet (src/manager/createBasket.ts). Only wallets the protocol admin
  * allowlisted as vault creators can create; others see why on step 1.
  */
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Image,
   Pressable,
@@ -106,6 +106,13 @@ export default function CreateBasketScreen() {
   const keyboardHeight = useKeyboardHeight();
   const [form, setForm] = useState<CreateForm>(EMPTY_FORM);
   const [step, setStep] = useState(0);
+  const scrollRef = useRef<ScrollView>(null);
+  // Every step opens at its top: the steps share one scroll view, and its
+  // Continue / Previous buttons sit at the bottom, so a new step would
+  // otherwise open scrolled down past its first fields.
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+  }, [step]);
   const [reached, setReached] = useState(0);
   // Steps where Continue was pressed: only then show their errors.
   const [checked, setChecked] = useState<Set<number>>(new Set());
@@ -144,6 +151,8 @@ export default function CreateBasketScreen() {
   const next = () => {
     if (!valid) {
       setChecked(current => new Set(current).add(step));
+      // Up to the fields, where their error messages now show.
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
     go(step + 1);
@@ -222,6 +231,7 @@ export default function CreateBasketScreen() {
   return (
     <View style={styles.root}>
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={[
           styles.content,
           {

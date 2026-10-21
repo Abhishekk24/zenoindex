@@ -1,7 +1,7 @@
 import { usePrivy, type PrivyUser } from '@privy-io/expo';
 import * as Clipboard from 'expo-clipboard';
 import React, { useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { robinhood } from '../../config/chains';
 import { useLoad } from '../../hooks/useLoad';
@@ -18,8 +18,17 @@ import type { User } from '../../lib/types';
 import { primaryWallet } from '../../lib/user';
 import { useWallet } from '../../lib/wallet';
 import { colors, fonts, space, type } from '../../theme/tokens';
-import { disconnectWallet } from '../../wallets/externalWallet';
-import { Badge, Body, Button, Card, LinkText, Notice, Row } from '../ui';
+import {
+  Badge,
+  Body,
+  Button,
+  Card,
+  LinkText,
+  Notice,
+  Row,
+  Skeleton,
+  SkeletonBar,
+} from '../ui';
 import { chooseWallet } from '../wallet/WalletPicker';
 import { DepositSheet } from './DepositSheet';
 
@@ -80,21 +89,11 @@ export function WalletsTab({ user }: { user: User }) {
     `balances#${signedIn ?? 'none'}`,
   );
   const [copied, setCopied] = useState(false);
-  const [disconnecting, setDisconnecting] = useState(false);
   const [depositing, setDepositing] = useState(false);
   const mismatch =
     address !== undefined &&
     !user.wallets.some(w => w.address.toLowerCase() === address.toLowerCase());
   const kind = isExternal ? 'External wallet' : signInLabel(privyUser);
-
-  const disconnect = async () => {
-    setDisconnecting(true);
-    try {
-      await disconnectWallet();
-    } finally {
-      setDisconnecting(false);
-    }
-  };
 
   const copy = async () => {
     if (!signedIn) return;
@@ -156,10 +155,14 @@ export function WalletsTab({ user }: { user: User }) {
           />
         </View>
       ) : balancesLoading && signedIn ? (
-        <View style={styles.loading} accessibilityLiveRegion="polite">
-          <ActivityIndicator color={colors.gold} size="small" />
-          <Text style={styles.muted}>Loading balances…</Text>
-        </View>
+        <Skeleton style={styles.item}>
+          {[0, 1].map(i => (
+            <View key={i} style={styles.line}>
+              <SkeletonBar width="35%" />
+              <SkeletonBar width="20%" />
+            </View>
+          ))}
+        </Skeleton>
       ) : balancesError ? (
         <Notice
           tone="error"
@@ -175,22 +178,13 @@ export function WalletsTab({ user }: { user: User }) {
           with the new one.
         </Body>
       )}
-      {isExternal ? (
-        address ? (
-          <Button
-            label="Disconnect wallet"
-            variant="ghost"
-            onPress={() => void disconnect()}
-            loading={disconnecting}
-            disabled={disconnecting}
-          />
-        ) : (
-          <Button
-            label="Connect wallet"
-            variant="ghost"
-            onPress={() => void chooseWallet()}
-          />
-        )
+      {/* The wallet only disconnects on sign-out; reconnect if it dropped. */}
+      {isExternal && !address ? (
+        <Button
+          label="Connect wallet"
+          variant="ghost"
+          onPress={() => void chooseWallet()}
+        />
       ) : null}
     </Card>
   );
@@ -198,7 +192,6 @@ export function WalletsTab({ user }: { user: User }) {
 
 const styles = StyleSheet.create({
   item: { gap: space.sm },
-  loading: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   line: {
     flexDirection: 'row',
     justifyContent: 'space-between',

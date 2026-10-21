@@ -18,6 +18,7 @@ import {
   estimateNetworkFee,
   explorerTxUrl,
   findVaultTx,
+  nativeBalance,
   nativeSymbol,
   pollUntil,
   waitForReceipt,
@@ -30,6 +31,7 @@ import {
   shortAddress,
 } from '../lib/format';
 import type { Dtf, Operation, TradePreview, TxDraft } from '../lib/types';
+import { primaryWallet } from '../lib/user';
 import { useWallet } from '../lib/wallet';
 import { colors, fonts, space, type } from '../theme/tokens';
 import { cancelWalletRequest, openWalletApp } from '../wallets/externalWallet';
@@ -47,6 +49,8 @@ import {
   Segmented,
   type NoticeContent,
 } from './ui';
+import { DepositSheet } from './profile/DepositSheet';
+import { chooseWallet } from './wallet/WalletPicker';
 import { TradeProgress, type ProgressStep } from './trade/TradeProgress';
 import { useLoad } from '../hooks/useLoad';
 import { useUser } from '../hooks/useUser';
@@ -126,6 +130,13 @@ export function TradePanel({
   const [busy, setBusy] = useState(false);
   const [step, setStep] = useState<Step>('idle');
   const [operation, setOperation] = useState<Operation>();
+  // The confirmed trade, for its summary: the form is cleared once it lands.
+  const [completed, setCompleted] = useState<{
+    side: Side;
+    pay: string;
+    receive: string;
+    unit: string;
+  }>();
   // A wallet request is pending; `walletPrompt` shows Open wallet / Cancel.
   const pendingWallet = useRef<{ cancel: () => void } | null>(null);
   const [awaitingWallet, setAwaitingWallet] = useState(false);
@@ -155,8 +166,14 @@ export function TradePanel({
     Boolean(dtf.minInvestment) &&
     compare(amount, dtf.minInvestment!) < 0;
 
-  /** The wallet that must sign: the embedded wallet, if it is the account's. */
-  const signer = address?.toLowerCase();
+  /**
+   * The wallet that signs: the account's own. For a wallet sign-in that is
+   * the wallet signed in with, live connection or not (Sign and send
+   * reconnects it if needed), so its balance always shows. For email /
+   * Google it is the embedded wallet once created.
+   */
+  const accountWallet = isExternal ? primaryWallet(user) : address;
+  const signer = accountWallet?.toLowerCase();
   const linked = user.wallets.some(w => w.address.toLowerCase() === signer);
 
   // What the user can spend: base asset to invest, shares to redeem.
@@ -183,6 +200,37 @@ export function TradePanel({
         : null,
     `fee#${preview?.draft.requestId ?? 'none'}`,
   );
+
+  // Network fees are paid in the chain's gas token (ETH on Robinhood Chain):
+  // without enough, the wallet refuses the transaction, so say so here.
+  const gasSymbol = nativeSymbol(dtf.chainId);
+  const { data: gasWei } = useLoad(
+    async () =>
+      signer && linked
+        ? (await nativeBalance(dtf.chainId, signer)).toString()
+        : null,
+    `gas#${signer ?? 'none'}#${preview?.draft.requestId ?? 'none'}#${balanceVersion}`,
+  );
+  const lacksGas =
+    typeof gasWei === 'string' &&
+    (BigInt(gasWei) === 0n ||
+      (typeof feeWei === 'string' && BigInt(gasWei) < BigInt(feeWei)));
+  const [depositing, setDepositing] = useState(false);
+
+  /** Why Review is disabled, said where the user looks (nothing for an empty field). */
+  const reviewBlocked = !linked
+    ? walletNeeded
+    : !amount
+      ? null
+      : !valid
+        ? 'Enter a number, like 10 or 2.5.'
+        : overBalance && balance !== null
+          ? side === 'invest'
+            ? `You only have ${formatDecimal(balance, 4)} ${unit} in this wallet. Add ${unit} to it, or invest less.`
+            : `You only have ${formatDecimal(balance, 4)} ${unit} to redeem.`
+          : belowMinimum
+            ? `The minimum investment is ${formatDecimal(dtf.minInvestment!)} ${baseSymbol}.`
+            : null;
 
   const review = async () => {
     if (!signer || !linked) {
@@ -276,7 +324,12 @@ export function TradePanel({
   async function approveSpend(spender: string, amountRaw: bigint) {
     const allowance = () =>
       erc20Allowance(dtf.chainId, dtf.baseAssetId, signer!, spender);
-    if ((await allowance()) >= amountRaw) return;
+    const current = await allowance();
+    // [trade] lines: which transaction the wallet is asked for (adb logcat).
+    console.log(
+      `[trade] ${baseSymbol} allowance ${current}, needs ${amountRaw}: ${current >= amountRaw ? 'no approval' : 'approving'}`,
+    );
+    if (current >= amountRaw) return;
     const data = encodeFunctionData({
       abi: erc20Abi,
       functionName: 'approve',
@@ -318,6 +371,9 @@ export function TradePanel({
     const chainId = draft.transaction.chainId;
     const to = draft.transaction.to;
     setLeg(n => n + 1);
+    console.log(
+      `[trade] signing ${side} transaction (request ${draft.requestId}, final ${draft.finalStep !== false})`,
+    );
     setStep('signing');
     // Watched on-chain as well as answered by the wallet, so a lost reply
     // can't leave the app waiting on a transaction that already landed (and
@@ -380,6 +436,27 @@ export function TradePanel({
 
   const confirmTrade = async () => {
     if (!preview || !signer) return;
+    // A wallet sign-in signs over its live connection: if that isn't there
+    // (or is another wallet), reconnect the account's wallet first.
+    if (isExternal && address?.toLowerCase() !== signer) {
+      const picked = await chooseWallet();
+      if (picked.status !== 'connected') return;
+      if (picked.address.toLowerCase() !== signer) {
+        setResult({
+          inputs,
+          problem: {
+            tone: 'error',
+            title: 'That’s a different wallet',
+            message: `Connect ${shortAddress(signer)}, the wallet you signed in with, to sign this trade.`,
+          },
+        });
+        return;
+      }
+    }
+    if ((await nativeBalance(dtf.chainId, signer).catch(() => 1n)) === 0n) {
+      setBalanceVersion(v => v + 1);
+      return;
+    }
     let draft = preview.draft;
     setBusy(true);
     setOperation(undefined);
@@ -406,6 +483,14 @@ export function TradePanel({
         });
         await sendDraft(draft);
       }
+      setCompleted({
+        side,
+        pay: preview.pay,
+        receive: preview.receive,
+        unit,
+      });
+      // Done: the amount was spent, so the form starts empty again.
+      setAmount('');
       setStep('done');
       setBalanceVersion(v => v + 1);
       onConfirmed?.();
@@ -464,6 +549,7 @@ export function TradePanel({
 
   const newTrade = () => {
     setAmount('');
+    setCompleted(undefined);
     setOperation(undefined);
     setStep('idle');
   };
@@ -482,7 +568,6 @@ export function TradePanel({
               message="The price may be out of date, so amounts can differ."
             />
           ) : null}
-          {!linked ? <Body muted>{walletNeeded}</Body> : null}
           <Field
             label={
               side === 'invest'
@@ -524,6 +609,14 @@ export function TradePanel({
               ]}
             >
               Minimum investment {formatDecimal(dtf.minInvestment)} {baseSymbol}
+            </Text>
+          ) : null}
+          {reviewBlocked ? (
+            <Text
+              style={[type.small, { color: colors.danger }]}
+              accessibilityLiveRegion="polite"
+            >
+              {reviewBlocked}
             </Text>
           ) : null}
           <Button
@@ -595,11 +688,29 @@ export function TradePanel({
               />
             </>
           ) : null}
+          {lacksGas ? (
+            <Notice
+              tone="warning"
+              title={`You need ${gasSymbol} for network fees`}
+              message={`${chainName(dtf.chainId)} charges network fees in ${gasSymbol}${
+                typeof feeWei === 'string'
+                  ? ` (about ${formatRaw(feeWei, 18, 6)} ${gasSymbol} for this trade)`
+                  : ''
+              }, and this wallet doesn’t have enough. Add a little to continue.`}
+              actions={[
+                {
+                  label: `Deposit ${gasSymbol}`,
+                  onPress: () => setDepositing(true),
+                },
+              ]}
+            />
+          ) : null}
           <Button
             label="Sign and send"
             variant="green"
             onPress={confirmTrade}
             loading={busy}
+            disabled={lacksGas}
           />
           <Text style={[type.small, { color: colors.dim }]}>
             The final amounts are set by the quote when you sign. Prices can
@@ -607,6 +718,17 @@ export function TradePanel({
           </Text>
         </View>
       )}
+
+      {signer ? (
+        <DepositSheet
+          address={signer}
+          visible={depositing}
+          onClose={() => {
+            setDepositing(false);
+            setBalanceVersion(v => v + 1);
+          }}
+        />
+      ) : null}
 
       {inFlow && (
         <View style={{ gap: space.md }}>
@@ -650,20 +772,22 @@ export function TradePanel({
             }
             tone={operation.status === 'confirmed' ? 'green' : 'gold'}
           />
-          {preview ? (
+          {completed ? (
             <>
               <Row
-                label={side === 'invest' ? 'You paid' : 'Shares redeemed'}
-                value={`${formatDecimal(preview.pay, 4)} ${unit}`}
+                label={
+                  completed.side === 'invest' ? 'You paid' : 'Shares redeemed'
+                }
+                value={`${formatDecimal(completed.pay, 4)} ${completed.unit}`}
               />
               <Row
                 label={
-                  side === 'invest'
+                  completed.side === 'invest'
                     ? 'Shares (estimated)'
                     : 'You receive (est.)'
                 }
-                value={`${formatDecimal(preview.receive, 4)} ${
-                  side === 'invest' ? dtf.symbol : baseSymbol
+                value={`${formatDecimal(completed.receive, 4)} ${
+                  completed.side === 'invest' ? dtf.symbol : baseSymbol
                 }`}
               />
             </>

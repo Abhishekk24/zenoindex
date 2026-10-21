@@ -1,38 +1,53 @@
 import React from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
-import { colors, space } from '../../theme/tokens';
+import { space } from '../../theme/tokens';
 import { Body } from './Body';
 import { Button } from './Button';
+import { Skeleton, SkeletonCard } from './Skeleton';
 
-/** Loading spinner, or an error with a retry, for a whole screen or section. */
+/**
+ * A screen or section that hasn't loaded: a skeleton in its place (the
+ * screen's own `placeholder`, or two skeleton cards), or the error with a
+ * retry. Never a spinner.
+ */
 export function LoadState({
   error,
   onRetry,
+  placeholder,
 }: {
   error?: string;
   onRetry?: () => void;
+  /** The screen's shape while loading; two skeleton cards by default. */
+  placeholder?: React.ReactNode;
 }) {
+  if (!error) {
+    return (
+      <Skeleton style={styles.skeleton}>
+        {placeholder ?? (
+          <>
+            <SkeletonCard />
+            <SkeletonCard rows={2} />
+          </>
+        )}
+      </Skeleton>
+    );
+  }
   return (
-    <View style={styles.state}>
-      {error ? (
-        <>
-          <Body muted style={styles.centered}>
-            {error}
-          </Body>
-          {onRetry ? (
-            <Button label="Try again" variant="outline" onPress={onRetry} />
-          ) : null}
-        </>
-      ) : (
-        <ActivityIndicator color={colors.gold} />
-      )}
+    <View style={styles.error}>
+      <Body muted style={styles.centered}>
+        {error}
+      </Body>
+      {onRetry ? (
+        <Button label="Try again" variant="outline" onPress={onRetry} />
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  state: {
+  skeleton: { gap: space.lg },
+  error: {
     alignItems: 'center',
     justifyContent: 'center',
     gap: space.md,

@@ -82,7 +82,11 @@ const SOCKET_STALE_MS = 15_000;
  * times, so waiting it out could hold a request — and the user — for minutes.
  */
 const RELAY_WAIT_MS = 3000;
-/** An always-sent switch opens the wallet only after this long unanswered. */
+/**
+ * A network switch opens the wallet only after this long unanswered: a wallet
+ * already on the network (or switching without a prompt) answers first, and
+ * the user isn't sent to it and back for nothing.
+ */
 const SWITCH_OPEN_AFTER_MS = 1500;
 
 export const WALLET_SESSION_EXPIRED =
@@ -595,25 +599,64 @@ export async function openWalletApp(): Promise<void> {
   if (scheme) await Linking.openURL(`${scheme}://`).catch(() => {});
 }
 
-/** `preferred` if the session approved it, else a network it did approve. */
-function approvedChain(provider: UniversalProvider, preferred: number): number {
-  const ns = provider.session?.namespaces.eip155;
-  const approved = new Set(
-    [
-      ...(ns?.chains ?? []),
-      ...(ns?.accounts ?? []).map(a => a.split(':').slice(0, 2).join(':')),
-    ]
-      .map(parseChain)
-      .filter((id): id is number => id !== undefined),
-  );
-  if (approved.has(preferred)) return preferred;
-  return approved.values().next().value ?? preferred;
+/**
+ * The networks the session on `topic` approved. Read from the client by
+ * topic: UniversalProvider's own `session` can be another (older) one.
+ */
+function approvedChains(provider: UniversalProvider, topic: string): number[] {
+  let ns;
+  try {
+    ns = provider.client.session.get(topic).namespaces.eip155;
+  } catch {
+    return [];
+  }
+  return [
+    ...new Set(
+      [
+        ...(ns?.chains ?? []),
+        ...(ns?.accounts ?? []).map(a => a.split(':').slice(0, 2).join(':')),
+      ]
+        .map(parseChain)
+        .filter((id): id is number => id !== undefined),
+    ),
+  ];
+}
+
+/** `preferred` if approved, else a network the session did approve. */
+function approvedChain(approved: number[], preferred: number): number {
+  return approved.includes(preferred) ? preferred : (approved[0] ?? preferred);
+}
+
+/** A transaction request, short: where to, value, gas set, data size. */
+function describeParams(method: string, params: unknown[]): string {
+  if (method !== 'eth_sendTransaction') return '';
+  const tx = (params[0] ?? {}) as {
+    to?: string;
+    value?: string;
+    gas?: string;
+    data?: string;
+  };
+  const bytes = tx.data ? (tx.data.length - 2) / 2 : 0;
+  return `; tx to ${tx.to}, value ${tx.value ?? '0x0'}, gas ${tx.gas ?? 'unset'}, ${bytes} data bytes`;
+}
+
+/** An error exactly as it arrived (plain object, Error or nothing). */
+function rawError(e: unknown): string {
+  if (e === undefined) return 'undefined';
+  try {
+    return JSON.stringify(
+      e,
+      e instanceof Error ? Object.getOwnPropertyNames(e) : undefined,
+    );
+  } catch {
+    return String(e);
+  }
 }
 
 /**
  * Sends one request on the connected session, opens the wallet once it has
- * reached the relay, and waits for the answer. A dead session, or no answer
- * in time, disconnects, so the next try connects afresh.
+ * reached the relay, and waits for the answer. A failed request never
+ * disconnects the wallet: only signing out does.
  */
 async function walletRequest<T>(
   method: string,
@@ -630,7 +673,11 @@ async function walletRequest<T>(
   if (shared.state.status !== 'connected' || !topic) {
     throw new WalletError(WALLET_SESSION_EXPIRED, 'expired');
   }
-  walletTrace(`${method}: sending`);
+  const approved = approvedChains(provider, topic);
+  const tag = caip(approvedChain(approved, chainId));
+  walletTrace(
+    `${method}: sending for chain ${chainId}, tagged ${tag}; session chains [${approved.join(', ')}]; wallet on ${shared.state.chainId ?? 'unknown'}${describeParams(method, params)}`,
+  );
   await readyToSend(provider);
 
   const events = provider.client.events;
@@ -658,10 +705,10 @@ async function walletRequest<T>(
     const result = await waitForUser(
       provider.client.request<T>({
         topic,
-        chainId: caip(approvedChain(provider, chainId)),
+        chainId: tag,
         request: { method, params },
       }),
-      `No answer from ${walletName()}. Connect your wallet again to retry.`,
+      `No answer from ${walletName()}. Try again.`,
     );
     walletTrace(`${method}: answered`);
     return result;
@@ -670,10 +717,10 @@ async function walletRequest<T>(
       e,
       `${walletName()} couldn’t complete the request.`,
     );
-    walletTrace(`${method}: ${error.kind} (${error.message})`);
-    if (error.kind === 'expired' || error.kind === 'timeout') {
-      await disconnectWallet();
-    }
+    walletTrace(
+      `${method}: ${error.kind} (${error.message}); raw ${rawError(e)}`,
+    );
+    // Never disconnects here: only signing out does (session.tsx).
     throw error;
   } finally {
     events.off('session_request_sent', onSent);
@@ -691,7 +738,7 @@ export async function switchChain(
   /**
    * Ask even if the wallet is believed to be on `chainId` (sign-in: the network
    * known from connecting is the first approved account's, not necessarily the
-   * wallet's). The wallet opens only if it doesn't answer within 1.5 s.
+   * wallet's).
    */
   { always = false }: { always?: boolean } = {},
 ): Promise<void> {
@@ -701,7 +748,7 @@ export async function switchChain(
       'wallet_switchEthereumChain',
       [{ chainId: numberToHex(chainId) }],
       chainId,
-      always ? SWITCH_OPEN_AFTER_MS : 0,
+      SWITCH_OPEN_AFTER_MS,
     );
   } catch (e) {
     const error = toWalletError(e, 'The network switch failed.');

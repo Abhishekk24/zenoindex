@@ -13,6 +13,7 @@
 import { usePrivy, type PrivyUser } from '@privy-io/expo';
 import type { Hex } from 'viem';
 
+import { sendTransaction as sendExternalTransaction } from '../wallets/externalWallet';
 import { useWallets, type WalletTx } from '../wallets/useWallets';
 
 export type { WalletTx };
@@ -47,11 +48,12 @@ export function useWallet() {
     isExternal,
 
     sendTransaction(tx: WalletTx): Promise<Hex> {
+      // External: whatever is connected when it's called, so a wallet just
+      // reconnected (TradePanel's Sign and send) is used.
+      if (isExternal) return sendExternalTransaction(tx);
       if (!wallet) {
         throw new Error(
-          isExternal
-            ? 'Connect your wallet first.'
-            : 'Your wallet is still being set up. Try again in a moment.',
+          'Your wallet is still being set up. Try again in a moment.',
         );
       }
       return wallet.sendTransaction(tx);

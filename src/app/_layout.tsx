@@ -14,7 +14,7 @@ import { useFonts } from 'expo-font';
 import { ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import React, { useEffect } from 'react';
+import React from 'react';
 import { LogBox, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
@@ -56,11 +56,8 @@ export default function RootLayout() {
     [fonts.bold]: SpaceGrotesk_700Bold,
   });
 
-  useEffect(() => {
-    if (loaded || error) SplashScreen.hideAsync();
-  }, [loaded, error]);
-
-  // If a font fails to load, carry on with system fonts rather than block.
+  // The splash hides in RootStack, once the session says which screen to
+  // show. If a font fails to load, carry on with system fonts rather than block.
   if (!loaded && !error) return null;
 
   return (

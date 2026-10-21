@@ -12,6 +12,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader } from '../../components/AppHeader';
 import { BasketCard } from '../../components/explore/BasketCard';
+import { BasketCardSkeleton } from '../../components/explore/BasketCardSkeleton';
 import { ChipRow } from '../../components/explore/ChipRow';
 import {
   ExploreBelowPanels,
@@ -204,8 +205,17 @@ export default function ExploreScreen() {
           </FilterPanel>
         )}
 
-        {!data ? (
+        {!data && error ? (
           <LoadState error={error} onRetry={reload} />
+        ) : !data ? (
+          // First load: the cards' outlines, not a spinner.
+          <Screen tabBar>
+            <View style={styles.list}>
+              {[0, 1, 2].map(i => (
+                <BasketCardSkeleton key={i} />
+              ))}
+            </View>
+          </Screen>
         ) : (
           <Screen tabBar onRefresh={reload} refreshing={loading}>
             <SwipeTabContent

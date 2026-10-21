@@ -6,6 +6,7 @@ import { BasketActivity } from '../../components/basket/BasketActivity';
 import { BasketCorporateActions } from '../../components/basket/BasketCorporateActions';
 import { BasketHeader } from '../../components/basket/BasketHeader';
 import { BasketHoldings } from '../../components/basket/BasketHoldings';
+import { BasketPageSkeleton } from '../../components/basket/BasketPageSkeleton';
 import { BasketPosition } from '../../components/basket/BasketPosition';
 import { BasketStats } from '../../components/basket/BasketStats';
 import { AllocationBar } from '../../components/charts/AllocationBar';
@@ -70,7 +71,17 @@ export default function BasketDetailScreen() {
     reload();
   };
 
-  if (!data) return <LoadState error={error} onRetry={reload} />;
+  if (!data) {
+    return (
+      <Screen>
+        <LoadState
+          error={error}
+          onRetry={reload}
+          placeholder={<BasketPageSkeleton />}
+        />
+      </Screen>
+    );
+  }
   const { dtf, assets, eligibility } = data;
   const permissioned = isPermissioned(dtf, assets);
   const baseSymbol = symbolOf(dtf.baseAssetId, assets);

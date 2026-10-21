@@ -12,6 +12,7 @@ import * as api from './api';
 import { setSessionExpiredHandler } from './http';
 import { SessionContext, type SessionValue, stageOf } from './sessionContext';
 import type { User } from './types';
+import { disconnectWallet } from '../wallets/externalWallet';
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -49,8 +50,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         setUser(await api.getMe());
       },
       signOut: async () => {
-        // Privy too, or the sign-in screen would resume its session.
-        await Promise.all([api.signOut(), privyLogout().catch(() => {})]);
+        // Privy too, or the sign-in screen would resume its session. Signing
+        // out is the one thing that disconnects the wallet.
+        await Promise.all([
+          api.signOut(),
+          privyLogout().catch(() => {}),
+          disconnectWallet().catch(() => {}),
+        ]);
         setUser(null);
       },
     }),

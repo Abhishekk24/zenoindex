@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppHeader } from '../components/AppHeader';
 import { SearchIcon } from '../components/icons';
-import { SkeletonCard } from '../components/search/SkeletonCard';
+import { BasketCardSkeleton } from '../components/explore/BasketCardSkeleton';
 import * as api from '../lib/api';
 import { formatDecimal, shortAddress } from '../lib/format';
 import type { Dtf } from '../lib/types';
@@ -86,7 +86,7 @@ export default function SearchScreen() {
             </Text>
           </Pressable>
         ) : !q || !data ? (
-          <SkeletonCard />
+          <BasketCardSkeleton />
         ) : results.length === 0 ? (
           <Text style={styles.message}>No baskets match “{query.trim()}”.</Text>
         ) : (
