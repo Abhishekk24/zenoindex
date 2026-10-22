@@ -1,9 +1,14 @@
 import { defineChain } from 'viem';
 
+// EXPO_PUBLIC_CHAIN=testnet builds an app that trades on Robinhood testnet (pair it with a testnet API).
+const testnet = process.env.EXPO_PUBLIC_CHAIN === 'testnet';
+const network = testnet ? 'testnet' : 'mainnet';
+
 /** Robinhood Chain mainnet — where the ZenoIndex contracts live. */
 export const robinhood = defineChain({
-  id: 4663,
-  name: 'Robinhood Chain',
+  id: testnet ? 46630 : 4663,
+  name: testnet ? 'Robinhood Chain Testnet' : 'Robinhood Chain',
+  testnet,
   nativeCurrency: {
     name: 'Ether',
     symbol: 'ETH',
@@ -11,13 +16,13 @@ export const robinhood = defineChain({
   },
   rpcUrls: {
     default: {
-      http: ['https://rpc.mainnet.chain.robinhood.com'],
+      http: [`https://rpc.${network}.chain.robinhood.com`],
     },
   },
   blockExplorers: {
     default: {
       name: 'Robinhood Explorer',
-      url: 'https://explorer.mainnet.chain.robinhood.com',
+      url: `https://explorer.${network}.chain.robinhood.com`,
     },
   },
   contracts: {
