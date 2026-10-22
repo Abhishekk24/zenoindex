@@ -31,7 +31,7 @@ if (env.SEED_PROJECT_NAME) {
 }
 
 const client = createPublicClient({ chain: robinhood, transport: http(env.RPC_URL) });
-if ((await client.getChainId()) !== robinhood.id) throw new Error(`RPC_URL is not Robinhood mainnet (${robinhood.id})`);
+if ((await client.getChainId()) !== robinhood.id) throw new Error(`RPC_URL is not ${robinhood.name} (${robinhood.id})`);
 
 const didit =
   env.DIDIT_API_KEY && env.DIDIT_WORKFLOW_ID

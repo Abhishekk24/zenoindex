@@ -11,7 +11,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // Keep in sync with EVM_COMMIT in src/constants.ts.
-const EVM_COMMIT = "e755a31";
+const EVM_COMMIT = "b284de1";
 const CONTRACTS = [
   ["ZenoIndexVault", "ZenoIndexVault.sol"],
   ["Vault", "Vault.sol"],

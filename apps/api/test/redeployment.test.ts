@@ -8,8 +8,8 @@ import { seedProject, testDb } from "./helpers";
 it("upgrades only the old mainnet factory, preserving API keys, sessions and historical operations", async () => {
   const db = await testDb();
   try {
-    // Model an existing database immediately before the new migration.
-    await db.query("delete from schema_migrations where name = '0009_mainnet_redeployment.sql'");
+    // Model an existing database immediately before the redeployment migrations (0009 then 0010).
+    await db.query("delete from schema_migrations where name in ('0009_mainnet_redeployment.sql', '0010_chainlink_factory.sql')");
     const { projectId, pk } = await seedProject(db);
     const old = "0xd00abbc1d1555a173c5081b2204579b057b05378";
     await db.query("update projects set factory_address = $1 where id = $2", [old, projectId]);

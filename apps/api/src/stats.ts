@@ -67,12 +67,14 @@ export async function assetPrices(client: PublicClient, snap: Snapshot) {
   // The raw table, not valueUsdc: that quote reverts (StalePrice) once a price is older than maxPriceAge.
   const read = (functionName: "priceNum" | "priceDen" | "priceUpdatedAt") =>
     client.multicall({ contracts: priced.map((a) => ({ address: factory, abi: ZenoIndexVaultAbi, functionName, args: [a.mint] }) as const) });
-  const [nums, dens, updated] = await Promise.all([read("priceNum"), read("priceDen"), read("priceUpdatedAt")]);
+  // Factories with Chainlink feeds price through getPrice (feed, else table); it reverts when stale or on older factories.
+  const live = client.multicall({ contracts: priced.map((a) => ({ address: factory, abi: ZenoIndexVaultAbi, functionName: "getPrice", args: [a.mint] }) as const) });
+  const [nums, dens, updated, prices] = await Promise.all([read("priceNum"), read("priceDen"), read("priceUpdatedAt"), live]);
   const ok = (r: { status: string; result?: bigint } | undefined) => (r?.status === "success" ? r.result! : 0n);
   const byMint = new Map(
     priced.map((a, i) => {
-      const num = ok(nums[i]);
-      const den = ok(dens[i]);
+      const p = prices[i];
+      const [num, den] = p?.status === "success" ? p.result! : [ok(nums[i]), ok(dens[i])];
       const at = ok(updated[i]);
       // value(amount) = amount * num / den in USDG raw; one whole token = 10^decimals.
       const price = den > 0n ? formatUnits((10n ** BigInt(a.decimals ?? 18) * num) / den, PRICE_DECIMALS) : null;

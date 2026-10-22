@@ -1,10 +1,10 @@
 import { defineChain, type Address } from "viem";
 
 /**
- * Deployed contract source revision, documented by README commit d3d51b5 on
+ * Deployed contract source revision (Chainlink price feeds) on
  * feat/zenoindex/phase-1-hardening. Keep in sync with scripts/gen-abis.mjs.
  */
-export const EVM_COMMIT = "e755a31";
+export const EVM_COMMIT = "b284de1";
 
 export const BPS = 10_000;
 export const USDG_DECIMALS = 6;
@@ -23,24 +23,51 @@ export const MAX_DEPOSIT_FEE_BPS = 600;
 export const MIN_REDEEM_FEE_BPS = 50;
 export const MAX_REDEEM_FEE_BPS = 1000;
 
-export const robinhood = defineChain({
-  id: 4663,
-  name: "Robinhood Chain",
-  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-  rpcUrls: { default: { http: ["https://rpc.mainnet.chain.robinhood.com"] } },
-  blockExplorers: { default: { name: "Robinhood Explorer", url: "https://explorer.mainnet.chain.robinhood.com" } },
-  contracts: { multicall3: { address: "0xcA11bde05977b3631167028862bE2a173976CA11" } },
-});
+// ZENO_CHAIN=testnet runs the whole process against the Robinhood testnet deployment instead:
+// `robinhood` and `MAINNET` then describe testnet (one chain per process; tests stay on mainnet).
+const testnet = typeof process !== "undefined" && process.env.ZENO_CHAIN === "testnet";
 
-/** Robinhood mainnet deployment documented in zenoindex-evm README@d3d51b5. */
-export const MAINNET = {
+export const robinhood = testnet
+  ? defineChain({
+      id: 46630,
+      name: "Robinhood Chain Testnet",
+      testnet: true,
+      nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+      rpcUrls: { default: { http: ["https://rpc.testnet.chain.robinhood.com"] } },
+      blockExplorers: { default: { name: "Robinhood Explorer", url: "https://explorer.testnet.chain.robinhood.com" } },
+      contracts: { multicall3: { address: "0xcA11bde05977b3631167028862bE2a173976CA11" } },
+    })
+  : defineChain({
+      id: 4663,
+      name: "Robinhood Chain",
+      nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+      rpcUrls: { default: { http: ["https://rpc.mainnet.chain.robinhood.com"] } },
+      blockExplorers: { default: { name: "Robinhood Explorer", url: "https://explorer.mainnet.chain.robinhood.com" } },
+      contracts: { multicall3: { address: "0xcA11bde05977b3631167028862bE2a173976CA11" } },
+    });
+
+/** Testnet stand-ins (zenoindex-evm DeployTestnetMocks.s.sol + Deploy.s.sol, 2026-10-23). */
+const TESTNET = {
+  chainId: 46630,
+  factory: "0x3bb34970bf3e1bc4a15f922cbc382b5b98f6cf87" as Address,
+  accessMaster: "0xb681958bb29ab66b03e229d2f85819d10e2fac79" as Address,
+  vaultImplementation: "0x7fa55ae5c7fd94b1aacfdbd6a5c1df8457fd66f7" as Address,
+  feeEscrow: "0xa2dcbf0ff2131554a8c481c39e4e9154c2ccadfa" as Address,
+  adapter: "0x7cd5378302af1086dba7c6e4d3610e63ef71f55c" as Address, // MockSwapRouter
+  poolManager: "0x0000000000000000000000000000000000000000" as Address, // no V4 on testnet
+  usdg: "0xb462642086474956f572bd5d9c5352f9ffe51548" as Address,
+  deployBlock: 140_933_674n,
+} as const;
+
+/** Robinhood mainnet deployment with Chainlink price feeds (zenoindex-evm Deploy.s.sol + .env.mainnet, 2026-10-23). */
+export const MAINNET = testnet ? TESTNET : {
   chainId: 4663,
-  factory: "0x494ecbd1d8df35fb39ad5973ec0a1598adf26ea9" as Address,
-  accessMaster: "0xc3a8ab91f9cc66d789b33fd61674991adef3edf2" as Address,
-  vaultImplementation: "0xb78a139e2f316527a53673b5f093cee9566cd1a7" as Address,
-  feeEscrow: "0x86867a40da338dfaf75b8fb1f65bc3cc9ca3b34f" as Address,
-  adapter: "0x1cd3f47e7137761e4c1066273893fbe778bb2dd7" as Address,
+  factory: "0x21369835194f59e895636f92359de3c3241997ab" as Address,
+  accessMaster: "0x7cd5378302af1086dba7c6e4d3610e63ef71f55c" as Address,
+  vaultImplementation: "0xb462642086474956f572bd5d9c5352f9ffe51548" as Address,
+  feeEscrow: "0x11e65932196b07617180a8fc5d1885bfd1170e9f" as Address,
+  adapter: "0x1e19319e3479f13747b0d059079d8396d4ccf867" as Address,
   poolManager: "0x8366a39cc670b4001a1121b8f6a443a643e40951" as Address,
   usdg: "0x5fc5360d0400a0fd4f2af552add042d716f1d168" as Address,
-  deployBlock: 90_148_628n,
+  deployBlock: 95_473_628n,
 } as const;

@@ -27,13 +27,13 @@ export const fakeClient = (handler: RpcHandler) =>
   });
 export const mainnetClient = () => createPublicClient({ chain: robinhood, transport: http(process.env.RPC_URL) });
 
-export async function seedProject(db: Db, name = "Test App") {
+export async function seedProject(db: Db, name = "Test App", factory: string = MAINNET.factory) {
   const org = await createOrganization(db, `${name} org`);
   const projectId = await createProject(db, {
     organizationId: org,
     name,
     chainId: MAINNET.chainId,
-    factory: MAINNET.factory,
+    factory,
     siweDomain: "app.test.zenoindex",
     siweUri: "https://app.test.zenoindex",
   });

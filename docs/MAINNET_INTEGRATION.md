@@ -7,11 +7,11 @@ the pinned source using Foundry.
 
 | Component | Mainnet address |
 |---|---|
-| Factory | `0x494ecbd1d8df35fb39ad5973ec0a1598adf26ea9` |
-| Vault implementation | `0xb78a139e2f316527a53673b5f093cee9566cd1a7` |
-| AccessMaster | `0xc3a8ab91f9cc66d789b33fd61674991adef3edf2` |
-| FeeEscrow | `0x86867a40da338dfaf75b8fb1f65bc3cc9ca3b34f` |
-| V4 adapter | `0x1cd3f47e7137761e4c1066273893fbe778bb2dd7` |
+| Factory | `0x21369835194f59e895636f92359de3c3241997ab` |
+| Vault implementation | `0xb462642086474956f572bd5d9c5352f9ffe51548` |
+| AccessMaster | `0x7cd5378302af1086dba7c6e4d3610e63ef71f55c` |
+| FeeEscrow | `0x11e65932196b07617180a8fc5d1885bfd1170e9f` |
+| V4 adapter | `0x1e19319e3479f13747b0d059079d8396d4ccf867` |
 | V4 PoolManager | `0x8366a39cc670b4001a1121b8f6a443a643e40951` |
 | USDG (6 decimals) | `0x5fc5360d0400a0fd4f2af552add042d716f1d168` |
 

@@ -1,6 +1,7 @@
 // Real deployed contracts and V4 pools, with all writes confined to a local Anvil fork.
 // anvil --fork-url https://rpc.mainnet.chain.robinhood.com --chain-id 4663 --port 8546
 // ZENO_FORK_RPC_URL=http://127.0.0.1:8546 pnpm --filter @zenoindex/api test
+// ZENO_FORK_FACTORY=0x… runs it against a factory deployed on the fork instead of MAINNET.factory.
 import { MAINNET, robinhood, VaultAbi, ZenoIndexVaultAbi } from "@zenoindex/sdk";
 import {
   createPublicClient, createTestClient, createWalletClient, erc20Abi, formatUnits,
@@ -9,6 +10,8 @@ import {
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { expect, it } from "vitest";
 import { makeApp, seedProject, testDb } from "./helpers";
+
+const FACTORY = (process.env.ZENO_FORK_FACTORY ?? MAINNET.factory) as Address;
 
 it.skipIf(!process.env.ZENO_FORK_RPC_URL)("API lifecycle: create → seed → deposit → V4 buy → rebalance → redeem → claim fees", async () => {
   const url = new URL(process.env.ZENO_FORK_RPC_URL!);
@@ -23,7 +26,7 @@ it.skipIf(!process.env.ZENO_FORK_RPC_URL)("API lifecycle: create → seed → de
   const wallet = createWalletClient({ account, chain: robinhood, transport: http(url.href) });
   const impersonated: Address[] = [];
   try {
-    const { pk } = await seedProject(db, "Fork lifecycle");
+    const { pk } = await seedProject(db, "Fork lifecycle", FACTORY);
     const { call } = makeApp(db, client);
     const nonce = await call("/auth/siwe/nonce", { key: pk, body: { walletAddress: account.address, chainId: MAINNET.chainId } });
     expect(nonce.status).toBe(200);
@@ -43,7 +46,7 @@ it.skipIf(!process.env.ZENO_FORK_RPC_URL)("API lifecycle: create → seed → de
     };
     await test.setBalance({ address: account.address, value: parseEther("10") });
     // Only on this fork: give the temporary manager creator rights and test USDG.
-    const admin = await client.readContract({ address: MAINNET.factory, abi: ZenoIndexVaultAbi, functionName: "superAdmin" });
+    const admin = await client.readContract({ address: FACTORY, abi: ZenoIndexVaultAbi, functionName: "superAdmin" });
     for (const address of [admin, MAINNET.poolManager]) {
       await test.impersonateAccount({ address });
       impersonated.push(address);
@@ -51,7 +54,7 @@ it.skipIf(!process.env.ZENO_FORK_RPC_URL)("API lifecycle: create → seed → de
     }
     const adminWallet = createWalletClient({ account: admin, chain: robinhood, transport: http(url.href) });
     const holderWallet = createWalletClient({ account: MAINNET.poolManager, chain: robinhood, transport: http(url.href) });
-    await mined(await adminWallet.writeContract({ address: MAINNET.factory, abi: ZenoIndexVaultAbi, functionName: "setVaultCreator", args: [account.address, true] }));
+    await mined(await adminWallet.writeContract({ address: FACTORY, abi: ZenoIndexVaultAbi, functionName: "setVaultCreator", args: [account.address, true] }));
     await mined(await holderWallet.writeContract({ address: MAINNET.usdg, abi: erc20Abi, functionName: "transfer", args: [account.address, 20_000_000n] }));
     await api("/auth/accept-terms", { terms: true, privacy: true });
     await api("/auth/profile", { firstName: "Fork", lastName: "Test", country: "IN" });

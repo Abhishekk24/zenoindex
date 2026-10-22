@@ -12,7 +12,7 @@ export function dtfRoutes(app: Hono<AppEnv>, { db, client, logos, demoStats, log
     c.json({
       items: [
         // Public RPC only — never expose a keyed provider URL from env.
-        { chainId: c.get("project").chainId, name: robinhood.name, network: "mainnet", rpcUrl: publicRpcUrl, explorerUrl },
+        { chainId: c.get("project").chainId, name: robinhood.name, network: robinhood.testnet ? "testnet" : "mainnet", rpcUrl: publicRpcUrl, explorerUrl },
       ],
     }),
   );
