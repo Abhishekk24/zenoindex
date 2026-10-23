@@ -5,12 +5,12 @@
  * operator) is the signed-in wallet.
  * Investor mode has no Baskets tab; it goes back to Explore.
  */
-import { Redirect, router, useFocusEffect } from 'expo-router';
+import { Redirect, useFocusEffect } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { AppHeader } from '../../components/AppHeader';
-import { BasketCard } from '../../components/explore/BasketCard';
+import { BasketCard, openBasket } from '../../components/explore/BasketCard';
 import { BasketMenu } from '../../components/manager/BasketMenu';
 import {
   Empty,
@@ -88,12 +88,7 @@ export default function ManagerBasketsScreen() {
                   key={dtf.id}
                   dtf={dtf}
                   assets={assets}
-                  onPress={() =>
-                    router.push({
-                      pathname: '/basket/[id]',
-                      params: { id: dtf.id },
-                    })
-                  }
+                  onPress={openBasket}
                   accessory={<BasketMenu id={dtf.id} name={dtf.name} />}
                 />
               ))

@@ -29,6 +29,7 @@ import {
   Skeleton,
   SkeletonBar,
 } from '../ui';
+import { useExternalWallet } from '../../wallets/externalWallet';
 import { chooseWallet } from '../wallet/WalletPicker';
 import { DepositSheet } from './DepositSheet';
 
@@ -93,7 +94,13 @@ export function WalletsTab({ user }: { user: User }) {
   const mismatch =
     address !== undefined &&
     !user.wallets.some(w => w.address.toLowerCase() === address.toLowerCase());
-  const kind = isExternal ? 'External wallet' : signInLabel(privyUser);
+  // An external wallet names itself through its connection (e.g. MetaMask).
+  const { peer } = useExternalWallet();
+  const kind = isExternal
+    ? peer
+      ? `Connected: ${peer.name}`
+      : 'External wallet'
+    : signInLabel(privyUser);
 
   const copy = async () => {
     if (!signedIn) return;

@@ -10,7 +10,7 @@
  * - A dot with a soft halo marks the latest price.
  * - Flat history draws a level line through the middle.
  */
-import React, { useId, useState } from 'react';
+import React, { useId, useMemo, useState } from 'react';
 import { View, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, {
   Circle,
@@ -92,11 +92,11 @@ export function Sparkline({
   const up = values.length < 2 || last! >= first!;
   const color = flat ? colors.muted : up ? colors.green : colors.red;
 
-  let line = '';
-  let area = '';
-  let end: Point | null = null;
-  let baseY = 0;
-  if (width > 0 && values.length >= 2) {
+  // The curve, worked out again only when the prices or the size change.
+  const { line, area, end, baseY } = useMemo(() => {
+    if (width <= 0 || values.length < 2) {
+      return { line: '', area: '', end: null, baseY: 0 };
+    }
     const min = Math.min(...values);
     const span = Math.max(...values) - min;
     const toY = (v: number) =>
@@ -108,11 +108,15 @@ export function Sparkline({
       (i / (values.length - 1)) * usable,
       toY(v),
     ]);
-    line = smoothPath(pts);
-    area = `${line} L${pts.at(-1)![0].toFixed(1)},${height} L0,${height} Z`;
-    end = pts.at(-1)!;
-    baseY = toY(first!);
-  }
+    const path = smoothPath(pts);
+    const last = pts.at(-1)!;
+    return {
+      line: path,
+      area: `${path} L${last[0].toFixed(1)},${height} L0,${height} Z`,
+      end: last,
+      baseY: toY(values[0]!),
+    };
+  }, [values, width, height]);
 
   return (
     <View

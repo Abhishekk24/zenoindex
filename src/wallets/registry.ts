@@ -9,8 +9,17 @@
  * plugins/withWalletQueries.js for Android.
  *
  * Logos come from WalletConnect's wallet directory, bundled in assets/wallets.
+ *
+ * On Android the picker also lists every WalletConnect wallet actually
+ * installed (modules/wallet-detector): a known one keeps its entry here
+ * (matched by package), any other becomes an entry with its own name and icon
+ * that opens the pairing link in that exact app. iOS can't list apps, so it
+ * checks these and the catalogue's wallets (./catalogue) by scheme.
  */
 import type { ImageSourcePropType } from 'react-native';
+
+import type { InstalledWallet } from '../../modules/wallet-detector';
+import { CATALOGUE } from './catalogue';
 
 export type WalletApp = {
   id: string;
@@ -21,6 +30,8 @@ export type WalletApp = {
   scheme: string | null;
   /** The pairing link for this app. */
   pairLink: (wcUri: string) => string;
+  /** Android package; opens this exact app (no chooser) when known. */
+  packageName?: string;
 };
 
 const deepLink =
@@ -35,6 +46,7 @@ export const WALLET_APPS: WalletApp[] = [
     name: 'MetaMask',
     scheme: 'metamask',
     pairLink: deepLink('metamask'),
+    packageName: 'io.metamask',
   },
   {
     id: 'trust',
@@ -42,6 +54,7 @@ export const WALLET_APPS: WalletApp[] = [
     name: 'Trust Wallet',
     scheme: 'trust',
     pairLink: deepLink('trust'),
+    packageName: 'com.wallet.crypto.trustapp',
   },
   {
     id: 'rainbow',
@@ -49,6 +62,7 @@ export const WALLET_APPS: WalletApp[] = [
     name: 'Rainbow',
     scheme: 'rainbow',
     pairLink: deepLink('rainbow'),
+    packageName: 'me.rainbow',
   },
   {
     id: 'coinbase',
@@ -56,6 +70,7 @@ export const WALLET_APPS: WalletApp[] = [
     name: 'Coinbase Wallet',
     scheme: 'cbwallet',
     pairLink: deepLink('cbwallet'),
+    packageName: 'org.toshi',
   },
   {
     id: 'zerion',
@@ -63,6 +78,7 @@ export const WALLET_APPS: WalletApp[] = [
     name: 'Zerion',
     scheme: 'zerion',
     pairLink: deepLink('zerion'),
+    packageName: 'io.zerion.android',
   },
   {
     id: 'uniswap',
@@ -70,6 +86,7 @@ export const WALLET_APPS: WalletApp[] = [
     name: 'Uniswap Wallet',
     scheme: 'uniswap',
     pairLink: deepLink('uniswap'),
+    packageName: 'com.uniswap.mobile',
   },
   {
     id: 'ledger',
@@ -77,8 +94,27 @@ export const WALLET_APPS: WalletApp[] = [
     name: 'Ledger Live',
     scheme: 'ledgerlive',
     pairLink: deepLink('ledgerlive'),
+    packageName: 'com.ledger.live',
   },
 ];
+
+/**
+ * The pairing link for a catalogue link, as Reown AppKit builds it
+ * (CoreHelperUtil.formatNativeUrl): `okex://main` → `okex://main/wc?uri=…`.
+ */
+const catalogueLink =
+  (native: string) =>
+  (wcUri: string): string =>
+    `${native.endsWith('/') ? native : `${native}/`}wc?uri=${encodeURIComponent(wcUri)}`;
+
+/** The catalogue's wallets, checked on iOS after the ones above. */
+export const CATALOGUE_APPS: WalletApp[] = CATALOGUE.map(wallet => ({
+  id: wallet.id,
+  name: wallet.name,
+  logo: wallet.logo,
+  scheme: wallet.scheme,
+  pairLink: catalogueLink(wallet.native),
+}));
 
 /** Any other WalletConnect wallet: the system picks (or asks) which app opens it. */
 export const OTHER_WALLET: WalletApp = {
@@ -89,11 +125,53 @@ export const OTHER_WALLET: WalletApp = {
   pairLink: wcUri => wcUri,
 };
 
+/** A wallet found on the phone, as a picker entry (known ones keep theirs). */
+export function detectedApp(found: InstalledWallet): WalletApp {
+  const known = WALLET_APPS.find(app => app.packageName === found.packageName);
+  if (known) return known;
+  return {
+    id: `android:${found.packageName}`,
+    name: found.label,
+    logo: { uri: found.icon },
+    scheme: null,
+    // The raw wc: link, opened in this app only (no chooser).
+    pairLink: wcUri => wcUri,
+    packageName: found.packageName,
+  };
+}
+
+/** What's saved about the chosen wallet, to bring it back after a restart. */
+export type SavedWalletApp = { id: string; name: string; packageName?: string };
+
+export const savedWalletApp = (app: WalletApp): SavedWalletApp => ({
+  id: app.id,
+  name: app.name,
+  ...(app.packageName ? { packageName: app.packageName } : {}),
+});
+
+/** The saved wallet again: a known entry, or a detected one by package. */
 export function walletApp(
-  id: string | null | undefined,
+  saved: string | null | undefined,
 ): WalletApp | undefined {
-  if (!id) return undefined;
-  return id === OTHER_WALLET.id
-    ? OTHER_WALLET
-    : WALLET_APPS.find(app => app.id === id);
+  if (!saved) return undefined;
+  let info: SavedWalletApp;
+  try {
+    info = JSON.parse(saved) as SavedWalletApp;
+  } catch {
+    info = { id: saved, name: saved }; // saved before: just the id
+  }
+  if (info.id === OTHER_WALLET.id) return OTHER_WALLET;
+  const known = [...WALLET_APPS, ...CATALOGUE_APPS].find(
+    app => app.id === info.id,
+  );
+  if (known) return known;
+  if (!info.packageName) return undefined;
+  return {
+    id: info.id,
+    name: info.name,
+    logo: null,
+    scheme: null,
+    pairLink: wcUri => wcUri,
+    packageName: info.packageName,
+  };
 }

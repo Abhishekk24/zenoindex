@@ -8,8 +8,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  FlatList,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -112,92 +112,99 @@ export default function SearchScreen() {
         />
       </View>
 
-      <ScrollView
+      {/* Only the rows near the screen are rendered, however many match. */}
+      <FlatList
+        data={results}
+        keyExtractor={dtf => dtf.id}
         contentContainerStyle={[
           styles.list,
           { paddingBottom: insets.bottom + space.xl },
         ]}
+        ItemSeparatorComponent={RowGap}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-      >
-        {error && !data ? (
-          <Pressable onPress={reload} accessibilityRole="button">
-            <Text style={styles.message}>
-              {error} <Text style={styles.retry}>Try again</Text>
-            </Text>
-          </Pressable>
-        ) : !q ? (
-          recent.length > 0 ? (
-            <View style={styles.recent}>
-              <Text style={styles.recentLabel}>Recent searches</Text>
-              <View style={styles.recentChips}>
-                {recent.map(term => (
-                  <Chip
-                    key={term}
-                    label={term}
-                    selected={false}
-                    onPress={() => setQuery(term)}
-                  />
-                ))}
-              </View>
-            </View>
-          ) : null
-        ) : !data ? (
-          <Skeleton style={styles.skeleton}>
-            {[0, 1].map(i => (
-              <View key={i} style={styles.row}>
-                <SkeletonBar width="45%" height={12} round={6} />
-                <View style={styles.bottom}>
-                  <SkeletonBar width="40%" />
-                  <SkeletonBar width={90} />
+        ListEmptyComponent={
+          error && !data ? (
+            <Pressable onPress={reload} accessibilityRole="button">
+              <Text style={styles.message}>
+                {error} <Text style={styles.retry}>Try again</Text>
+              </Text>
+            </Pressable>
+          ) : !q ? (
+            recent.length > 0 ? (
+              <View style={styles.recent}>
+                <Text style={styles.recentLabel}>Recent searches</Text>
+                <View style={styles.recentChips}>
+                  {recent.map(term => (
+                    <Chip
+                      key={term}
+                      label={term}
+                      selected={false}
+                      onPress={() => setQuery(term)}
+                    />
+                  ))}
                 </View>
               </View>
-            ))}
-          </Skeleton>
-        ) : results.length === 0 ? (
-          <Text style={styles.message}>No baskets match “{query.trim()}”.</Text>
-        ) : (
-          results.map(dtf => (
-            <Pressable
-              key={dtf.id}
-              onPress={() => {
-                remember();
-                router.push({
-                  pathname: '/basket/[id]',
-                  params: { id: dtf.id },
-                });
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={`${dtf.name}, ${dtf.symbol}`}
-              style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-            >
-              <Text style={styles.name} numberOfLines={1}>
-                {dtf.name}
+            ) : null
+          ) : !data ? (
+            <Skeleton style={styles.skeleton}>
+              {[0, 1].map(i => (
+                <View key={i} style={styles.row}>
+                  <SkeletonBar width="45%" height={12} round={6} />
+                  <View style={styles.bottom}>
+                    <SkeletonBar width="40%" />
+                    <SkeletonBar width={90} />
+                  </View>
+                </View>
+              ))}
+            </Skeleton>
+          ) : (
+            <Text style={styles.message}>
+              No baskets match “{query.trim()}”.
+            </Text>
+          )
+        }
+        renderItem={({ item: dtf }) => (
+          <Pressable
+            onPress={() => {
+              remember();
+              router.push({
+                pathname: '/basket/[id]',
+                params: { id: dtf.id },
+              });
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={`${dtf.name}, ${dtf.symbol}`}
+            style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+          >
+            <Text style={styles.name} numberOfLines={1}>
+              {dtf.name}
+            </Text>
+            <View style={styles.bottom}>
+              <Text style={[styles.meta, styles.fill]} numberOfLines={1}>
+                {dtf.symbol} · {managerLabel(dtf.manager)}
               </Text>
-              <View style={styles.bottom}>
-                <Text style={[styles.meta, styles.fill]} numberOfLines={1}>
-                  {dtf.symbol} · {managerLabel(dtf.manager)}
+              <Text style={styles.nav}>
+                {formatDecimal(dtf.sharePrice, 4)}{' '}
+                <Text
+                  style={{
+                    color: changeColor(dtf.stats?.change30dBps ?? null),
+                  }}
+                >
+                  {dtf.stats?.change30dBps == null
+                    ? ''
+                    : formatSignedBps(dtf.stats.change30dBps)}
                 </Text>
-                <Text style={styles.nav}>
-                  {formatDecimal(dtf.sharePrice, 4)}{' '}
-                  <Text
-                    style={{
-                      color: changeColor(dtf.stats?.change30dBps ?? null),
-                    }}
-                  >
-                    {dtf.stats?.change30dBps == null
-                      ? ''
-                      : formatSignedBps(dtf.stats.change30dBps)}
-                  </Text>
-                </Text>
-              </View>
-            </Pressable>
-          ))
+              </Text>
+            </View>
+          </Pressable>
         )}
-      </ScrollView>
+      />
     </View>
   );
 }
+
+const RowGap = () => <View style={styles.rowGap} />;
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
@@ -218,7 +225,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.text,
   },
-  list: { padding: space.md, paddingTop: space.lg, gap: space.sm },
+  // Rows are spaced by RowGap: a gap would also space FlatList's spacers.
+  list: { padding: space.md, paddingTop: space.lg },
+  rowGap: { height: space.sm },
   row: {
     backgroundColor: colors.surface,
     borderRadius: radius.md,

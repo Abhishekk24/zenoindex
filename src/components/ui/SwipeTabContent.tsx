@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { SlideInLeft, SlideInRight } from 'react-native-reanimated';
 
@@ -17,11 +17,14 @@ export function SwipeTabContent({
   index,
   count,
   onIndexChange,
+  style,
   children,
 }: {
   index: number;
   count: number;
   onIndexChange: (index: number) => void;
+  /** E.g. `flex: 1` when the content is its own scrolling list. */
+  style?: StyleProp<ViewStyle>;
   children: React.ReactNode;
 }) {
   // Which way the content should slide in: from the right when moving to a
@@ -51,7 +54,11 @@ export function SwipeTabContent({
 
   return (
     <GestureDetector gesture={swipe}>
-      <Animated.View key={index} entering={entering} style={styles.content}>
+      <Animated.View
+        key={index}
+        entering={entering}
+        style={[styles.content, style]}
+      >
         {children}
       </Animated.View>
     </GestureDetector>

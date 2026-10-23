@@ -2,6 +2,7 @@
  * A basket in the Explore list (design: Explore mockup). Manager mode reuses it
  * with a ⋮ menu in `accessory`.
  */
+import { router } from 'expo-router';
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -25,7 +26,15 @@ const MAX_AVATARS = 5;
 const trendColor = (bps: number | null) =>
   bps === null || bps === 0 ? colors.text : bps > 0 ? colors.green : colors.red;
 
-export function BasketCard({
+/** The usual `onPress`: the basket's page. */
+export const openBasket = (dtf: Dtf) =>
+  router.push({ pathname: '/basket/[id]', params: { id: dtf.id } });
+
+/**
+ * Memoised: a list re-renders only the cards whose basket changed, so pass a
+ * stable `onPress` (it gets the basket) rather than a new closure per card.
+ */
+export const BasketCard = React.memo(function BasketCard({
   dtf,
   assets,
   onPress,
@@ -33,7 +42,7 @@ export function BasketCard({
 }: {
   dtf: Dtf;
   assets: AssetMap;
-  onPress: () => void;
+  onPress: (dtf: Dtf) => void;
   /** Top-right control over the card, e.g. the manager ⋮ menu. */
   accessory?: React.ReactNode;
 }) {
@@ -54,7 +63,7 @@ export function BasketCard({
   return (
     <View>
       <Pressable
-        onPress={onPress}
+        onPress={() => onPress(dtf)}
         accessibilityRole="button"
         accessibilityLabel={`${dtf.name}, ${dtf.symbol}`}
         style={({ pressed }) => [styles.card, pressed && styles.pressed]}
@@ -145,7 +154,7 @@ export function BasketCard({
       {accessory ? <View style={styles.accessory}>{accessory}</View> : null}
     </View>
   );
-}
+});
 
 const AVATAR = 28;
 

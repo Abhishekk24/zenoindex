@@ -38,7 +38,8 @@ import { mainnet } from 'viem/chains';
 
 import { robinhood } from '../config/chains';
 import { WALLETCONNECT } from '../config/wallet';
-import { walletApp, type WalletApp } from './registry';
+import { launchWallet, openInWallet } from '../../modules/wallet-detector';
+import { savedWalletApp, walletApp, type WalletApp } from './registry';
 import { removeLegacyWalletData, walletStorage } from './storage';
 
 const CHAINS = [mainnet, robinhood] as const;
@@ -138,6 +139,8 @@ export type ExternalWalletState = {
   /** The wallet's current network, as it last reported it. */
   chainId?: number;
   app?: WalletApp;
+  /** The connected wallet as it names itself (the session's peer). */
+  peer?: { name: string; icon?: string };
   /**
    * The user came back to Zeno twice (the wallet was reopened once) and the
    * wallet still hasn't answered: likely closed by mistake. The UI asks.
@@ -454,7 +457,13 @@ async function init(): Promise<UniversalProvider> {
     const { address } = parseAccount(session.namespaces.eip155?.accounts[0]);
     const app = walletApp(await AsyncStorage.getItem(WALLET_APP_KEY));
     if (address) {
-      set({ status: 'connected', address, topic: session.topic, app });
+      set({
+        status: 'connected',
+        address,
+        topic: session.topic,
+        app,
+        peer: peerOf(session),
+      });
     }
   }
   return provider;
@@ -463,6 +472,22 @@ async function init(): Promise<UniversalProvider> {
 // --- connecting ------------------------------------------------------------------
 
 type Session = NonNullable<Awaited<ReturnType<UniversalProvider['connect']>>>;
+
+/** The wallet's own name and icon, as the session reports them. */
+function peerOf(session: {
+  peer?: { metadata?: { name?: string; icons?: string[] } };
+}): ExternalWalletState['peer'] {
+  const name = session.peer?.metadata?.name?.trim();
+  if (!name) return undefined;
+  const icon = session.peer?.metadata?.icons?.find(i => /^https?:\/\//.test(i));
+  return { name, ...(icon ? { icon } : {}) };
+}
+
+/** Opens `link` in the wallet: the exact app when its package is known. */
+async function openInApp(app: WalletApp, link: string): Promise<void> {
+  if (app.packageName && (await openInWallet(link, app.packageName))) return;
+  await Linking.openURL(link);
+}
 
 /** Makes an approved session the connected wallet; closes the one before it. */
 async function adopt(
@@ -480,8 +505,18 @@ async function adopt(
     );
   }
   const previous = shared.state.topic;
-  await AsyncStorage.setItem(WALLET_APP_KEY, app.id).catch(() => {});
-  set({ status: 'connected', address, topic: session.topic, chainId, app });
+  await AsyncStorage.setItem(
+    WALLET_APP_KEY,
+    JSON.stringify(savedWalletApp(app)),
+  ).catch(() => {});
+  set({
+    status: 'connected',
+    address,
+    topic: session.topic,
+    chainId,
+    app,
+    peer: peerOf(session),
+  });
   if (previous && previous !== session.topic) {
     // In the background: nothing waits on it.
     void provider.client
@@ -513,7 +548,7 @@ export async function connectWallet(app: WalletApp): Promise<Hex> {
     if (stopped()) return;
     walletTrace('connection request sent: opening the wallet');
     shared.pending = `connect-${attempt}`;
-    Linking.openURL(app.pairLink(uri)).catch(() => {
+    openInApp(app, app.pairLink(uri)).catch(() => {
       [...shared.waiting].forEach(stop =>
         stop(
           new WalletError(
@@ -595,8 +630,9 @@ export async function disconnectWallet(): Promise<void> {
 
 /** Brings the connected wallet app to the front ("Other wallet" can't be). */
 export async function openWalletApp(): Promise<void> {
-  const scheme = shared.state.app?.scheme;
-  if (scheme) await Linking.openURL(`${scheme}://`).catch(() => {});
+  const app = shared.state.app;
+  if (app?.packageName && (await launchWallet(app.packageName))) return;
+  if (app?.scheme) await Linking.openURL(`${app.scheme}://`).catch(() => {});
 }
 
 /**

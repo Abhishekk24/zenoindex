@@ -44,3 +44,6 @@ yarn-error.*
 .vscode/
 
 .env
+
+# Local Expo modules: Gradle build output
+modules/*/android/build/

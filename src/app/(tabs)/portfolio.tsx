@@ -18,6 +18,8 @@ import {
   Empty,
   LoadState,
   Screen,
+  SkeletonBar,
+  SkeletonCard,
   SwipeTabContent,
   UnderlineTabs,
 } from '../../components/ui';
@@ -75,7 +77,22 @@ export default function PortfolioScreen() {
     return (
       <View style={styles.root}>
         {header}
-        <LoadState error={error} onRetry={reload} />
+        {/* Inside Screen, like the loaded page: side margins and a gap. */}
+        <Screen tabBar>
+          <LoadState
+            error={error}
+            onRetry={reload}
+            placeholder={
+              <>
+                <SkeletonCard rows={2}>
+                  <SkeletonBar width="55%" height={30} round={8} />
+                </SkeletonCard>
+                <SkeletonBar height={14} round={7} />
+                <SkeletonCard rows={3} />
+              </>
+            }
+          />
+        </Screen>
       </View>
     );
   }

@@ -8,12 +8,12 @@
  * tabs (a gold ring marks an applied filter); search opens /search.
  * Other screens can open these via ?panel=strategy|manager.
  */
-import { Redirect, router, useLocalSearchParams } from 'expo-router';
+import { Redirect, useLocalSearchParams } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader } from '../../components/AppHeader';
-import { BasketCard } from '../../components/explore/BasketCard';
+import { BasketCard, openBasket } from '../../components/explore/BasketCard';
 import { BasketCardSkeleton } from '../../components/explore/BasketCardSkeleton';
 import { ChipRow } from '../../components/explore/ChipRow';
 import {
@@ -26,6 +26,7 @@ import {
   LoadState,
   OptionBar,
   Screen,
+  ScreenList,
   SwipeTabContent,
   UnderlineTabs,
 } from '../../components/ui';
@@ -223,41 +224,36 @@ export default function ExploreScreen() {
             </View>
           </Screen>
         ) : (
-          <Screen tabBar onRefresh={reload} refreshing={loading}>
-            <SwipeTabContent
-              index={ACCESS.findIndex(a => a.value === access)}
-              count={ACCESS.length}
-              onIndexChange={i => setAccess(ACCESS[i]!.value)}
-            >
-              <View style={styles.list}>
-                {dtfs.length === 0 ? (
+          <SwipeTabContent
+            index={ACCESS.findIndex(a => a.value === access)}
+            count={ACCESS.length}
+            onIndexChange={i => setAccess(ACCESS[i]!.value)}
+            style={styles.below}
+          >
+            <ScreenList
+              tabBar
+              onRefresh={reload}
+              refreshing={loading}
+              data={visible}
+              keyExtractor={dtf => dtf.id}
+              renderItem={({ item }) => (
+                <BasketCard dtf={item} assets={assets} onPress={openBasket} />
+              )}
+              ListEmptyComponent={
+                dtfs.length === 0 ? (
                   <Empty
                     title="No baskets are listed yet"
                     body="Listed baskets appear here as soon as a manager publishes one."
                   />
-                ) : visible.length === 0 ? (
+                ) : (
                   <Empty
                     title="No baskets match these filters"
                     body="Try another tab, or adjust the search, manager or strategy filters."
                   />
-                ) : (
-                  visible.map(dtf => (
-                    <BasketCard
-                      key={dtf.id}
-                      dtf={dtf}
-                      assets={assets}
-                      onPress={() =>
-                        router.push({
-                          pathname: '/basket/[id]',
-                          params: { id: dtf.id },
-                        })
-                      }
-                    />
-                  ))
-                )}
-              </View>
-            </SwipeTabContent>
-          </Screen>
+                )
+              }
+            />
+          </SwipeTabContent>
         )}
       </ExploreBelowPanels>
     </View>

@@ -25,6 +25,10 @@ import Animated, { useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Hex } from 'viem';
 
+import {
+  canDetectWallets,
+  installedWallets,
+} from '../../../modules/wallet-detector';
 import { colors, fonts, radius, space, type } from '../../theme/tokens';
 import {
   cancelWalletRequest,
@@ -36,6 +40,8 @@ import {
   warmUp,
 } from '../../wallets/externalWallet';
 import {
+  CATALOGUE_APPS,
+  detectedApp,
   OTHER_WALLET,
   WALLET_APPS,
   type WalletApp,
@@ -61,6 +67,35 @@ const set = (next: Request) => {
 /** The wallet app last connected from this phone, marked "Last used". */
 const LAST_WALLET_KEY = '@zeno/last-wallet-app';
 
+/**
+ * The wallet apps on this phone. Android lists every app that opens
+ * WalletConnect links (and the default one); iOS can't list apps, so the
+ * known and catalogue wallets are checked by scheme (declared in app.json).
+ */
+async function findWallets(): Promise<{
+  apps: WalletApp[];
+  defaultId?: string;
+}> {
+  if (canDetectWallets) {
+    const found = await installedWallets();
+    const apps = found.map(detectedApp);
+    const preferred = found.find(f => f.isDefault);
+    return {
+      apps,
+      defaultId: preferred ? detectedApp(preferred).id : undefined,
+    };
+  }
+  const answers = await Promise.all(
+    [...WALLET_APPS, ...CATALOGUE_APPS].map(async app =>
+      app.scheme &&
+      (await Linking.canOpenURL(`${app.scheme}://`).catch(() => false))
+        ? app
+        : null,
+    ),
+  );
+  return { apps: answers.filter((app): app is WalletApp => app !== null) };
+}
+
 /** Opens the picker; resolves with how it ended. */
 export function chooseWallet(): Promise<PickResult> {
   request?.resolve({ status: 'closed' });
@@ -73,28 +108,26 @@ export function WalletPickerHost() {
     l => (listeners.add(l), () => listeners.delete(l)),
     () => request,
   );
-  const [installed, setInstalled] = useState<Set<string>>(new Set());
+  // The wallets on this phone: every WalletConnect wallet on Android
+  // (modules/wallet-detector), the known ones that answer to their scheme
+  // elsewhere; and the one the phone opens WalletConnect links in by default.
+  const [onPhone, setOnPhone] = useState<WalletApp[]>([]);
+  const [defaultId, setDefaultId] = useState<string>();
   const [lastUsed, setLastUsed] = useState<string | null>(null);
   const [connecting, setConnecting] = useState<WalletApp>();
   const [notice, setNotice] = useState<NoticeContent>();
-  const { stalled } = useExternalWallet();
+  const { stalled, status, peer } = useExternalWallet();
 
-  // Which wallet apps are on this phone (schemes declared in app.json / plugin),
-  // and which one was used last.
+  // Which wallet apps are on this phone, and which one was used last.
   useEffect(() => {
     if (!open) return;
     let active = true;
     // Opens the relay socket now, so the connection request goes out at once.
     void warmUp();
-    Promise.all(
-      WALLET_APPS.map(async app =>
-        app.scheme &&
-        (await Linking.canOpenURL(`${app.scheme}://`).catch(() => false))
-          ? app.id
-          : null,
-      ),
-    ).then(ids => {
-      if (active) setInstalled(new Set(ids.filter((id): id is string => !!id)));
+    findWallets().then(found => {
+      if (!active) return;
+      setOnPhone(found.apps);
+      setDefaultId(found.defaultId);
     });
     AsyncStorage.getItem(LAST_WALLET_KEY)
       .then(id => active && setLastUsed(id))
@@ -140,11 +173,13 @@ export function WalletPickerHost() {
     if (!connecting) close({ status: 'closed' });
   };
 
-  // On this phone first, the last one used at the top; the rest in list order.
-  const onPhone = WALLET_APPS.filter(app => installed.has(app.id)).sort(
-    (a, b) => Number(b.id === lastUsed) - Number(a.id === lastUsed),
+  // On this phone first: the default, then the last one used, then the rest.
+  const rank = (app: WalletApp) =>
+    app.id === defaultId ? 2 : app.id === lastUsed ? 1 : 0;
+  const phoneApps = [...onPhone].sort((a, b) => rank(b) - rank(a));
+  const more = WALLET_APPS.filter(
+    app => !onPhone.some(found => found.id === app.id),
   );
-  const more = WALLET_APPS.filter(app => !installed.has(app.id));
 
   const row = (app: WalletApp, i: number) => (
     <Pressable
@@ -162,7 +197,11 @@ export function WalletPickerHost() {
       <Text style={styles.name} numberOfLines={1}>
         {app.name}
       </Text>
-      {app.id === lastUsed ? <Text style={styles.tag}>Last used</Text> : null}
+      {app.id === defaultId ? (
+        <Text style={[styles.tag, styles.tagDefault]}>Default</Text>
+      ) : app.id === lastUsed ? (
+        <Text style={styles.tag}>Last used</Text>
+      ) : null}
       <ChevronRightIcon color={colors.dim} />
     </Pressable>
   );
@@ -193,21 +232,32 @@ export function WalletPickerHost() {
                 back to Zeno.
               </Text>
             </View>
+            {status === 'connected' && peer ? (
+              <View style={styles.connected}>
+                {peer.icon ? (
+                  <Image source={{ uri: peer.icon }} style={styles.peerIcon} />
+                ) : null}
+                <Text style={styles.connectedText} numberOfLines={1}>
+                  Connected:{' '}
+                  <Text style={styles.connectedName}>{peer.name}</Text>
+                </Text>
+              </View>
+            ) : null}
             {notice ? <Notice {...notice} /> : null}
             <ScrollView
               style={styles.list}
               contentContainerStyle={styles.listContent}
               bounces={false}
             >
-              {onPhone.length > 0 ? (
+              {phoneApps.length > 0 ? (
                 <View style={styles.section}>
                   <Text style={styles.sectionLabel}>On this phone</Text>
-                  <View style={styles.group}>{onPhone.map(row)}</View>
+                  <View style={styles.group}>{phoneApps.map(row)}</View>
                 </View>
               ) : null}
               <View style={styles.section}>
                 <Text style={styles.sectionLabel}>
-                  {onPhone.length > 0 ? 'More wallets' : 'Wallets'}
+                  {phoneApps.length > 0 ? 'More wallets' : 'Wallets'}
                 </Text>
                 <View style={styles.group}>{more.map(row)}</View>
               </View>
@@ -410,6 +460,24 @@ const styles = StyleSheet.create({
   otherText: { flex: 1, justifyContent: 'center', gap: 2 },
   otherName: { fontFamily: fonts.medium, fontSize: 16, color: colors.text },
   hint: { ...type.small, color: colors.dim },
+  tagDefault: { color: colors.green, backgroundColor: colors.greenSoft },
+  connected: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    alignSelf: 'flex-start',
+    paddingHorizontal: space.md,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    backgroundColor: colors.greenSoft,
+  },
+  peerIcon: { width: 18, height: 18, borderRadius: 4 },
+  connectedText: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: colors.muted,
+  },
+  connectedName: { fontFamily: fonts.medium, color: colors.green },
   tag: {
     fontFamily: fonts.medium,
     fontSize: 12,
