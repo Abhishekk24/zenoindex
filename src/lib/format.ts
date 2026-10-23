@@ -91,6 +91,16 @@ export function formatDate(iso: string): string {
   } ${date.getUTCFullYear()}`;
 }
 
+/** ISO timestamp -> "12 Oct, 14:02:58" in the phone's time zone. */
+export function formatDateTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
+  const two = (n: number) => String(n).padStart(2, '0');
+  return `${date.getDate()} ${MONTHS[date.getMonth()]}, ${two(
+    date.getHours(),
+  )}:${two(date.getMinutes())}:${two(date.getSeconds())}`;
+}
+
 /** ISO timestamp -> "just now", "5 min ago", "3 h ago", or the date. */
 export function formatAgo(iso: string, now = Date.now()): string {
   const time = new Date(iso).getTime();

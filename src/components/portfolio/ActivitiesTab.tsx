@@ -1,8 +1,8 @@
+import { router } from 'expo-router';
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { openInAppBrowser } from '../../lib/browser';
-import { explorerTxUrl } from '../../lib/chain';
+import type { ActivityLink } from '../../lib/activity';
 import { fromRaw } from '../../lib/decimal';
 import { formatDate, formatRaw, humanize } from '../../lib/format';
 import { usd } from '../../lib/money';
@@ -35,10 +35,30 @@ function matches(tx: WalletTransaction, filter: Filter): boolean {
   return filter === 'invest' ? tx.action === 'invest' : tx.action !== 'invest';
 }
 
+/** Opens an activity's own screen (app/activity/[id]) with what it needs. */
+function openActivity(tx: WalletTransaction, dtf: Dtf) {
+  const link: ActivityLink = {
+    tx,
+    basket: {
+      id: dtf.id,
+      name: dtf.name,
+      symbol: dtf.symbol,
+      chainId: dtf.chainId,
+      baseAssetId: dtf.baseAssetId,
+      baseAssetDecimals: dtf.baseAssetDecimals,
+      shareDecimals: dtf.shareDecimals,
+    },
+  };
+  router.push({
+    pathname: '/activity/[id]',
+    params: { id: tx.id, data: JSON.stringify(link) },
+  });
+}
+
 /**
  * The wallet's invests and redeems, newest first (design): a Status bar,
  * then per activity its type and date, basket and amount, shares and status.
- * Tapping one opens it on the block explorer.
+ * Tapping one opens its details (app/activity/[id]).
  */
 export function ActivitiesTab({
   activity,
@@ -67,16 +87,13 @@ export function ActivitiesTab({
           const dtf = dtfs.get(tx.dtfId);
           const invest = tx.action === 'invest';
           const status = STATUS[tx.status];
-          const url = tx.txHash
-            ? explorerTxUrl(tx.chainId || dtf?.chainId || 0, tx.txHash)
-            : null;
           return (
             <Pressable
               key={tx.id}
-              onPress={url ? () => void openInAppBrowser(url) : undefined}
-              disabled={!url}
-              accessibilityRole={url ? 'link' : undefined}
-              accessibilityHint={url ? 'Opens it on the explorer' : undefined}
+              onPress={dtf ? () => openActivity(tx, dtf) : undefined}
+              disabled={!dtf}
+              accessibilityRole={dtf ? 'button' : undefined}
+              accessibilityHint={dtf ? 'Opens its details' : undefined}
               style={({ pressed }) => [
                 listStyles.row,
                 styles.item,

@@ -10,6 +10,7 @@ export { CreateIcon } from './CreateIcon';
 export { DocumentIcon } from './DocumentIcon';
 export { DocumentStackIcon } from './DocumentStackIcon';
 export { DropletIcon } from './DropletIcon';
+export { ExternalLinkIcon } from './ExternalLinkIcon';
 export { ExploreIcon } from './ExploreIcon';
 export { GoogleIcon } from './GoogleIcon';
 export { InfoIcon } from './InfoIcon';

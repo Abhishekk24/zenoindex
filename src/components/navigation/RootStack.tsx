@@ -59,6 +59,7 @@ export function RootStack() {
           name="position/[id]"
           options={{ title: '', headerBackTitle: 'Back' }}
         />
+        <Stack.Screen name="activity/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="manager/create" options={{ headerShown: false }} />
         <Stack.Screen
           name="manager/[id]/corporate-actions"
