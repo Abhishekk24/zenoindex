@@ -31,5 +31,16 @@ export function SlideLabel({
     const distance = Math.min(Math.abs(x.get() - index * segment) / segment, 1);
     return { color: interpolateColor(distance, [0, 1], [on, off]) };
   });
-  return <Animated.Text style={[style, colorStyle]}>{label}</Animated.Text>;
+  // Equal-width tabs: a long label ("Permissioned") on a narrow phone shrinks
+  // a little to stay on one line instead of wrapping.
+  return (
+    <Animated.Text
+      style={[style, colorStyle]}
+      numberOfLines={1}
+      adjustsFontSizeToFit
+      minimumFontScale={0.8}
+    >
+      {label}
+    </Animated.Text>
+  );
 }
