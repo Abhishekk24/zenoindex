@@ -20,7 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAppMode } from '../lib/appMode';
 import { colors, fonts, space } from '../theme/tokens';
-import { ManagerIcon, SearchIcon, StrategyIcon } from './icons';
+import { CloseIcon, ManagerIcon, SearchIcon, StrategyIcon } from './icons';
 import { IconButton } from './ui';
 
 export type ExplorePanel = 'strategy' | 'manager';
@@ -39,6 +39,7 @@ export function AppHeader({
   onStrategy,
   onManager,
   onEdit,
+  onClose,
 }: {
   title: string;
   /** Show the three round action buttons. */
@@ -51,6 +52,8 @@ export function AppHeader({
   onManager?: () => void;
   /** Profile: show only the user icon, opening Edit profile. */
   onEdit?: () => void;
+  /** Search: show a close icon that cancels the screen. */
+  onClose?: () => void;
 }) {
   const insets = useSafeAreaInsets();
   const { mode } = useAppMode();
@@ -117,6 +120,13 @@ export function AppHeader({
             />
           </View>
         )}
+        {onClose ? (
+          <IconButton
+            icon={<CloseIcon color={colors.text} size={18} />}
+            onPress={onClose}
+            accessibilityLabel="Cancel search"
+          />
+        ) : null}
       </View>
     </View>
   );

@@ -4,6 +4,7 @@ export { BasketsIcon } from './BasketsIcon';
 export { ChevronLeftIcon } from './ChevronLeftIcon';
 export { ChevronRightIcon } from './ChevronRightIcon';
 export { ChevronUpIcon } from './ChevronUpIcon';
+export { CloseIcon } from './CloseIcon';
 export { CoinsIcon } from './CoinsIcon';
 export { CopyIcon } from './CopyIcon';
 export { CreateIcon } from './CreateIcon';

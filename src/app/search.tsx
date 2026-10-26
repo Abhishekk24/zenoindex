@@ -9,6 +9,7 @@ import { router } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
+  Keyboard,
   Pressable,
   StyleSheet,
   Text,
@@ -65,6 +66,12 @@ export default function SearchScreen() {
   const [query, setQuery] = useState('');
   const { data, error, reload } = useLoad(api.listDtfs, 'search-dtfs');
 
+  const cancel = () => {
+    Keyboard.dismiss();
+    if (router.canGoBack()) router.back();
+    else router.replace('/');
+  };
+
   const [recent, setRecent] = useState<string[]>([]);
   useEffect(() => {
     AsyncStorage.getItem(RECENT_KEY)
@@ -90,7 +97,7 @@ export default function SearchScreen() {
 
   return (
     <View style={styles.root}>
-      <AppHeader title="Search" actions={false} />
+      <AppHeader title="Search" actions={false} onClose={cancel} />
 
       <View style={styles.field}>
         <SearchIcon color={colors.muted} size={16} />
