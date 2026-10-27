@@ -19,7 +19,8 @@ export function dtfRoutes(app: Hono<AppEnv>, { db, client, logos, demoStats, log
 
   app.get("/assets", async (c) => {
     const project = c.get("project");
-    const [snap, logoMap] = await Promise.all([snapshot(client, project.factory), logos?.(project.chainId) ?? new Map<string, string>()]);
+    const snap = await snapshot(client, project.factory);
+    const logoMap = (await logos?.(project.chainId, snap.assets.map((a) => a.mint))) ?? new Map<string, string>();
     const usdg = snap.protocol.usdg.toLowerCase();
     // Price (USDG per token) and its 24h / 30d change, so a manager can compare assets.
     const prices = new Map((await assetPrices(client, snap)).map((p) => [p.mint, p]));

@@ -14,8 +14,13 @@ import { USDG_LOGO } from "./usdgLogo";
 export const logoOf = (logos: Map<string, string>, token: string, usdg: string) =>
   token === usdg ? USDG_LOGO : (logos.get(token) ?? null);
 
-/** Lowercase token address → logo URL, for one chain. */
-export type LogoSource = (chainId: number) => Promise<Map<string, string>>;
+/** Lowercase token address → logo URL, for one chain. `tokens` not on Robinhood's list are looked up on DexScreener. */
+export type LogoSource = (chainId: number, tokens?: string[]) => Promise<Map<string, string>>;
+
+// Meme coins aren't on Robinhood's list; DexScreener indexes Robinhood Chain mainnet and carries their images.
+const DEXSCREENER_CHAIN: Record<number, string> = { 4663: "robinhood" };
+const dexscreenerUrl = (chain: string, tokens: string[]) => `https://api.dexscreener.com/tokens/v1/${chain}/${tokens.join(",")}`;
+type DexPairs = { baseToken?: { address?: string }; info?: { imageUrl?: string } }[];
 
 type RobinhoodAssets = { assets?: { tokenSymbol?: string; deployments?: { contractAddress?: string; chainId?: number }[] }[] };
 
@@ -41,13 +46,39 @@ export function robinhoodLogos(fetchFn: typeof fetch = fetch): LogoSource {
     cached = { at: Date.now(), byChain };
   };
 
-  return async (chainId) => {
+  // Lowercase address → DexScreener image (null: looked up, none). A token found or not is never asked again.
+  // shortcut: a coin that gets its DexScreener image later only shows it after a restart; add a TTL if that matters.
+  const dex = new Map<string, string | null>();
+  const lookup = async (chain: string, tokens: string[]) => {
+    for (let i = 0; i < tokens.length; i += 30) {
+      const batch = tokens.slice(i, i + 30); // the endpoint's per-call limit
+      const res = await fetchFn(dexscreenerUrl(chain, batch), { signal: AbortSignal.timeout(10_000) });
+      if (!res.ok) throw new Error(`DexScreener ${res.status}`);
+      for (const p of (await res.json()) as DexPairs) {
+        const a = p.baseToken?.address?.toLowerCase();
+        if (a && p.info?.imageUrl && !dex.get(a)) dex.set(a, p.info.imageUrl);
+      }
+      for (const a of batch) if (!dex.has(a)) dex.set(a, null);
+    }
+  };
+
+  const settle = (p: Promise<unknown>) => Promise.race([p, new Promise((r) => setTimeout(r, WAIT_MS))]);
+
+  return async (chainId, tokens = []) => {
     if (!cached || Date.now() - cached.at > TTL_MS) {
       refreshing ??= refresh()
         .catch((e) => console.warn(`logos: ${e instanceof Error ? e.message : e}`))
         .finally(() => (refreshing = null));
-      await Promise.race([refreshing, new Promise((r) => setTimeout(r, WAIT_MS))]);
+      await settle(refreshing);
     }
-    return cached?.byChain.get(chainId) ?? new Map();
+    const logos = new Map(cached?.byChain.get(chainId));
+    const chain = DEXSCREENER_CHAIN[chainId];
+    const missing = [...new Set(tokens.map((t) => t.toLowerCase()))].filter((t) => !logos.has(t) && !dex.has(t));
+    if (chain && missing.length) await settle(lookup(chain, missing).catch((e) => console.warn(`logos: ${e instanceof Error ? e.message : e}`)));
+    for (const t of tokens) {
+      const url = dex.get(t.toLowerCase());
+      if (url && !logos.has(t.toLowerCase())) logos.set(t.toLowerCase(), url);
+    }
+    return logos;
   };
 }

@@ -301,7 +301,7 @@ export function createRoutes(app: Hono<AppEnv>, { db, client, logos }: Deps) {
     const [canCreate, priced, logoMap] = await Promise.all([
       canCreateVault(client, user.wallet_address as Address, project.factory),
       hasPrices(client, active.map((a) => a.mint), project.factory),
-      logos?.(project.chainId) ?? new Map<string, string>(),
+      logos?.(project.chainId, active.map((a) => a.mint)) ?? new Map<string, string>(),
     ]);
     const usdg = snap.protocol.usdg.toLowerCase();
     return c.json({

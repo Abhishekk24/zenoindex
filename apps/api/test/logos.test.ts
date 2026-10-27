@@ -37,6 +37,23 @@ describe("robinhoodLogos", () => {
     expect(f.calls()).toBe(1);
   });
 
+  it("fills tokens missing from Robinhood's list from DexScreener, once", async () => {
+    const urls: string[] = [];
+    const fn = (async (url: string) => {
+      urls.push(url);
+      if (url.includes("robinhood.com")) return ok();
+      return new Response(JSON.stringify([{ baseToken: { address: "0xMEME" }, info: { imageUrl: "https://cdn.dexscreener.com/meme.png" } }]));
+    }) as unknown as typeof fetch;
+    const logos = robinhoodLogos(fn);
+    const map = await logos(4663, ["0xABC", "0xMEME", "0xNONE"]);
+    expect(map.get("0xmeme")).toBe("https://cdn.dexscreener.com/meme.png");
+    expect(map.get("0xabc")).toBe("https://financialmodelingprep.com/image-stock/TSLA.png");
+    expect(map.has("0xnone")).toBe(false);
+    expect(urls.filter((u) => u.includes("dexscreener"))).toEqual(["https://api.dexscreener.com/tokens/v1/robinhood/0xmeme,0xnone"]);
+    await logos(4663, ["0xMEME", "0xNONE"]);
+    expect(urls.filter((u) => u.includes("dexscreener"))).toHaveLength(1);
+  });
+
   it("a failed fetch answers with no logos instead of failing the request", async () => {
     const logos = robinhoodLogos(fakeFetch([() => new Response("down", { status: 503 })]).fn);
     expect((await logos(4663)).size).toBe(0);
