@@ -132,7 +132,8 @@ function AssetRow({
           <Text style={styles.price}>
             {a.priceUsdg === null
               ? 'No price'
-              : `${formatDecimal(a.priceUsdg, 2)} USDG`}
+              : // Meme coins trade below $1: show all 6 USDG decimals there.
+                `${formatDecimal(a.priceUsdg, Number(a.priceUsdg) >= 1 ? 2 : 6)} USDG`}
           </Text>
           <Text style={styles.changes}>
             <Text style={{ color: tone(d1) }}>
