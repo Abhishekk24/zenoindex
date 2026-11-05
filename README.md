@@ -5,11 +5,18 @@ managers create baskets, set target weights and rebalance through Uniswap v4; de
 fees are accounted on-chain in a FeeEscrow. Investors use the Zeno mobile app (Android APK), signing
 with any WalletConnect wallet or a Privy email wallet.
 
+**Live:** website [zenoindex.vercel.app](https://zenoindex.vercel.app) · API [zenoindex-api.vercel.app](https://zenoindex-api.vercel.app/docs) ·
+Android app [latest release](https://github.com/Abhishekk24/zenoindex/releases/latest)
+
 | Package | What |
 |---|---|
 | [`contracts/`](contracts) | Solidity (Foundry): basket factory, vault clones, access control, fee escrow, Uniswap v4 adapter. Arc build: `src/arc`, `FOUNDRY_PROFILE=arc` |
 | [`backend/`](backend) | TypeScript API (Hono + Postgres) and `@zenoindex/sdk`: reads baskets from chain, prepares unsigned transactions, verifies mined ones |
 | [`mobile/`](mobile) | Expo / React Native investor + manager app |
+| [`website/`](website) | Static landing page (Vercel): live demo basket, APK download, how to try it |
+
+Deployments: `backend/` and `website/` are two Vercel projects that deploy from `main` (each only when its
+folder changes). The API runs as one Node function with Neon Postgres and a daily cron for NAV snapshots.
 
 ## Arc testnet deployment
 
