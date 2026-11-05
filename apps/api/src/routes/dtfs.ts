@@ -1,4 +1,4 @@
-import { robinhood, USDG_DECIMALS } from "@zenoindex/sdk";
+import { activeChain, USDG_DECIMALS } from "@zenoindex/sdk";
 import type { Hono } from "hono";
 import { explorerUrl, findVault, holdings, publicRpcUrl, snapshot, toDtfRow } from "../chain";
 import type { AppEnv, Deps } from "../context";
@@ -12,7 +12,7 @@ export function dtfRoutes(app: Hono<AppEnv>, { db, client, logos, demoStats, log
     c.json({
       items: [
         // Public RPC only — never expose a keyed provider URL from env.
-        { chainId: c.get("project").chainId, name: robinhood.name, network: robinhood.testnet ? "testnet" : "mainnet", rpcUrl: publicRpcUrl, explorerUrl },
+        { chainId: c.get("project").chainId, name: activeChain.name, network: activeChain.testnet ? "testnet" : "mainnet", rpcUrl: publicRpcUrl, explorerUrl },
       ],
     }),
   );

@@ -23,9 +23,21 @@ export const MAX_DEPOSIT_FEE_BPS = 600;
 export const MIN_REDEEM_FEE_BPS = 50;
 export const MAX_REDEEM_FEE_BPS = 1000;
 
-// ZENO_CHAIN=testnet runs the whole process against the Robinhood testnet deployment instead:
-// `robinhood` and `MAINNET` then describe testnet (one chain per process; tests stay on mainnet).
-const testnet = typeof process !== "undefined" && process.env.ZENO_CHAIN === "testnet";
+// One chain per API process. Robinhood remains the default.
+const selectedChain = typeof process !== "undefined"
+  ? process.env.ZENO_CHAIN
+  : undefined;
+
+const testnet = selectedChain === "testnet";
+
+export const arcTestnet = defineChain({
+  id: 5042002,
+  name: "Arc Testnet",
+  testnet: true,
+  nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 6 },
+  rpcUrls: { default: { http: ["https://rpc.testnet.arc.io"] } },
+  blockExplorers: { default: { name: "Arc Explorer", url: "https://testnet.arcscan.app" } },
+});
 
 export const robinhood = testnet
   ? defineChain({
@@ -46,6 +58,8 @@ export const robinhood = testnet
       contracts: { multicall3: { address: "0xcA11bde05977b3631167028862bE2a173976CA11" } },
     });
 
+export const activeChain = selectedChain === "arc-testnet" ? arcTestnet : robinhood;
+
 /** Testnet stand-ins (zenoindex-evm DeployTestnetMocks.s.sol + Deploy.s.sol, 2026-10-23). */
 const TESTNET = {
   chainId: 46630,
@@ -60,7 +74,7 @@ const TESTNET = {
 } as const;
 
 /** Robinhood mainnet deployment with Chainlink price feeds (zenoindex-evm Deploy.s.sol + .env.mainnet, 2026-10-23). */
-export const MAINNET = testnet ? TESTNET : {
+const ROBINHOOD_MAINNET = {
   chainId: 4663,
   factory: "0x21369835194f59e895636f92359de3c3241997ab" as Address,
   accessMaster: "0x7cd5378302af1086dba7c6e4d3610e63ef71f55c" as Address,
@@ -71,3 +85,19 @@ export const MAINNET = testnet ? TESTNET : {
   usdg: "0x5fc5360d0400a0fd4f2af552add042d716f1d168" as Address,
   deployBlock: 95_473_628n,
 } as const;
+
+const ARC_TESTNET = {
+  chainId: 5042002,
+  factory: "0x50838499F82f13A527819b748d467CB7ba671E23" as Address,
+  accessMaster: "0xEa5A7B27E511e831e1BfBb10F4B63Ea11077DB81" as Address,
+  vaultImplementation: "0x0c840Ec559a06De4cA1fcCbc795C21844c421bDb" as Address,
+  feeEscrow: "0x80BD86f5778C3cD3Dd55502cab55F4Ea96e87b36" as Address,
+  adapter: "0x92c64e17a1A4c5B28a26B30102Ac1D453A7991b6" as Address,
+  poolManager: "0x15b5f2c054b9dc788250131fcd1bcfcc34080a59" as Address,
+  usdg: "0x3600000000000000000000000000000000000000" as Address,
+  deployBlock: 70824974n,
+} as const;
+
+export const MAINNET = selectedChain === "arc-testnet"
+  ? ARC_TESTNET
+  : testnet ? TESTNET : ROBINHOOD_MAINNET;

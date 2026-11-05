@@ -1,4 +1,4 @@
-import { getAssets, getProtocol, getVault, listVaults, robinhood, SHARE_DECIMALS, USDG_DECIMALS } from "@zenoindex/sdk";
+import { getAssets, getProtocol, getVault, listVaults, activeChain, SHARE_DECIMALS, USDG_DECIMALS } from "@zenoindex/sdk";
 import { erc20Abi, formatUnits, type Address, type PublicClient } from "viem";
 import { notFound } from "./errors";
 
@@ -85,5 +85,5 @@ export async function holdings(client: PublicClient, v: VaultState, snap: Snapsh
   }));
 }
 
-export const publicRpcUrl = robinhood.rpcUrls.default.http[0];
-export const explorerUrl = robinhood.blockExplorers.default.url;
+export const publicRpcUrl = activeChain.rpcUrls.default.http[0];
+export const explorerUrl = activeChain.blockExplorers.default.url;
