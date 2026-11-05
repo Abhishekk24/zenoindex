@@ -1,0 +1,114 @@
+{
+  "expo": {
+    "name": "Zeno",
+    "slug": "zeno-mobile",
+    "scheme": "zeno",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/app-icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#050706",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.zeno.mobile",
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": [
+          "wc",
+          "metamask",
+          "trust",
+          "rainbow",
+          "cbwallet",
+          "zerion",
+          "uniswap",
+          "ledgerlive",
+          "mywallet-wc",
+          "bnc",
+          "safepalwallet",
+          "tpoutside",
+          "fireblocks-wc",
+          "bitkeep",
+          "okex",
+          "bifrostwallet",
+          "dfw",
+          "bitcoincom",
+          "bw",
+          "xportal",
+          "oneinch",
+          "blockchain-wallet",
+          "dcent",
+          "imtokenv2",
+          "bitpay",
+          "coolwallet",
+          "arculuswc",
+          "safe",
+          "roninwallet",
+          "rabby",
+          "okxwallet",
+          "tangem",
+          "robinhood-wallet",
+          "krakenwallet",
+          "exodus",
+          "onekey-wallet",
+          "blackfortwc",
+          "keplrwallet",
+          "kucoin",
+          "cakewallet",
+          "bee",
+          "avacus",
+          "xova",
+          "sweat",
+          "gem",
+          "backpack",
+          "thorwallet",
+          "klipwallet",
+          "mewwallet",
+          "hotwallet"
+        ],
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#050706",
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "monochromeImage": "./assets/images/adaptive-icon-mono.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.zeno.mobile"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-status-bar",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#050706",
+          "image": "./assets/images/zeno-icon.png",
+          "imageWidth": 78,
+          "resizeMode": "contain"
+        }
+      ],
+      "expo-secure-store",
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Zeno uses your photos so you can choose an image for a basket you create.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      "./plugins/withWalletQueries"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "6abf22a4-06ec-417c-812a-b2e2f2ab723b"
+      }
+    }
+  }
+}
