@@ -1,0 +1,25 @@
+node_modules
+**/node_modules
+.git
+.github
+Dockerfile
+.dockerignore
+coverage
+*.log
+.DS_Store
+
+# Local data and secrets never go into the image; runtime env comes from --env-file.
+.data
+**/.data
+.env
+.env.*
+**/.env
+**/.env.*
+!**/.env.example
+*.local
+
+# Not needed at runtime.
+**/test
+**/scripts
+docs
+README.md

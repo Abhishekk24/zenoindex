@@ -1,0 +1,270 @@
+name: Build & Deploy to production
+
+# Same flow as IMPACTMAX: Vault -> GHCR image -> SSH `docker run` behind Traefik.
+# To fill in before the first run (CI owner):
+#   - Vault paths below (zenoindex-backend/production/app + /infra) — create them with the keys listed in README.md › Deploy.
+#   - Repository variable API_HOST (Settings › Variables), e.g. api.zenoindex.xyz — the public host Traefik routes.
+#     PUBLIC_URL in the app secrets must be https://<API_HOST> (it is the sign-in domain users see).
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  IMAGE: ghcr.io/ans-mishra/zenoindex-backend:prod
+  CONTAINER: zenoindex-backend-prod
+  VAULT_APP_URL: https://mgt.cyreneai.com/v1/ZENOINDEX-BACKEND/data/production/app
+  VAULT_INFRA_URL: https://mgt.cyreneai.com/v1/ZENOINDEX-BACKEND/data/production/infra
+
+jobs:
+  build-and-push:
+    name: Build & Push to GHCR
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # The image needs no build-time secrets (all config is runtime env), so only infra creds are fetched here.
+      - name: Fetch Infra Credentials from Vault
+        env:
+          VAULT_ACCESS_CLIENT_ID: ${{ secrets.VAULT_ACCESS_CLIENT_ID }}
+          VAULT_ACCESS_CLIENT_SECRET: ${{ secrets.VAULT_ACCESS_CLIENT_SECRET }}
+          VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
+        run: |
+          set -e
+
+          pip install cloudscraper requests -q
+
+          python3 << 'EOF'
+          import cloudscraper
+          import os
+
+          scraper = cloudscraper.create_scraper()
+
+          response = scraper.get(os.environ["VAULT_INFRA_URL"], headers={
+              "CF-Access-Client-Id": os.environ["VAULT_ACCESS_CLIENT_ID"],
+              "CF-Access-Client-Secret": os.environ["VAULT_ACCESS_CLIENT_SECRET"],
+              "X-Vault-Token": os.environ["VAULT_TOKEN"],
+          })
+
+          if response.status_code != 200:
+              print(f"❌ Failed with status {response.status_code}: {response.text}")
+              exit(1)
+
+          vault_data = response.json()["data"]["data"]
+
+          print(f"::add-mask::{vault_data['GHCR_USERNAME']}")
+          print(f"::add-mask::{vault_data['GHCR_TOKEN']}")
+
+          with open(os.environ["GITHUB_ENV"], "a") as f:
+              f.write(f"GHCR_USERNAME={vault_data['GHCR_USERNAME']}\n")
+              f.write(f"GHCR_TOKEN={vault_data['GHCR_TOKEN']}\n")
+
+          print("✅ Infra credentials loaded and masked")
+          EOF
+
+      - name: Login GHCR
+        run: |
+          set -e
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
+          echo "✅ GHCR authentication successful"
+
+      - name: Setup Buildx
+        run: |
+          set -ex
+          docker buildx create --name builder || true
+          docker buildx use builder
+          docker buildx inspect --bootstrap
+
+      - name: Build & Push
+        run: |
+          set -ex
+          docker buildx build \
+            --push \
+            --tag "$IMAGE" \
+            --builder builder \
+            --progress=plain \
+            .
+          echo "✅ Image built and pushed successfully"
+
+  deploy:
+    name: Deploy to production
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      # Runtime secrets -> .env (copied to the server, used by --env-file, then deleted). Never baked into the image.
+      - name: Fetch App Secrets from Vault
+        env:
+          VAULT_ACCESS_CLIENT_ID: ${{ secrets.VAULT_ACCESS_CLIENT_ID }}
+          VAULT_ACCESS_CLIENT_SECRET: ${{ secrets.VAULT_ACCESS_CLIENT_SECRET }}
+          VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
+        run: |
+          set -e
+
+          pip install cloudscraper requests -q
+
+          python3 << 'EOF'
+          import cloudscraper
+          import json
+          import os
+
+          scraper = cloudscraper.create_scraper()
+
+          response = scraper.get(os.environ["VAULT_APP_URL"], headers={
+              "CF-Access-Client-Id": os.environ["VAULT_ACCESS_CLIENT_ID"],
+              "CF-Access-Client-Secret": os.environ["VAULT_ACCESS_CLIENT_SECRET"],
+              "X-Vault-Token": os.environ["VAULT_TOKEN"],
+          })
+          print(f"ℹ️ Vault response status: {response.status_code}")
+
+          if response.status_code != 200:
+              print(f"❌ Failed with status {response.status_code}")
+              exit(1)
+
+          vault_data = response.json()["data"]["data"]
+          print(f"ℹ️ Loaded {len(vault_data)} app secrets from Vault")
+
+          missing = [k for k in ("DATABASE_URL", "PUBLIC_URL") if not vault_data.get(k)]
+          if missing:
+              print(f"❌ Missing required app secrets: {', '.join(missing)}")
+              exit(1)
+
+          with open(".env", "w") as f:
+              for key, value in vault_data.items():
+                  if isinstance(value, dict):
+                      f.write(f"{key}={json.dumps(value)}\n")
+                  else:
+                      # One line per key: multi-line values (e.g. DATABASE_CA_CERT PEM) are stored with \n escapes.
+                      f.write(f"{key}={str(value).replace(chr(10), chr(92) + 'n')}\n")
+
+          os.chmod(".env", 0o644)
+          print("✅ App secrets loaded and .env written")
+          EOF
+
+      - name: Fetch Infra Credentials from Vault
+        env:
+          VAULT_ACCESS_CLIENT_ID: ${{ secrets.VAULT_ACCESS_CLIENT_ID }}
+          VAULT_ACCESS_CLIENT_SECRET: ${{ secrets.VAULT_ACCESS_CLIENT_SECRET }}
+          VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
+        run: |
+          set -e
+
+          pip install cloudscraper requests -q
+
+          python3 << 'EOF'
+          import cloudscraper
+          import os
+
+          scraper = cloudscraper.create_scraper()
+
+          response = scraper.get(os.environ["VAULT_INFRA_URL"], headers={
+              "CF-Access-Client-Id": os.environ["VAULT_ACCESS_CLIENT_ID"],
+              "CF-Access-Client-Secret": os.environ["VAULT_ACCESS_CLIENT_SECRET"],
+              "X-Vault-Token": os.environ["VAULT_TOKEN"],
+          })
+
+          if response.status_code != 200:
+              print(f"❌ Failed with status {response.status_code}")
+              exit(1)
+
+          vault_data = response.json()["data"]["data"]
+
+          ssh_key = vault_data["REMOTE_SERVER_KEY"]
+          for line in ssh_key.split("\n"):
+              if line.strip():
+                  print(f"::add-mask::{line}")
+          for k in ("GHCR_USERNAME", "GHCR_TOKEN", "SERVER_HOST", "SERVER_USERNAME", "SSH_PORT"):
+              print(f"::add-mask::{vault_data[k]}")
+
+          with open(os.environ["GITHUB_ENV"], "a") as f:
+              for k in ("GHCR_USERNAME", "GHCR_TOKEN", "SERVER_HOST", "SERVER_USERNAME", "SSH_PORT"):
+                  f.write(f"{k}={vault_data[k]}\n")
+              f.write(f"REMOTE_SERVER_KEY<<EOF\n{ssh_key}\nEOF\n")
+
+          print("✅ Infra credentials loaded and masked")
+          EOF
+
+      - name: Copy env file to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ env.SERVER_HOST }}
+          username: ${{ env.SERVER_USERNAME }}
+          key: ${{ env.REMOTE_SERVER_KEY }}
+          port: ${{ env.SSH_PORT }}
+          source: .env
+          target: zenoindex-backend-prod/
+          debug: false
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ env.SERVER_HOST }}
+          username: ${{ env.SERVER_USERNAME }}
+          key: ${{ env.REMOTE_SERVER_KEY }}
+          port: ${{ env.SSH_PORT }}
+          envs: GHCR_TOKEN,GHCR_USERNAME,IMAGE,CONTAINER
+          debug: false
+          script: |
+            set -e
+
+            mkdir -p zenoindex-backend-prod
+            cd zenoindex-backend-prod || exit 1
+            chmod 600 .env
+            trap 'rm -f .env' EXIT
+
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
+
+            echo "🚀 Pulling latest image..."
+            docker pull "$IMAGE"
+
+            echo "🛑 Replacing old container..."
+            docker stop "$CONTAINER" 2>/dev/null || true
+            docker rm "$CONTAINER" 2>/dev/null || true
+            docker image prune -f > /dev/null 2>&1
+
+            echo "🐳 Starting new container..."
+            docker run -d \
+              --name "$CONTAINER" \
+              --env-file .env \
+              --restart unless-stopped \
+              --label "traefik.enable=true" \
+              --label 'traefik.http.routers.zenoindex-api.rule=Host("api.zenoindex.com")' \
+              --label "traefik.http.routers.zenoindex-api.entrypoints=websecure" \
+              --label "traefik.http.routers.zenoindex-api.tls.certresolver=letsencrypt" \
+              --label "traefik.http.services.zenoindex-api.loadbalancer.server.port=8787" \
+              --label "traefik.http.routers.zenoindex-api.middlewares=zenoindex-api-headers" \
+              --label 'traefik.http.routers.zenoindex-api-http.rule=Host("api.zenoindex.com")' \
+              --label "traefik.http.routers.zenoindex-api-http.entrypoints=web" \
+              --label "traefik.http.routers.zenoindex-api-http.middlewares=zenoindex-api-redirect@docker" \
+              --label "traefik.http.middlewares.zenoindex-api-redirect.redirectscheme.scheme=https" \
+              --label "traefik.http.middlewares.zenoindex-api-redirect.redirectscheme.permanent=true" \
+              --label "traefik.http.middlewares.zenoindex-api-headers.headers.STSSeconds=31536000" \
+              --label "traefik.http.middlewares.zenoindex-api-headers.headers.STSIncludeSubdomains=true" \
+              --label "traefik.http.middlewares.zenoindex-api-headers.headers.contentTypeNosniff=true" \
+              --label "traefik.http.middlewares.zenoindex-api-headers.headers.referrerPolicy=no-referrer" \
+              --network traefik \
+              "$IMAGE"
+
+            rm -f .env
+
+            echo "ℹ️ Waiting for the health check (migrations run on boot)..."
+            for i in $(seq 1 30); do
+              status=$(docker inspect --format '{{.State.Health.Status}}' "$CONTAINER" 2>/dev/null || echo missing)
+              [ "$status" = "healthy" ] && break
+              [ "$status" = "missing" ] && break
+              sleep 2
+            done
+            docker logs --tail 50 "$CONTAINER"
+            if [ "$status" != "healthy" ]; then
+              echo "❌ Container is not healthy (status: $status)"
+              exit 1
+            fi
+            echo "✅ Deployment complete!"
