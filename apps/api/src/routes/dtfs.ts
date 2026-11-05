@@ -1,4 +1,4 @@
-import { activeChain, USDG_DECIMALS } from "@zenoindex/sdk";
+import { activeChain, BASE_ASSET, USDG_DECIMALS } from "@zenoindex/sdk";
 import type { Hono } from "hono";
 import { explorerUrl, findVault, holdings, publicRpcUrl, snapshot, toDtfRow } from "../chain";
 import type { AppEnv, Deps } from "../context";
@@ -43,9 +43,9 @@ export function dtfRoutes(app: Hono<AppEnv>, { db, client, logos, demoStats, log
         };
       }),
     );
-    // Every basket is priced in USDG, so the app needs it even before it's registered as an asset.
+    // Every basket is priced in the base asset (USDG / USDC), so the app needs it even before it's registered as an asset.
     if (!items.some((a) => a.id === usdg)) {
-      items.push({ id: usdg, contractAddress: usdg, chainId: project.chainId, symbol: "USDG", name: "Global Dollar", decimals: USDG_DECIMALS, underlyingTransferPolicy: "open", logoUrl: logoOf(logoMap, usdg, usdg), priceUsdg: "1", priceUpdatedAt: null, stats: null });
+      items.push({ id: usdg, contractAddress: usdg, chainId: project.chainId, symbol: BASE_ASSET.symbol, name: BASE_ASSET.name, decimals: USDG_DECIMALS, underlyingTransferPolicy: "open", logoUrl: logoOf(logoMap, usdg, usdg), priceUsdg: "1", priceUpdatedAt: null, stats: null });
     }
     return c.json({ items });
   });

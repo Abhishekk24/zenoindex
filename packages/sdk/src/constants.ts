@@ -34,9 +34,12 @@ export const arcTestnet = defineChain({
   id: 5042002,
   name: "Arc Testnet",
   testnet: true,
-  nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 6 },
+  // Native USDC is 18-decimal at the EVM level (gas, eth_getBalance); the ERC-20 at 0x3600… is 6-decimal.
+  nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
   rpcUrls: { default: { http: ["https://rpc.testnet.arc.io"] } },
   blockExplorers: { default: { name: "Arc Explorer", url: "https://testnet.arcscan.app" } },
+  // Every SDK read batches through multicall; without this viem throws on Arc.
+  contracts: { multicall3: { address: "0xcA11bde05977b3631167028862bE2a173976CA11" } },
 });
 
 export const robinhood = testnet
@@ -59,6 +62,12 @@ export const robinhood = testnet
     });
 
 export const activeChain = selectedChain === "arc-testnet" ? arcTestnet : robinhood;
+
+/** The deposit token baskets are priced in: USDG on Robinhood Chain, USDC on Arc. */
+export const BASE_ASSET =
+  selectedChain === "arc-testnet"
+    ? ({ symbol: "USDC", name: "USD Coin" } as const)
+    : ({ symbol: "USDG", name: "Global Dollar" } as const);
 
 /** Testnet stand-ins (zenoindex-evm DeployTestnetMocks.s.sol + Deploy.s.sol, 2026-10-23). */
 const TESTNET = {

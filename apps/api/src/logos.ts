@@ -8,11 +8,17 @@ const TTL_MS = 6 * 60 * 60 * 1000;
 const WAIT_MS = 2000;
 const logoForTicker = (ticker: string) => `https://financialmodelingprep.com/image-stock/${encodeURIComponent(ticker)}.png`;
 
+import { BASE_ASSET } from "@zenoindex/sdk";
 import { USDG_LOGO } from "./usdgLogo";
 
-/** A token's logo: USDG's embedded one, else the source's, else null. */
+// shortcut: hotlinked like the stock logos above; embed it like USDG's before a public launch.
+const USDC_LOGO = "https://assets.coingecko.com/coins/images/6319/large/usdc.png";
+/** The base asset's logo: USDG's embedded one on Robinhood Chain, USDC's on Arc. */
+const BASE_ASSET_LOGO = BASE_ASSET.symbol === "USDC" ? USDC_LOGO : USDG_LOGO;
+
+/** A token's logo: the base asset's own, else the source's, else null. */
 export const logoOf = (logos: Map<string, string>, token: string, usdg: string) =>
-  token === usdg ? USDG_LOGO : (logos.get(token) ?? null);
+  token === usdg ? BASE_ASSET_LOGO : (logos.get(token) ?? null);
 
 /** Lowercase token address → logo URL, for one chain. `tokens` not on Robinhood's list are looked up on DexScreener. */
 export type LogoSource = (chainId: number, tokens?: string[]) => Promise<Map<string, string>>;
