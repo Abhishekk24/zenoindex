@@ -1,0 +1,154 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="1600" height="900" role="img" aria-labelledby="t d">
+  <title id="t">ZenoIndex on Arc: architecture</title>
+  <desc id="d">The Android app and website talk to the ZenoIndex API on Vercel (Neon Postgres, daily cron, Privy sign-in). The app's wallet signs transactions that go to the ZenoIndex contracts on Arc testnet, where deposits, redemptions, fees and gas are all USDC.</desc>
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&amp;family=JetBrains+Mono:wght@400&amp;display=block');
+      text { font-family: 'Space Grotesk', 'Inter', 'Segoe UI', Helvetica, Arial, sans-serif; }
+      .h1 { font-size: 30px; font-weight: 500; fill: #f4f5f2; }
+      .sub { font-size: 16px; fill: #a3aaa5; }
+      .col { font-size: 13px; letter-spacing: 2px; fill: #cdb679; font-weight: 500; }
+      .box { fill: #0c0f0e; stroke: #2a302d; stroke-width: 1.5; }
+      .box-arc { fill: #101310; stroke: #3a3f33; stroke-width: 1.5; }
+      .arc { fill: rgba(205,182,121,0.05); stroke: rgba(205,182,121,0.45); stroke-width: 1.5; stroke-dasharray: 6 5; }
+      .t { font-size: 17px; font-weight: 600; fill: #f4f5f2; }
+      .s { font-size: 13px; fill: #a3aaa5; }
+      .m { font-family: 'JetBrains Mono', Menlo, Consolas, monospace; font-size: 12px; fill: #cdb679; }
+      .warn { font-size: 12.5px; fill: #e3cf98; }
+      .ln { stroke: #8a918c; stroke-width: 1.6; fill: none; }
+      .lbl { font-size: 12.5px; fill: #d7dbd8; }
+      .foot { font-size: 13px; fill: #7d847f; }
+    </style>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8a918c"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="900" fill="#050706"/>
+
+  <text class="h1" x="60" y="66">ZenoIndex on Arc: architecture</text>
+  <text class="sub" x="60" y="96">Arc testnet (chain 5042002). Deposits, redemptions, fees and gas are all paid in USDC.</text>
+
+  <!-- column labels -->
+  <text class="col" x="60" y="156">CLIENTS</text>
+  <text class="col" x="560" y="156">BACKEND · VERCEL</text>
+
+  <!-- clients -->
+  <rect class="box" x="60" y="176" width="360" height="100" rx="14"/>
+  <text class="t" x="80" y="206">Website</text>
+  <text class="s" x="80" y="230">zenoindex.vercel.app · static page on Vercel</text>
+  <text class="s" x="80" y="252">live demo basket from the API,</text>
+  <text class="s" x="80" y="270">raw eth_call to Arc if the API is down</text>
+
+  <rect class="box" x="60" y="316" width="360" height="200" rx="14"/>
+  <text class="t" x="80" y="346">Zeno Android app</text>
+  <text class="s" x="80" y="372">Expo 58 · React Native 0.88 · viem</text>
+  <text class="s" x="80" y="400">Investor: explore · invest · redeem</text>
+  <text class="s" x="80" y="424">Manager Mode: create · weights · fees</text>
+  <text class="s" x="80" y="452">Sign-in: Privy email or a</text>
+  <text class="s" x="80" y="472">WalletConnect wallet (Reown)</text>
+  <text class="s" x="80" y="500">Gas reserve on "max": gas is USDC</text>
+
+  <rect class="box" x="60" y="576" width="360" height="90" rx="14"/>
+  <text class="t" x="80" y="606">Wallet signs every transaction</text>
+  <text class="s" x="80" y="630">Privy embedded wallet (email users)</text>
+  <text class="s" x="80" y="650">or any WalletConnect wallet</text>
+
+  <!-- backend -->
+  <rect class="box" x="560" y="176" width="400" height="60" rx="14"/>
+  <text class="t" x="580" y="203">Privy</text>
+  <text class="s" x="580" y="224">issues and verifies sign-in tokens</text>
+
+  <rect class="box" x="560" y="276" width="400" height="220" rx="14"/>
+  <text class="t" x="580" y="306">ZenoIndex API</text>
+  <text class="s" x="580" y="330">Hono · Node 22 function on Vercel</text>
+  <text class="s" x="580" y="362">• session from SIWE or a Privy token</text>
+  <text class="s" x="580" y="386">• batched reads via Multicall3</text>
+  <text class="s" x="580" y="410">• prepares unsigned transactions</text>
+  <text class="s" x="580" y="434">• confirms only the tx it prepared</text>
+  <text class="s" x="580" y="458">• activity: eth_getLogs in 5k-block chunks</text>
+  <text class="s" x="580" y="482">  (Arc RPC caps log ranges)</text>
+
+  <rect class="box" x="560" y="546" width="400" height="70" rx="14"/>
+  <text class="t" x="580" y="574">Neon Postgres</text>
+  <text class="s" x="580" y="598">users · sessions · orders · NAV history</text>
+
+  <rect class="box" x="560" y="656" width="400" height="60" rx="14"/>
+  <text class="t" x="580" y="683">Vercel Cron (daily)</text>
+  <text class="s" x="580" y="704">/cron/nav → NAV and price snapshots</text>
+
+  <!-- Arc -->
+  <rect class="arc" x="1060" y="128" width="480" height="672" rx="18"/>
+  <text class="col" x="1080" y="156">ARC TESTNET · 5042002</text>
+
+  <rect class="box-arc" x="1080" y="176" width="440" height="74" rx="12"/>
+  <text class="t" x="1098" y="202">ZenoIndexVault factory</text>
+  <text class="s" x="1098" y="222">baskets · assets · admin price table · swap floor</text>
+  <text class="m" x="1098" y="240">0x5083…1E23</text>
+
+  <rect class="box-arc" x="1080" y="280" width="440" height="74" rx="12"/>
+  <text class="t" x="1098" y="306">Vault per basket (OZ clone) + ShareToken</text>
+  <text class="s" x="1098" y="326">deposit → shares at NAV · redeem · rebalance</text>
+  <text class="m" x="1098" y="344">demo ZADV 0xbF41…f259</text>
+
+  <rect class="box-arc" x="1080" y="384" width="440" height="74" rx="12"/>
+  <text class="t" x="1098" y="410">UniswapV4Adapter</text>
+  <text class="s" x="1098" y="430">unlock callback · multi-hop exact-in · hook allowlist</text>
+  <text class="m" x="1098" y="448">0x92c6…91b6</text>
+
+  <rect class="box-arc" x="1080" y="488" width="440" height="74" rx="12"/>
+  <text class="t" x="1098" y="514">Uniswap v4 PoolManager</text>
+  <text class="warn" x="1098" y="534">no liquidity for the stock test tokens yet</text>
+  <text class="m" x="1098" y="552">0x1d70…F929</text>
+
+  <rect class="box-arc" x="1080" y="592" width="210" height="74" rx="12"/>
+  <text class="t" x="1096" y="618">FeeEscrow</text>
+  <text class="s" x="1096" y="638">platform / manager split</text>
+  <text class="m" x="1096" y="656">0x80BD…7b36</text>
+
+  <rect class="box-arc" x="1310" y="592" width="210" height="74" rx="12"/>
+  <text class="t" x="1326" y="618">AccessMaster</text>
+  <text class="s" x="1326" y="638">roles · treasury</text>
+  <text class="m" x="1326" y="656">0xEa5A…DB81</text>
+
+  <rect class="box-arc" x="1080" y="696" width="440" height="74" rx="12"/>
+  <text class="t" x="1098" y="722">USDC</text>
+  <text class="s" x="1098" y="742">ERC-20 (6 decimals) for baskets · native USDC (18) for gas</text>
+  <text class="m" x="1098" y="760">0x3600…0000</text>
+
+  <!-- arrows: clients/backend -->
+  <path class="ln" d="M420 226 L556 302" marker-end="url(#a)"/>
+  <text class="lbl" x="430" y="300">basket data</text>
+
+  <path class="ln" d="M420 396 L556 396" marker-end="url(#a)"/>
+  <text class="lbl" x="432" y="384">REST /api/v1</text>
+  <text class="lbl" x="432" y="416">key + session</text>
+
+  <path class="ln" d="M760 276 L760 240" marker-end="url(#a)"/>
+  <text class="lbl" x="770" y="263">verify token</text>
+
+  <path class="ln" d="M760 500 L760 542" marker-start="url(#a)" marker-end="url(#a)"/>
+
+  <path class="ln" d="M960 686 L1010 686 L1010 456 L964 456" marker-end="url(#a)"/>
+  <text class="lbl" x="1016" y="576">daily</text>
+
+  <path class="ln" d="M960 316 L1056 316" marker-end="url(#a)"/>
+  <text class="lbl" x="968" y="292">eth_call</text>
+  <text class="lbl" x="968" y="306">Multicall3</text>
+
+  <path class="ln" d="M240 516 L240 572" marker-end="url(#a)"/>
+  <text class="lbl" x="252" y="550">unsigned tx</text>
+
+  <path class="ln" d="M420 621 L500 621 L500 786 L1056 786" marker-end="url(#a)"/>
+  <text class="lbl" x="560" y="776">signed tx to Arc RPC · gas paid in USDC</text>
+
+  <!-- arrows inside Arc -->
+  <path class="ln" d="M1300 250 L1300 276" marker-end="url(#a)"/>
+  <text class="lbl" x="1310" y="268">clones</text>
+  <path class="ln" d="M1300 354 L1300 380" marker-end="url(#a)"/>
+  <text class="lbl" x="1310" y="372">rebalance swaps via factory</text>
+  <path class="ln" d="M1300 458 L1300 484" marker-end="url(#a)"/>
+  <text class="lbl" x="1310" y="476">unlock · swap · settle · take</text>
+
+  <text class="foot" x="60" y="862">Live: zenoindex.vercel.app · API zenoindex-api.vercel.app · github.com/Abhishekk24/zenoindex</text>
+</svg>
