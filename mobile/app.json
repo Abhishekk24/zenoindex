@@ -99,7 +99,15 @@
           "microphonePermission": false
         }
       ],
-      "./plugins/withWalletQueries"
+      "./plugins/withWalletQueries",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "extraProguardRules": "# JNA (via @walletconnect/react-native-compat -> yttrium): java.awt is desktop-only; keep what JNA loads by reflection.\n-dontwarn java.awt.**\n-keep class com.sun.jna.** { *; }\n-keep class * implements com.sun.jna.** { *; }\n-keep class uniffi.** { *; }"
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
