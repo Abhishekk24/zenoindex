@@ -31,6 +31,7 @@ import {
   UnderlineTabs,
 } from '../../components/ui';
 import { useLoad } from '../../hooks/useLoad';
+import { useReloadOnRefocus } from '../../hooks/useReloadOnRefocus';
 import * as api from '../../lib/api';
 import { useAppMode } from '../../lib/appMode';
 import { assetMap, isPermissioned, strategyOf } from '../../lib/basket';
@@ -92,6 +93,7 @@ function asPanel(value: string | undefined): Panel {
 export default function ExploreScreen() {
   const params = useLocalSearchParams<{ panel?: string; at?: string }>();
   const { data, error, loading, reload } = useLoad(loadExplore, 'explore');
+  useReloadOnRefocus(reload);
   const { mode } = useAppMode();
   const [access, setAccess] = useState<Access>(
     params.panel === 'strategy' ? 'custom' : 'all',

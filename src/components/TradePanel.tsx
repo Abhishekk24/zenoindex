@@ -9,6 +9,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import { encodeFunctionData, erc20Abi, parseUnits, type Hex } from 'viem';
 
+import { gasPaidInBaseAsset } from '../config/chains';
 import * as api from '../lib/api';
 import {
   blockNumber,
@@ -23,7 +24,7 @@ import {
   pollUntil,
   waitForReceipt,
 } from '../lib/chain';
-import { compare, fromRaw, isDecimal, isPositive } from '../lib/decimal';
+import { compare, fromRaw, isDecimal, isPositive, sub } from '../lib/decimal';
 import {
   formatBps,
   formatDecimal,
@@ -67,6 +68,23 @@ type Step =
 
 /** How long to wait for a signature, from the wallet or seen on-chain. */
 const WALLET_TIMEOUT_MS = 5 * 60_000;
+/**
+ * Gas for a whole trade, for the fee estimate (drafts carry no gas limit):
+ * invest = approve + deposit, redeem = request + claim, measured on Arc
+ * testnet with headroom. Redeems that also swap stocks cost more.
+ */
+const TYPICAL_TRADE_GAS: Record<Side, bigint> = {
+  invest: 320_000n,
+  redeem: 600_000n,
+};
+/** Fee reserve kept out of MAX until the live estimate loads (base units). */
+const GAS_RESERVE_FALLBACK = '0.05';
+
+/** Native wei (18 decimals) in base-asset units, rounded up. */
+function weiToBaseUnits(wei: bigint, decimals: number): bigint {
+  const scale = 10n ** BigInt(Math.max(0, 18 - decimals));
+  return (wei + scale - 1n) / scale;
+}
 
 /**
  * While a signature is pending, ask whether the user is still on it once they
@@ -189,15 +207,48 @@ export function TradePanel({
     `${side}#${signer ?? 'none'}#${linked}#${balanceVersion}`,
   );
   const balance = balanceRaw ? fromRaw(balanceRaw, balanceDecimals) : null;
-  const overBalance = valid && balance !== null && compare(amount, balance) > 0;
 
-  const gas = preview?.draft.transaction.gas;
+  // Where gas is paid in the base asset (Arc: USDC), investing every last
+  // USDC leaves nothing for the approve + deposit fees: keep a reserve (twice
+  // a typical invest's fee) out of MAX and out of the most you can invest.
+  const gasIsBase = side === 'invest' && gasPaidInBaseAsset(dtf.chainId);
+  const { data: reserveRaw } = useLoad(
+    async () =>
+      gasIsBase
+        ? weiToBaseUnits(
+            2n *
+              (await estimateNetworkFee(dtf.chainId, TYPICAL_TRADE_GAS.invest)),
+            dtf.baseAssetDecimals,
+          ).toString()
+        : null,
+    `reserve#${dtf.chainId}#${gasIsBase}`,
+  );
+  const reserve = gasIsBase
+    ? reserveRaw
+      ? fromRaw(reserveRaw, dtf.baseAssetDecimals)
+      : GAS_RESERVE_FALLBACK
+    : null;
+  /** The most that can go in: the balance, less the fee reserve. */
+  const spendable =
+    balance === null || reserve === null
+      ? balance
+      : compare(balance, reserve) > 0
+        ? sub(balance, reserve)
+        : '0';
+  const overBalance =
+    valid && spendable !== null && compare(amount, spendable) > 0;
+
+  // Drafts carry no gas limit: estimate the fee from a typical whole trade.
+  const draftGas = preview?.draft.transaction.gas;
+  const gas = preview
+    ? draftGas
+      ? BigInt(draftGas)
+      : TYPICAL_TRADE_GAS[preview.side]
+    : undefined;
   const feeChainId = preview?.draft.transaction.chainId ?? dtf.chainId;
   const { data: feeWei } = useLoad(
     async () =>
-      gas
-        ? (await estimateNetworkFee(feeChainId, BigInt(gas))).toString()
-        : null,
+      gas ? (await estimateNetworkFee(feeChainId, gas)).toString() : null,
     `fee#${preview?.draft.requestId ?? 'none'}`,
   );
 
@@ -211,10 +262,13 @@ export function TradePanel({
         : null,
     `gas#${signer ?? 'none'}#${preview?.draft.requestId ?? 'none'}#${balanceVersion}`,
   );
+  // Where gas is the base asset, the same balance also pays the investment.
+  const spentWei = gasIsBase && valid ? parseUnits(amount, 18) : 0n;
   const lacksGas =
     typeof gasWei === 'string' &&
     (BigInt(gasWei) === 0n ||
-      (typeof feeWei === 'string' && BigInt(gasWei) < BigInt(feeWei)));
+      (typeof feeWei === 'string' &&
+        BigInt(gasWei) < BigInt(feeWei) + spentWei));
   const [depositing, setDepositing] = useState(false);
 
   /** Why Review is disabled, said where the user looks (nothing for an empty field). */
@@ -226,7 +280,9 @@ export function TradePanel({
         ? 'Enter a number, like 10 or 2.5.'
         : overBalance && balance !== null
           ? side === 'invest'
-            ? `You only have ${formatDecimal(balance, 4)} ${unit} in this wallet. Add ${unit} to it, or invest less.`
+            ? reserve !== null && compare(amount, balance) <= 0
+              ? `Keep about ${formatDecimal(reserve, 4)} ${unit} for network fees: you can invest up to ${formatDecimal(spendable ?? '0', 4)} ${unit}.`
+              : `You only have ${formatDecimal(balance, 4)} ${unit} in this wallet. Add ${unit} to it, or invest less.`
             : `You only have ${formatDecimal(balance, 4)} ${unit} to redeem.`
           : belowMinimum
             ? `The minimum investment is ${formatDecimal(dtf.minInvestment!)} ${baseSymbol}.`
@@ -241,6 +297,11 @@ export function TradePanel({
       return;
     }
     setBusy(true);
+    // A review starts a new trade. Drop the finished one: its 'done' step
+    // would otherwise hide this preview, and with the operation cleared the
+    // confirmation is gone too, leaving the panel blank.
+    setCompleted(undefined);
+    setStep('idle');
     setOperation(undefined);
     try {
       setResult({
@@ -592,9 +653,13 @@ export function TradePanel({
                 Available {formatDecimal(balance, 4)} {unit}
               </Text>
               <Pressable
-                onPress={() => setAmount(balance)}
+                onPress={() => setAmount(spendable ?? balance)}
                 accessibilityRole="button"
-                accessibilityLabel={`Use the full ${unit} balance`}
+                accessibilityLabel={
+                  reserve !== null
+                    ? `Use the ${unit} balance, less network fees`
+                    : `Use the full ${unit} balance`
+                }
                 hitSlop={8}
               >
                 <Text style={styles.max}>MAX</Text>

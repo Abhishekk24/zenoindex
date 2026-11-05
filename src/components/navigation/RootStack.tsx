@@ -15,10 +15,25 @@ import * as SplashScreen from 'expo-splash-screen';
 import React, { useEffect } from 'react';
 
 import { useSession } from '../../hooks/useSession';
+import type { Stage } from '../../lib/sessionContext';
 import { colors } from '../../theme/tokens';
+
+/**
+ * Where a guarded route sends the user at each stage. Expo Router 58 falls
+ * back to the first allowed route in file order, not in the order below; at
+ * sign-in or onboarding that can be wc-return, which replaces to "/" (guarded
+ * again) and loops on a blank screen. Naming the target avoids the fallback.
+ */
+const HOME_FOR_STAGE: Record<Stage, '/sign-in' | '/complete-profile' | '/'> = {
+  signedOut: '/sign-in',
+  terms: '/complete-profile',
+  profile: '/complete-profile',
+  ready: '/',
+};
 
 export function RootStack() {
   const { stage, booted } = useSession();
+  const home = HOME_FOR_STAGE[stage];
   // The splash stays up until /auth/me says where to go (fonts are loaded by
   // now, see _layout), then the right screen shows straight away: no
   // spinner in between. /auth/me gives up after 20 s (lib/http).
@@ -36,16 +51,19 @@ export function RootStack() {
         contentStyle: { backgroundColor: colors.bg },
       }}
     >
-      <Stack.Protected guard={stage === 'signedOut'}>
+      <Stack.Protected guard={stage === 'signedOut'} redirectTo={home}>
         <Stack.Screen name="sign-in" options={{ headerShown: false }} />
       </Stack.Protected>
-      <Stack.Protected guard={stage === 'terms' || stage === 'profile'}>
+      <Stack.Protected
+        guard={stage === 'terms' || stage === 'profile'}
+        redirectTo={home}
+      >
         <Stack.Screen
           name="complete-profile"
           options={{ headerShown: false }}
         />
       </Stack.Protected>
-      <Stack.Protected guard={stage === 'ready'}>
+      <Stack.Protected guard={stage === 'ready'} redirectTo={home}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen
           name="search"

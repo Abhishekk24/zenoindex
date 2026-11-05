@@ -142,18 +142,34 @@ export function AccountTab({ user }: { user: User }) {
           {emailError ? <Text style={styles.error}>{emailError}</Text> : null}
         </View>
       ) : null}
-      <View style={styles.modeRow}>
+      {/* The whole row toggles: inside the swipeable profile tabs the native
+          switch only reacts to a drag, never to a tap. It just shows the state. */}
+      <Pressable
+        onPress={() => void switchMode(managerOn ? 'investor' : 'manager')}
+        disabled={switchingTo !== null}
+        accessibilityRole="switch"
+        accessibilityLabel="Manager Mode"
+        accessibilityState={{
+          checked: managerOn,
+          disabled: switchingTo !== null,
+        }}
+        style={styles.modeRow}
+      >
         <Text style={styles.modeLabel}>Manager Mode</Text>
-        <Switch
-          value={managerOn}
-          onValueChange={on => void switchMode(on ? 'manager' : 'investor')}
-          disabled={switchingTo !== null}
-          trackColor={{ false: colors.surface3, true: colors.primaryGreen }}
-          thumbColor="#ffffff"
-          ios_backgroundColor={colors.surface3}
-          accessibilityLabel="Manager Mode"
-        />
-      </View>
+        <View
+          pointerEvents="none"
+          importantForAccessibility="no-hide-descendants"
+        >
+          <Switch
+            value={managerOn}
+            disabled={switchingTo !== null}
+            trackColor={{ false: colors.surface3, true: colors.primaryGreen }}
+            thumbColor="#ffffff"
+            ios_backgroundColor={colors.surface3}
+            accessibilityElementsHidden
+          />
+        </View>
+      </Pressable>
 
       <View style={styles.legal}>
         <Label>Legal</Label>

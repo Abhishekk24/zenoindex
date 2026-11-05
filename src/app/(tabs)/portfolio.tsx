@@ -24,6 +24,7 @@ import {
   UnderlineTabs,
 } from '../../components/ui';
 import { useLoad } from '../../hooks/useLoad';
+import { useReloadOnRefocus } from '../../hooks/useReloadOnRefocus';
 import { useUser } from '../../hooks/useUser';
 import { sum } from '../../lib/decimal';
 import {
@@ -52,6 +53,7 @@ export default function PortfolioScreen() {
     async () => (wallet ? loadPortfolio(wallet) : null),
     wallet ?? 'none',
   );
+  useReloadOnRefocus(reload);
 
   const header = <AppHeader title="Portfolio" filters={false} />;
 
