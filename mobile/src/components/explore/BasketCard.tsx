@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
     height: 84,
   },
   body: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 20 },
-  name: { fontFamily: fonts.medium, fontSize: 19, color: colors.text },
+  name: { fontFamily: fonts.serif, fontSize: 26, lineHeight: 30, color: colors.text },
   meta: {
     fontFamily: fonts.regular,
     fontSize: 12,

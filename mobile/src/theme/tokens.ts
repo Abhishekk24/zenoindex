@@ -67,11 +67,14 @@ export const fonts = {
   medium: 'SpaceGrotesk-Medium',
   semibold: 'SpaceGrotesk-SemiBold',
   bold: 'SpaceGrotesk-Bold',
+  /** Display serif (Instrument Serif), as on the website: titles, names, hero lines. */
+  serif: 'InstrumentSerif-Regular',
+  serifItalic: 'InstrumentSerif-Italic',
   mono: Platform.select({ ios: 'Menlo', default: 'monospace' }),
 } as const;
 
 export const type = {
-  display: { fontFamily: fonts.medium, fontSize: 28, lineHeight: 34 },
+  display: { fontFamily: fonts.serif, fontSize: 34, lineHeight: 38 },
   title: { fontFamily: fonts.medium, fontSize: 19, lineHeight: 25 },
   heading: { fontFamily: fonts.semibold, fontSize: 17, lineHeight: 22 },
   body: { fontFamily: fonts.regular, fontSize: 15, lineHeight: 22 },

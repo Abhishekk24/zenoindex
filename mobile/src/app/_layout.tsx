@@ -10,6 +10,10 @@ import {
   SpaceGrotesk_700Bold,
 } from '@expo-google-fonts/space-grotesk';
 import { PrivyProvider } from '@privy-io/expo';
+import {
+  InstrumentSerif_400Regular,
+  InstrumentSerif_400Regular_Italic,
+} from '@expo-google-fonts/instrument-serif';
 import { useFonts } from 'expo-font';
 import { ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -54,6 +58,8 @@ export default function RootLayout() {
     [fonts.medium]: SpaceGrotesk_500Medium,
     [fonts.semibold]: SpaceGrotesk_600SemiBold,
     [fonts.bold]: SpaceGrotesk_700Bold,
+    [fonts.serif]: InstrumentSerif_400Regular,
+    [fonts.serifItalic]: InstrumentSerif_400Regular_Italic,
   });
 
   // The splash hides in RootStack, once the session says which screen to

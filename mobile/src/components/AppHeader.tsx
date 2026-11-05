@@ -155,6 +155,11 @@ const styles = StyleSheet.create({
     marginTop: space.lg,
     minHeight: 40,
   },
-  title: { fontFamily: fonts.medium, fontSize: 21, color: colors.text },
+  title: {
+    fontFamily: fonts.serif,
+    fontSize: 32,
+    lineHeight: 36,
+    color: colors.text,
+  },
   actions: { flexDirection: 'row', gap: space.sm },
 });

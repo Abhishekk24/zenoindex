@@ -1,12 +1,12 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 
 import { isComingSoon } from '../../lib/basket';
 import { chainName } from '../../lib/chain';
 import { formatAgo, shortAddress } from '../../lib/format';
 import type { DtfDetail } from '../../lib/types';
 import { colors, space, type } from '../../theme/tokens';
-import { Badge, Display, Label, Mono, Stripes } from '../ui';
+import { Badge, Display, Label, Mono } from '../ui';
 
 /** Basket detail top: status badges, name, symbol and manager. */
 export function BasketHeader({
@@ -18,7 +18,13 @@ export function BasketHeader({
 }) {
   return (
     <View style={styles.header}>
-      <Stripes height={132} fade="down" stripe={6} gap={16} opacity={0.18} />
+      {/* The painted sky from the website, fading into the page. */}
+      <Image
+        source={require('../../../assets/images/sky-banner.jpg')}
+        style={styles.sky}
+        resizeMode="cover"
+        accessibilityIgnoresInvertColors
+      />
       <View style={styles.badges}>
         {isComingSoon(dtf) ? (
           <Badge label="Coming soon" />
@@ -61,6 +67,13 @@ const styles = StyleSheet.create({
     paddingTop: space.lg,
     paddingBottom: space.sm,
     overflow: 'hidden',
+  },
+  sky: {
+    alignSelf: 'stretch',
+    width: undefined,
+    height: 150,
+    borderRadius: 22,
+    marginBottom: -14,
   },
   badges: { flexDirection: 'row', gap: space.sm },
   manager: { flexDirection: 'row', alignItems: 'center', gap: space.md },

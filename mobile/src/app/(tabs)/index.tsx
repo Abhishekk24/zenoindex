@@ -16,6 +16,8 @@ import { AppHeader } from '../../components/AppHeader';
 import { BasketCard, openBasket } from '../../components/explore/BasketCard';
 import { BasketCardSkeleton } from '../../components/explore/BasketCardSkeleton';
 import { ChipRow } from '../../components/explore/ChipRow';
+import { HeroBanner } from '../../components/explore/HeroBanner';
+import { activeChain } from '../../config/chains';
 import {
   ExploreBelowPanels,
   FilterPanel,
@@ -241,6 +243,11 @@ export default function ExploreScreen() {
               renderItem={({ item }) => (
                 <BasketCard dtf={item} assets={assets} onPress={openBasket} />
               )}
+              ListHeaderComponent={
+                access === 'all' && !filtered ? (
+                  <HeroBanner chainName={activeChain.name} />
+                ) : undefined
+              }
               ListEmptyComponent={
                 dtfs.length === 0 ? (
                   <Empty
