@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "installCommand": "pnpm install --frozen-lockfile",
-  "buildCommand": "pnpm --filter @zenoindex/api build:vercel",
+  "installCommand": "npx --yes pnpm@11.17.0 install --frozen-lockfile",
+  "buildCommand": "npx --yes pnpm@11.17.0 --filter @zenoindex/api build:vercel",
   "ignoreCommand": "git diff --quiet HEAD^ HEAD -- ."
 }
