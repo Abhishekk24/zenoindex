@@ -1,0 +1,39 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+# Pinned: every file (project ^0.8.13 and lib/v4-core's exact 0.8.26 PoolManager)
+# builds with one reproducible compiler. v4-core's transient storage needs cancun.
+solc_version = "0.8.26"
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 200
+via_ir = true
+
+remappings = [
+    "@uniswap/v4-core/=lib/v4-core/",
+    "v4-core/=lib/v4-core/src/",
+    "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+]
+
+[rpc_endpoints]
+robinhood_testnet = "${RH_RPC_URL}"
+robinhood = "${RH_RPC_URL}"
+
+# Robinhood Chain (Arbitrum Orbit L2)
+#   Testnet chainId 46630 — https://rpc.testnet.chain.robinhood.com
+#   Mainnet  chainId 4663  — https://rpc.mainnet.chain.robinhood.com
+#   Explorers: explorer.testnet.chain.robinhood.com / robinhoodchain.blockscout.com
+
+# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
+
+[profile.arc]
+src = "src/arc"
+test = "test/arc"
+out = "out/arc"
+cache_path = "cache/arc"
+solc_version = "0.8.26"
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 200
+via_ir = true
