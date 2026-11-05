@@ -36,13 +36,13 @@ import { AppState, Linking } from 'react-native';
 import { getAddress, numberToHex, toHex, type Hex } from 'viem';
 import { mainnet } from 'viem/chains';
 
-import { robinhood } from '../config/chains';
+import { activeChain } from '../config/chains';
 import { WALLETCONNECT } from '../config/wallet';
 import { launchWallet, openInWallet } from '../../modules/wallet-detector';
 import { savedWalletApp, walletApp, type WalletApp } from './registry';
 import { removeLegacyWalletData, walletStorage } from './storage';
 
-const CHAINS = [mainnet, robinhood] as const;
+const CHAINS = [mainnet, activeChain] as const;
 const caip = (chainId: number) => `eip155:${chainId}`;
 
 const NAMESPACES = {
@@ -841,7 +841,7 @@ export async function sendTransaction(tx: WalletTx): Promise<Hex> {
     const error = toWalletError(e, 'The network switch failed.');
     if (error.kind !== 'rejected') throw error;
     throw new WalletError(
-      `Switch ${walletName()} to ${tx.chainId === robinhood.id ? 'Robinhood Chain' : 'the right network'} to continue.`,
+      `Switch ${walletName()} to ${tx.chainId === activeChain.id ? activeChain.name : 'the right network'} to continue.`,
       'rejected',
       error.code,
     );

@@ -72,7 +72,7 @@ export function EmailCodeStep({
   onGoogle: () => void;
   onWallet: () => void;
 }) {
-  const input = useRef<TextInput>(null);
+  const input = useRef<React.ComponentRef<typeof TextInput>>(null);
   const [code, setCode] = useState('');
   const [focused, setFocused] = useState(true);
   const [cooldown, setCooldown] = useState(resendAfterSeconds);

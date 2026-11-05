@@ -3,7 +3,7 @@ import * as Clipboard from 'expo-clipboard';
 import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { robinhood } from '../../config/chains';
+import { activeChain } from '../../config/chains';
 import { useLoad } from '../../hooks/useLoad';
 import * as api from '../../lib/api';
 import { assetMap, symbolOf } from '../../lib/basket';
@@ -40,7 +40,7 @@ import { DepositSheet } from './DepositSheet';
 async function loadBalances(wallet: string) {
   const [dtfs, assets] = await Promise.all([api.listDtfs(), api.listAssets()]);
   const dtf = dtfs[0];
-  const chainId = dtf?.chainId ?? robinhood.id;
+  const chainId = dtf?.chainId ?? activeChain.id;
   const [base, gas] = await Promise.all([
     dtf?.baseAssetId
       ? erc20BalanceOf(chainId, dtf.baseAssetId, wallet)
@@ -120,7 +120,7 @@ export function WalletsTab({ user }: { user: User }) {
             <Text style={styles.muted} numberOfLines={1}>
               {kind ?? 'Wallet'}
             </Text>
-            <Badge label={robinhood.name} tone="gold" />
+            <Badge label={activeChain.name} tone="gold" />
           </View>
           <Text style={styles.address} selectable>
             {signedIn}
@@ -139,7 +139,7 @@ export function WalletsTab({ user }: { user: User }) {
           </View>
           <LinkText
             label="View on explorer"
-            url={explorerAddressUrl(robinhood.id, signedIn)}
+            url={explorerAddressUrl(activeChain.id, signedIn)}
           />
           <DepositSheet
             address={signedIn}

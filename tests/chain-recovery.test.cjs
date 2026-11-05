@@ -19,7 +19,7 @@ function loadChain(client) {
     if (name === 'viem') return { ...viem, createPublicClient: () => client };
     if (name === '../config/chains')
       return {
-        robinhood: {
+        activeChain: {
           id: 4663,
           rpcUrls: { default: { http: ['http://rpc.test'] } },
         },

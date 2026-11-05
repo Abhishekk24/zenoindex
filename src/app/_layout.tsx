@@ -1,5 +1,5 @@
 /**
- * Zeno mobile: investor app for on-chain baskets (DTFs) on Robinhood Chain.
+ * Zeno mobile: investor app for on-chain baskets (DTFs) on the configured network.
  * Providers, fonts and the splash screen; routes live in RootStack.
  */
 import {

@@ -10,7 +10,7 @@ import type { PrivyProviderProps } from '@privy-io/expo';
 import Constants from 'expo-constants';
 import * as Linking from 'expo-linking';
 
-import { robinhood } from './chains';
+import { activeChain } from './chains';
 
 const appId = process.env.EXPO_PUBLIC_PRIVY_APP_ID;
 const clientId = process.env.EXPO_PUBLIC_PRIVY_CLIENT_ID;
@@ -29,7 +29,7 @@ if (!projectId) {
 export const privyProps: Omit<PrivyProviderProps, 'children'> = {
   appId,
   clientId,
-  supportedChains: [robinhood],
+  supportedChains: [activeChain],
   config: {
     embedded: { ethereum: { createOnLogin: 'users-without-wallets' } },
   },

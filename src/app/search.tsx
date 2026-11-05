@@ -152,7 +152,7 @@ export default function SearchScreen() {
                   ))}
                 </View>
               </View>
-            ) : null
+            ) : undefined
           ) : !data ? (
             <Skeleton style={styles.skeleton}>
               {[0, 1].map(i => (

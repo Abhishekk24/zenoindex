@@ -5,7 +5,7 @@
  * 1 Identity · 2 Constituents · 3 Fees & Access · 4 Review ("Prep creation")
  * · 5 Deploy ("Submit") · 6 Configure (the created basket: seed it, open it in
  * Manager, or finish). The
- * network is Robinhood Chain, preset: there is nothing to choose. Continue checks the current step first.
+ * network is selected by the app configuration; there is nothing to choose. Continue checks the current step first.
  *
  * Assets come from GET /manager/create; Prep creation asks the API for the
  * factory's createVault transaction and Submit signs it with the manager's
@@ -106,7 +106,7 @@ export default function CreateBasketScreen() {
   const keyboardHeight = useKeyboardHeight();
   const [form, setForm] = useState<CreateForm>(EMPTY_FORM);
   const [step, setStep] = useState(0);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   // Every step opens at its top: the steps share one scroll view, and its
   // Continue / Previous buttons sit at the bottom, so a new step would
   // otherwise open scrolled down past its first fields.

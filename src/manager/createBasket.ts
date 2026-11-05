@@ -12,7 +12,7 @@
  */
 import * as api from '../lib/api';
 import type { TxDraft } from '../lib/types';
-import { robinhood } from '../config/chains';
+import { activeChain } from '../config/chains';
 
 export type Option = { value: string; label: string };
 
@@ -55,8 +55,8 @@ export async function loadCreateOptions() {
 
 export const CREATE_CHAINS: (Option & { providers: Option[] })[] = [
   {
-    value: String(robinhood.id),
-    label: robinhood.name,
+    value: String(activeChain.id),
+    label: activeChain.name,
     providers: [{ value: 'robinhood', label: 'Robinhood' }],
   },
 ];
@@ -120,8 +120,8 @@ export type CreateForm = {
 };
 
 export const EMPTY_FORM: CreateForm = {
-  // Robinhood Chain is the only network baskets live on, so it's preset.
-  chain: String(robinhood.id),
+  // The configured network is preset for basket creation.
+  chain: String(activeChain.id),
   provider: 'robinhood',
   name: '',
   symbol: '',

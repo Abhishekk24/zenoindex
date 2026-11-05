@@ -1,6 +1,6 @@
 /**
  * Deposit: the wallet's address as a QR code and text to copy, with the one
- * rule that loses money if broken — send only on Robinhood Chain.
+ * rule that loses money if broken — send only on the selected network.
  */
 import * as Clipboard from 'expo-clipboard';
 import React, { useState } from 'react';
@@ -8,7 +8,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { robinhood } from '../../config/chains';
+import { activeChain } from '../../config/chains';
 import { colors, fonts, radius, space, type } from '../../theme/tokens';
 import { Button } from '../ui';
 
@@ -64,10 +64,10 @@ export function DepositSheet({
         />
 
         <View style={styles.warning}>
-          <Text style={styles.warningTitle}>Only send on {robinhood.name}</Text>
+          <Text style={styles.warningTitle}>Only send on {activeChain.name}</Text>
           <Text style={styles.warningText}>
-            Send USDG (to invest) or ETH (for network fees) on {robinhood.name}{' '}
-            (chain ID {robinhood.id}) only. Tokens sent from another network,
+            Send USDC (to invest) or the network's native token (for network fees) on {activeChain.name}{' '}
+            (chain ID {activeChain.id}) only. Tokens sent from another network,
             such as Ethereum or Base, or tokens Zeno doesn’t support, can be
             lost for good.
           </Text>

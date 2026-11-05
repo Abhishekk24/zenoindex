@@ -62,8 +62,59 @@
           "thorwallet",
           "klipwallet",
           "mewwallet",
+          "hotwallet",
+          "wc",
+          "metamask",
+          "trust",
+          "rainbow",
+          "cbwallet",
+          "zerion",
+          "uniswap",
+          "ledgerlive",
+          "mywallet-wc",
+          "bnc",
+          "safepalwallet",
+          "tpoutside",
+          "fireblocks-wc",
+          "bitkeep",
+          "okex",
+          "bifrostwallet",
+          "dfw",
+          "bitcoincom",
+          "bw",
+          "xportal",
+          "oneinch",
+          "blockchain-wallet",
+          "dcent",
+          "imtokenv2",
+          "bitpay",
+          "coolwallet",
+          "arculuswc",
+          "safe",
+          "roninwallet",
+          "rabby",
+          "okxwallet",
+          "tangem",
+          "robinhood-wallet",
+          "krakenwallet",
+          "exodus",
+          "onekey-wallet",
+          "blackfortwc",
+          "keplrwallet",
+          "kucoin",
+          "cakewallet",
+          "bee",
+          "avacus",
+          "xova",
+          "sweat",
+          "gem",
+          "backpack",
+          "thorwallet",
+          "klipwallet",
+          "mewwallet",
           "hotwallet"
-        ]
+        ],
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -102,6 +153,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "6abf22a4-06ec-417c-812a-b2e2f2ab723b"
+      }
     }
   }
 }

@@ -16,10 +16,10 @@ import {
   type PublicClient,
 } from 'viem';
 
-import { robinhood } from '../config/chains';
+import { activeChain } from '../config/chains';
 import { listChains, type ChainInfo } from './api';
 
-const chains = new Map<number, Chain>([[robinhood.id, robinhood]]);
+const chains = new Map<number, Chain>([[activeChain.id, activeChain]]);
 const clients = new Map<number, PublicClient>();
 let chainsLoaded: Promise<void> | null = null;
 

@@ -7,9 +7,9 @@
  */
 import { BlurTargetView } from 'expo-blur';
 import React, { useEffect, useRef, useSyncExternalStore } from 'react';
-import { StyleSheet, type View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
-type Target = { key: string; ref: React.RefObject<View | null> };
+type Target = { key: string; ref: React.RefObject<React.ComponentRef<typeof View> | null> };
 
 let focused: Target | null = null;
 const listeners = new Set<() => void>();
@@ -41,7 +41,7 @@ export function TabBlurTarget({
   navigation: FocusNavigation;
   children: React.ReactNode;
 }) {
-  const ref = useRef<View | null>(null);
+  const ref = useRef<React.ComponentRef<typeof View> | null>(null);
   useEffect(() => {
     const target = { key: routeKey, ref };
     if (navigation.isFocused()) setFocused(target);

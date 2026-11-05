@@ -201,7 +201,7 @@ export function TradePanel({
     `fee#${preview?.draft.requestId ?? 'none'}`,
   );
 
-  // Network fees are paid in the chain's gas token (ETH on Robinhood Chain):
+  // Network fees are paid in the selected chain's native gas token:
   // without enough, the wallet refuses the transaction, so say so here.
   const gasSymbol = nativeSymbol(dtf.chainId);
   const { data: gasWei } = useLoad(

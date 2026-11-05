@@ -29,7 +29,7 @@ export function Popover({
   accessibilityLabel: string;
   hitSlop?: number;
 }) {
-  const ref = useRef<View>(null);
+  const ref = useRef<React.ComponentRef<typeof Pressable>>(null);
   const [anchor, setAnchor] = useState<Anchor | null>(null);
   const window = useWindowDimensions();
 
