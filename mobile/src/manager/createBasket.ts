@@ -57,7 +57,12 @@ export const CREATE_CHAINS: (Option & { providers: Option[] })[] = [
   {
     value: String(activeChain.id),
     label: activeChain.name,
-    providers: [{ value: 'robinhood', label: 'Robinhood' }],
+    // Display only: where the basket's tokens come from on this network.
+    providers: [
+      activeChain.id === 4663 || activeChain.id === 46630
+        ? { value: 'robinhood', label: 'Robinhood' }
+        : { value: 'robinhood', label: activeChain.name },
+    ],
   },
 ];
 
