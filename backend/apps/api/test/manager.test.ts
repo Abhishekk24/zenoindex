@@ -56,9 +56,18 @@ function ethCall(to: string, data: Hex): Hex {
 
 // eth_getLogs answers (raw RPC logs); empty unless a test sets them.
 let logs: unknown[] = [];
+// Like Arc's public RPC: refuse eth_getLogs spans wider than this many blocks (none when undefined).
+let logRangeCap: bigint | undefined;
+const HEAD = MAINNET.deployBlock + 12_000n;
 
 const rpc: RpcHandler = (method, params) => {
-  if (method === "eth_getLogs") return logs;
+  if (method === "eth_blockNumber") return `0x${HEAD.toString(16)}`;
+  if (method === "eth_getLogs") {
+    if (logRangeCap === undefined) return logs;
+    const { fromBlock, toBlock } = params[0] as { fromBlock: string; toBlock: string };
+    if (toBlock === "latest" || BigInt(toBlock) - BigInt(fromBlock) >= logRangeCap) throw new Error("requested range too large");
+    return (logs as { blockNumber: string }[]).filter((l) => BigInt(l.blockNumber) >= BigInt(fromBlock) && BigInt(l.blockNumber) <= BigInt(toBlock));
+  }
   if (method === "eth_getBlockByNumber") return { number: params[0], hash: `0x${"ab".repeat(32)}`, timestamp: "0x6a000000", transactions: [], logsBloom: null };
   if (method !== "eth_call") throw new Error(`unexpected RPC call: ${method}`);
   const { to, data } = params[0] as { to: string; data: Hex };
@@ -404,5 +413,34 @@ describe("basket stats", () => {
       status: "available",
       items: [{ action: "invest", walletAddress: user, amountRaw: "5000000", shareAmountRaw: "4950000", status: "confirmed" }],
     });
+  });
+
+  it("recent activity still loads where the RPC caps eth_getLogs ranges (Arc)", async () => {
+    const deposit = getAbiItem({ abi: VaultAbi, name: "Deposit" });
+    const user = "0x8888888888888888888888888888888888888888";
+    logRangeCap = 9_999n;
+    logs = [
+      {
+        address: vault,
+        topics: encodeEventTopics({ abi: [deposit], eventName: "Deposit" }),
+        data: encodeAbiParameters(deposit.inputs, [user, 2_000_000n, 2_000_000n, 0n, 0n, 2_000_000n]),
+        // Two chunks back from the head: found only by walking back.
+        blockNumber: `0x${(HEAD - 7_000n).toString(16)}`,
+        transactionHash: `0x${"ef".repeat(32)}`,
+        transactionIndex: "0x0",
+        blockHash: `0x${"ab".repeat(32)}`,
+        logIndex: "0x0",
+        removed: false,
+      },
+    ];
+    try {
+      const r = await detail();
+      expect(r.json.readModels.recentTransactions).toMatchObject({
+        status: "available",
+        items: [{ action: "invest", walletAddress: user, amountRaw: "2000000" }],
+      });
+    } finally {
+      logRangeCap = undefined;
+    }
   });
 });

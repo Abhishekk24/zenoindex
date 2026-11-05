@@ -188,6 +188,34 @@ const ACTIVITY = ["GenesisSeeded", "Deposit", "RequestRedeem", "Claim", "RedeemS
 // Per chain client, so the app's one client shares it (and each test's fake client starts empty).
 const activityCaches = new WeakMap<PublicClient, Map<string, { at: number; items: unknown[] }>>();
 
+/** Block span per eth_getLogs call on RPCs that cap ranges (Arc's public RPC refuses 10k blocks). */
+const LOG_CHUNK = 5_000n;
+/** At most this many chunks per refresh there: 200k blocks, about two days of Arc testnet. */
+const MAX_LOG_CHUNKS = 40;
+const rangeCapped = (e: unknown) =>
+  /range|more than \d+ results|too many results/i.test(e instanceof Error ? `${e.message} ${(e as { details?: string }).details ?? ""}` : String(e));
+
+/**
+ * The vault's logs since the factory deploy block. One call where the RPC allows it; where it caps the
+ * block range, the newest chunks back from the head until `limit` activity events are found.
+ */
+async function vaultLogs(client: PublicClient, vault: Address, limit: number) {
+  try {
+    return await client.getLogs({ address: vault, fromBlock: MAINNET.deployBlock, toBlock: "latest" });
+  } catch (e) {
+    if (!rangeCapped(e)) throw e;
+  }
+  const logs: Awaited<ReturnType<PublicClient["getLogs"]>> = [];
+  let to = await client.getBlockNumber();
+  for (let i = 0; i < MAX_LOG_CHUNKS && to >= MAINNET.deployBlock; i++) {
+    const from = to - LOG_CHUNK + 1n > MAINNET.deployBlock ? to - LOG_CHUNK + 1n : MAINNET.deployBlock;
+    logs.unshift(...(await client.getLogs({ address: vault, fromBlock: from, toBlock: to })));
+    if (parseEventLogs({ abi: VaultAbi, logs, eventName: [...ACTIVITY] }).length >= limit) break;
+    to = from - 1n;
+  }
+  return logs;
+}
+
 /**
  * The vault's latest events, newest first, in the app's transaction shape. Read straight from the chain (the public
  * RPC serves the whole range in one call); cached 60s per vault.
@@ -200,7 +228,7 @@ export async function recentActivity(client: PublicClient, vault: Address, chain
   const hit = activityCache.get(key);
   if (hit && Date.now() - hit.at < 60_000) return hit.items;
 
-  const raw = await client.getLogs({ address: vault, fromBlock: MAINNET.deployBlock, toBlock: "latest" });
+  const raw = await vaultLogs(client, vault, limit);
   const logs = parseEventLogs({ abi: VaultAbi, logs: raw, eventName: [...ACTIVITY] }).slice(-limit).reverse();
   const blocks = new Map<bigint, string>();
   for (const n of new Set(logs.map((l) => l.blockNumber))) {
