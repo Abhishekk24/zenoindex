@@ -9,7 +9,10 @@ import { BlurTargetView } from 'expo-blur';
 import React, { useEffect, useRef, useSyncExternalStore } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-type Target = { key: string; ref: React.RefObject<React.ComponentRef<typeof View> | null> };
+type Target = {
+  key: string;
+  ref: React.RefObject<React.ComponentRef<typeof View> | null>;
+};
 
 let focused: Target | null = null;
 const listeners = new Set<() => void>();

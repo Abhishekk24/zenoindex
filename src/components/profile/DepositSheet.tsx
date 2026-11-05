@@ -64,12 +64,14 @@ export function DepositSheet({
         />
 
         <View style={styles.warning}>
-          <Text style={styles.warningTitle}>Only send on {activeChain.name}</Text>
+          <Text style={styles.warningTitle}>
+            Only send on {activeChain.name}
+          </Text>
           <Text style={styles.warningText}>
-            Send USDC (to invest) or the network's native token (for network fees) on {activeChain.name}{' '}
-            (chain ID {activeChain.id}) only. Tokens sent from another network,
-            such as Ethereum or Base, or tokens Zeno doesn’t support, can be
-            lost for good.
+            Send USDC (to invest) or the network’s native token (for network
+            fees) on {activeChain.name} (chain ID {activeChain.id}) only. Tokens
+            sent from another network, such as Ethereum or Base, or tokens Zeno
+            doesn’t support, can be lost for good.
           </Text>
         </View>
 
