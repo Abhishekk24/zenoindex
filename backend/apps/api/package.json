@@ -10,7 +10,8 @@
     "cli": "tsx src/cli.ts",
     "check:mainnet": "tsx scripts/check-mainnet.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build:vercel": "node scripts/build-vercel.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.3.11",
@@ -26,6 +27,7 @@
   "devDependencies": {
     "@types/node": "^22.18.10",
     "@types/pg": "^8.15.5",
+    "esbuild": "0.28.2",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"
   }
