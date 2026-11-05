@@ -3,7 +3,7 @@
   const cfg = window.ZENO;
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => document.querySelectorAll(s);
-  const colors = ["#cdb679", "#5cc796", "#8fb8de", "#e08e8e", "#b8a2e0", "#e3cf98"];
+  const colors = ["#a9844c", "#5b8fd0", "#8fae8b", "#d39a82", "#9d8fd0", "#d8bf86"];
   const short = (a) => `${a.slice(0, 6)}…${a.slice(-4)}`;
   const fmt = (v, d = 4) => Number(v).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
 
