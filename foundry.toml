@@ -26,3 +26,14 @@ robinhood = "${RH_RPC_URL}"
 #   Explorers: explorer.testnet.chain.robinhood.com / robinhoodchain.blockscout.com
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
+
+[profile.arc]
+src = "src/arc"
+test = "test/arc"
+out = "out/arc"
+cache_path = "cache/arc"
+solc_version = "0.8.26"
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 200
+via_ir = true

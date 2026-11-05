@@ -702,3 +702,251 @@ bash script/check-readme-src-docs.sh
 ```
 
 For deployment changes, verify the documented commands and environment variables against the checked-in scripts. Never commit `.env`, private keys, seed phrases, or other secrets.
+
+---
+
+# Arc Contract Implementation
+
+This section documents the independent Arc implementation. The existing Robinhood deployment documentation above remains unchanged.
+
+# Arc Network Configuration
+
+| Network | Chain ID | RPC |
+|---|---:|---|
+| Arc Testnet | 5042002 | https://rpc.testnet.arc.io |
+| Arc Mainnet | 5042 | https://rpc.mainnet.arc.io |
+
+## Arc Token Configuration
+
+| Token | Network | Address | Decimals |
+|---|---|---|---:|
+| ERC-20 USDC | Testnet | `0x3600000000000000000000000000000000000000` | 6 |
+| EURC | Testnet | `0x89b50855aa3be2f677cd6303cec089b5f319d72a` | 6 |
+| Test USDT | Testnet | `0x175cdb1d338945f0d851a741ccf787d343e57952` | 18 |
+
+**Important:** Arc native USDC is an 18-decimal gas asset. Vault accounting uses the six-decimal ERC-20 USDC contract listed above.
+
+## Uniswap V4 Configuration
+
+### Arc Mainnet
+
+| Contract | Address |
+|---|---|
+| PoolManager | `0x8366a39CC670B4001A1121B8F6A443A643e40951` |
+| Quoter | `0x8Dc178eFB8111BB0973Dd9d722ebeFF267c98F94` |
+| StateView | `0xF3334192D15450CdD385c8B70e03f9A6bD9E673b` |
+| PositionManager | `0x6049c9a0e26405C0985f9E3685C87d0aE917f82B` |
+| UniversalRouter | `0x4fcA4a51Ab4F23A7447b3284fBd7D73289A89Fb1` |
+
+### Arc Testnet
+
+| Contract | Address | Status |
+|---|---|---|
+| PoolManager | `0x15b5f2c054b9dc788250131fcd1bcfcc34080a59` | Successful V4 swap verified |
+| Quoter | `0x8Dc178eFB8111BB0973Dd9d722ebeFF267c98F94` | Linked to canonical mainnet PoolManager |
+| StateView | `0xF3334192D15450CdD385c8B70e03f9A6bD9E673b` | Linked to canonical mainnet PoolManager |
+
+#### Arc Testnet PoolManager Verification
+
+The testnet PoolManager was verified through an on-chain successful Uniswap V4 swap.
+
+| Property | Verified Value |
+|---|---|
+| Chain ID | `5042002` |
+| PoolManager | `0x15b5f2c054b9dc788250131fcd1bcfcc34080a59` |
+| Owner | `0xceeD79dBB39bA3C6Cddb57eb6343BE25FfD6dd56` |
+| Runtime bytecode size | Approximately 20,671 bytes |
+| Protocol fee controller | `0x0000000000000000000000000000000000000000` |
+| Verified pool ID | `0xfdb3f9c7526fb58ffb4b2951968957f622b5f1ac985a6e7e3bd6b72b2e59cd58` |
+| Currency 0 | Arc testnet USDC |
+| Currency 1 | TEST1 (`0x68ef3e91b13548f224c17dff062f4673b01d8aef`) |
+| Hook | `0xb199d39636435d917780bb7ab1d82647d4ed88ec` |
+
+**Successful swap transaction:**
+
+`0xad28401b3dbe98f9cf4a2a3f4d8ee31b263538e6768171f21764bdc76db6695b`
+
+The transaction receipt returned status `1 (success)`. The receipt contains the PoolManager swap event, hook event, and token transfer events.
+
+**Integration warning:** The currently identified Quoter and StateView contracts point to the canonical mainnet PoolManager, not the verified Arc testnet PoolManager. They must not be configured as compatible with the testnet manager without further verification.
+
+The testnet hook implementation and permissions must also be reviewed before enabling it in the adapter.
+
+## Arc Implementation Progress
+
+### Completed
+
+- [x] Arc source contracts copied from the Robinhood implementation.
+- [x] Arc test files copied with imports redirected to `src/arc`.
+- [x] Foundry Arc profile configured.
+- [x] Arc build completed successfully.
+- [x] Arc test suite completed successfully: 274 tests passed, 0 failed, 0 skipped.
+- [x] Vault initialization rejects a zero manager address.
+- [x] Swap paths validate the minimum path length.
+- [x] ShareToken rejects a zero vault address.
+- [x] Uniswap V4 adapter validates oversized amounts before signed conversion.
+- [x] Regression tests added for the above security checks.
+- [x] Vault creation script uses the transaction sender as vault manager.
+- [x] Arc testnet chain ID verified.
+- [x] Arc testnet PoolManager verified through a successful on-chain V4 swap.
+- [x] Test pool currencies, pool ID, and hook identified from transaction events.
+
+### Pending
+
+- [ ] Review the testnet hook implementation and its permissions.
+- [ ] Finalize the five non-USDC assets for the Arc vault.
+- [ ] Finalize six asset allocation values totalling 10,000 basis points.
+- [ ] Verify selected asset contract code, decimals, and balances.
+- [ ] Verify the required pool configurations and available liquidity.
+- [ ] Identify compatible testnet Quoter and StateView contracts, if available.
+- [ ] Configure and test the Arc Uniswap V4 adapter against the selected pools.
+- [ ] Run deployment script preflight checks.
+- [ ] Complete multi-asset swap integration.
+- [ ] Complete NAV/AUM integration and validation.
+- [ ] Complete mobile application integration with Arc Testnet.
+- [ ] Run full multi-asset deposit, rebalance, NAV, and redemption tests.
+- [ ] Update deployment addresses and final integration instructions.
+
+## Arc Deployment Configuration
+
+The Arc deployment scripts use the following environment variables.
+
+### Deployment
+
+| Variable | Purpose |
+|---|---|
+| `ARC_PRIVATE_KEY` | Deployment and transaction signer |
+| `ARC_SUPER_ADMIN` | Factory super-admin address |
+| `ARC_TREASURY` | Treasury address |
+| `ARC_USDC` | Arc testnet ERC-20 USDC address |
+| `ARC_ASSET_0` to `ARC_ASSET_4` | Five additional asset addresses |
+
+### Adapter
+
+| Variable | Purpose |
+|---|---|
+| `ARC_FACTORY_ADDRESS` | Deployed Arc factory address |
+| `ARC_POOL_MANAGER` | Verified Arc testnet PoolManager address |
+
+### Vault Allocation
+
+| Variable | Purpose |
+|---|---|
+| `ARC_ALLOCATION_BPS_0` to `ARC_ALLOCATION_BPS_5` | Six asset allocation weights in basis points |
+
+The six allocation values must total exactly `10000` basis points (100%).
+
+The vault creation script currently configures:
+- Deposit fee: `0` basis points.
+- Redemption fee: `50` basis points.
+- Fund type: `1`.
+- Maximum shares: `0` (unlimited).
+- Vault manager: transaction sender.
+
+The genesis seed amount is `1,000,000` USDC base units, equivalent to `1 USDC` at six decimals.
+
+**Security:** Never commit private keys or secret environment variables. Use a funded testnet signer and verify all addresses before broadcasting transactions.
+
+## Arc Deployment Scripts
+
+| Script | Purpose |
+|---|---|
+| `script/arc/DeployArc.s.sol` | Deploys the Vault implementation, AccessMaster, ZenoIndexVault factory, and FeeEscrow; registers the six assets. |
+| `script/arc/DeployArcAdapter.s.sol` | Deploys the Arc Uniswap V4 adapter, authorizes the factory, and configures the factory router. |
+| `script/arc/CreateArcVault.s.sol` | Creates the demo vault using the configured asset allocation. |
+| `script/arc/SeedArcVault.s.sol` | Approves USDC and seeds the created vault. |
+
+## Arc Deployment Status
+
+**Current status: Core Arc contracts deployed and demo vault end-to-end deposit/redemption lifecycle verified on Arc Testnet.**
+
+### Deployed Contract Addresses
+
+| Component | Address |
+|---|---|
+| ZenoIndexVault Factory | `0x50838499F82f13A527819b748d467CB7ba671E23` |
+| Vault Implementation | `0x0c840Ec559a06De4cA1fcCbc795C21844c421bDb` |
+| AccessMaster | `0xEa5A7B27E511e831e1BfBb10F4B63Ea11077DB81` |
+| FeeEscrow | `0x80BD86f5778C3cD3Dd55502cab55F4Ea96e87b36` |
+| Manager / Deployer | `0x44BCF620e72912aa0f0e8142D4AD67d581793e18` |
+| Demo Vault (ID 0) | `0xbF41248213C650bb7D14A6caC985e77b1Bacf259` |
+| Vault Share Token | `0x41DFCe973f7A0e783499C857B3Edc498615Da8eD` |
+
+### Demo Vault Configuration
+
+- Network: Arc Testnet (chain ID 5042002).
+- Base asset: ERC-20 USDC.
+- Genesis seed: 1 USDC.
+- Deposit fee: 0 basis points.
+- Redemption fee: 50 basis points.
+- Asset slots: 6.
+- Initial allocation configuration: USDC 5%, NVDA 30%, TSLA 20%, META 20%, MU 15%, SPCX 10%.
+
+The non-USDC assets and their allocations are configuration/demo values. They should not be represented as successfully traded tokenized stock positions.
+
+### Verified End-to-End Transactions
+
+| Operation | Transaction hash |
+|---|---|
+| Genesis initialization | `0x40261ec496671657a0ded1d9e8ce86d4f4af4983679c5928e9245bae147e543e` |
+| Investor USDC approval | `0x1cbcdaa968976a1d232118794dd722426cd8abec3d357e4af960ca057f0842ce` |
+| Investor deposit (10 USDC) | `0x4855600efb4bc04c2b35b64b52a69fd5fbdda544c23676ff7e5cd7619720ee3c` |
+| Redemption request | `0xe3a051b793d8b8ee2b9e290769574e6ee77696fe6996a49f18ea5e4b9e6edb42` |
+| In-kind redemption claim | `0x3ac5d2d770170cb862549d95529c2e92021d7f22db3963da911bd8cd862cc176` |
+
+### Verified Redemption Results
+
+- Investor deposited 10 USDC.
+- Investor received 10,000,000 vault shares.
+- Investor successfully requested redemption.
+- Redemption shares were burned.
+- Investor successfully claimed the in-kind redemption.
+- Redemption fee: 0.05 USDC (50 basis points).
+- FeeEscrow received 0.05 USDC.
+- Investor's redemption proceeds were settled.
+- Vault retained its 1 USDC genesis seed.
+
+The FeeAccounted event recorded 0.01 USDC as platform fee and 0.04 USDC as manager fee.
+
+### Remaining Work
+
+- Review the Arc testnet hook implementation and permissions.
+- Verify compatible testnet Quoter and StateView contracts.
+- Finalize and verify the non-USDC asset contracts.
+- Verify pool liquidity and adapter compatibility.
+- Complete multi-asset swap integration.
+- Complete NAV/AUM integration and validation.
+- Complete mobile application integration with Arc Testnet.
+- Run full multi-asset deposit, rebalance, NAV and redemption tests.
+
+**Important:** Core vault deployment and the USDC deposit/redemption lifecycle have been tested. This does not establish that the Uniswap V4 adapter, non-USDC asset swaps, or full multi-asset NAV lifecycle are operational. Do not treat those as completed until independently verified.
+
+### `FeeEscrow.sol` (Root Implementation)
+
+**Path:** `src/FeeEscrow.sol`
+
+Centralized fee accounting and withdrawal contract. It accepts fee allocations from registered vaults and tracks platform and manager fees separately.
+
+| Function / Event | Purpose |
+|---|---|
+| `accountFee(token, platformFee, managerFee, feeType)` | Accounts platform and manager fees for a registered vault. |
+| `claimManagerFees(token, recipient)` | Allows the authorized manager to claim accumulated manager fees. |
+| `claimPlatformFees(token)` | Claims accumulated platform fees. |
+| `FeeAccounted` | Emitted when fees are accounted. |
+| `ManagerFeeClaimed` | Emitted when manager fees are claimed. |
+| `PlatformFeeClaimed` | Emitted when platform fees are claimed. |
+
+### `FeeEscrow.sol` (Arc Implementation)
+
+**Path:** `src/arc/FeeEscrow.sol`
+
+Arc-specific FeeEscrow implementation. It exposes the same public function and event signatures as the root implementation, handling fee accounting and withdrawals for registered vaults.
+
+| Function / Event | Purpose |
+|---|---|
+| `accountFee(token, platformFee, managerFee, feeType)` | Accounts platform and manager fees for a registered vault. |
+| `claimManagerFees(token, recipient)` | Allows the authorized manager to claim accumulated manager fees. |
+| `claimPlatformFees(token)` | Claims accumulated platform fees. |
+| `FeeAccounted` | Emitted when fees are accounted. |
+| `ManagerFeeClaimed` | Emitted when manager fees are claimed. |
+| `PlatformFeeClaimed` | Emitted when platform fees are claimed. |
