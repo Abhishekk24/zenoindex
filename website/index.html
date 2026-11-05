@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ZenoIndex on Arc</title>
+  <meta name="description" content="On-chain index baskets on Arc testnet. Invest USDC into a basket, get shares, redeem any time. Android app download.">
+  <meta property="og:title" content="ZenoIndex on Arc">
+  <meta property="og:description" content="On-chain index baskets on Arc testnet, settled in USDC.">
+  <meta property="og:image" content="/assets/screen-explore.jpg">
+  <link rel="icon" href="/assets/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="nav">
+    <div class="wrap nav-inner">
+      <a class="brand" href="/"><img src="/assets/zeno-icon.png" alt="" width="28" height="28"><span>ZenoIndex</span><span class="chip">Arc testnet</span></a>
+      <nav class="nav-links">
+        <a href="#try">Try it</a>
+        <a href="#how">How it works</a>
+        <a href="#contracts">Contracts</a>
+        <a class="js-repo" href="https://github.com/Abhishekk24/zenoindex">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero wrap">
+      <div class="hero-copy">
+        <p class="eyebrow">On-chain index baskets · settled in USDC</p>
+        <h1>Own a basket of assets in one tap, on Arc.</h1>
+        <p class="lede">ZenoIndex turns a list of tokens and target weights into a single on-chain basket.
+          Deposit USDC, get basket shares at the live NAV, redeem whenever you want. Fees and every
+          step are on Arc, where gas is paid in USDC too.</p>
+        <div class="cta">
+          <a class="btn btn-gold js-apk" href="#">Download the Android app</a>
+          <a class="btn btn-ghost js-repo" href="https://github.com/Abhishekk24/zenoindex">View the code</a>
+        </div>
+        <p class="fine">Android APK for Arc testnet. Testnet USDC only: no real money.</p>
+      </div>
+      <div class="phones" aria-hidden="true">
+        <img class="phone p1" src="/assets/screen-explore.jpg" alt="" width="540" height="1174">
+        <img class="phone p2" src="/assets/screen-invest.jpg" alt="" width="540" height="1174">
+      </div>
+    </section>
+
+    <section class="wrap live" aria-labelledby="live-title">
+      <div class="card live-card">
+        <div class="live-head">
+          <div>
+            <p class="eyebrow">Live on Arc testnet</p>
+            <h2 id="live-title"><span class="js-name">Zeno Arc Demo Vault</span> <span class="sym js-symbol">ZADV</span></h2>
+          </div>
+          <span class="status js-status"><i></i><span>Loading</span></span>
+        </div>
+        <div class="stats">
+          <div><p class="label">NAV / share</p><p class="value js-nav">—</p></div>
+          <div><p class="label">AUM · USDC</p><p class="value js-aum">—</p></div>
+          <div><p class="label">Shares</p><p class="value js-supply">—</p></div>
+          <div><p class="label">Exit fee</p><p class="value js-exit">—</p></div>
+        </div>
+        <div class="alloc">
+          <div class="bar js-bar"></div>
+          <ul class="legend js-legend"></ul>
+        </div>
+        <p class="fine js-source">Read from the ZenoIndex API, or straight from the chain if the API is unreachable.</p>
+      </div>
+    </section>
+
+    <section id="try" class="wrap">
+      <p class="eyebrow">Try it in five minutes</p>
+      <h2>From zero to a basket position</h2>
+      <ol class="steps">
+        <li><span class="n">1</span><div><h3>Get testnet USDC</h3><p>Claim USDC on <b>Arc Testnet</b> from the <a href="https://faucet.circle.com" target="_blank" rel="noopener">Circle faucet</a>. On Arc it pays for gas as well.</p></div></li>
+        <li><span class="n">2</span><div><h3>Install the app</h3><p><a class="js-apk" href="#">Download the APK</a> and open it on an Android phone. Allow installs from your browser when asked.</p></div></li>
+        <li><span class="n">3</span><div><h3>Sign in</h3><p>Use your email (Zeno creates a wallet for you) or connect any WalletConnect wallet; the app adds Arc to it.</p></div></li>
+        <li><span class="n">4</span><div><h3>Invest and redeem</h3><p>Open a basket, enter an amount, review the shares, fees and network fee, and sign. Redeem the same way.</p></div></li>
+      </ol>
+    </section>
+
+    <section id="how" class="wrap">
+      <p class="eyebrow">How it works</p>
+      <h2>Three parts, one flow</h2>
+      <div class="grid3">
+        <article class="card"><h3>Contracts</h3><p>A factory clones a vault per basket. Deposits mint shares at NAV, redemptions burn them and pay out net of the exit fee, which a FeeEscrow splits between platform and manager. A Uniswap v4 adapter routes rebalancing swaps.</p></article>
+        <article class="card"><h3>API</h3><p>Reads every basket from Arc in batched calls, prepares unsigned transactions for the app, and checks each mined transaction matches what was prepared before it confirms an order.</p></article>
+        <article class="card"><h3>App</h3><p>Explore baskets, invest and redeem as an investor; switch to Manager Mode to create a basket, set weights, seed it and claim fees. Signing stays in your wallet.</p></article>
+      </div>
+      <div class="gallery">
+        <figure><img src="/assets/screen-explore.jpg" alt="Explore baskets screen" loading="lazy" width="540" height="1174"><figcaption>Explore</figcaption></figure>
+        <figure><img src="/assets/screen-invest.jpg" alt="Invest preview with network fee" loading="lazy" width="540" height="1174"><figcaption>Invest</figcaption></figure>
+        <figure><img src="/assets/screen-redeem.jpg" alt="Redeem preview with exit fee" loading="lazy" width="540" height="1174"><figcaption>Redeem</figcaption></figure>
+        <figure><img src="/assets/screen-manager.jpg" alt="Manager create basket screen" loading="lazy" width="540" height="1174"><figcaption>Manager Mode</figcaption></figure>
+      </div>
+    </section>
+
+    <section id="contracts" class="wrap">
+      <p class="eyebrow">Deployed on Arc testnet · chain 5042002</p>
+      <h2>Contracts</h2>
+      <div class="card table">
+        <div class="row"><span>ZenoIndexVault factory</span><a class="mono" data-addr="0x50838499F82f13A527819b748d467CB7ba671E23"></a></div>
+        <div class="row"><span>Demo basket (ZADV)</span><a class="mono" data-addr="0xbF41248213C650bb7D14A6caC985e77b1Bacf259"></a></div>
+        <div class="row"><span>FeeEscrow</span><a class="mono" data-addr="0x80BD86f5778C3cD3Dd55502cab55F4Ea96e87b36"></a></div>
+        <div class="row"><span>AccessMaster</span><a class="mono" data-addr="0xEa5A7B27E511e831e1BfBb10F4B63Ea11077DB81"></a></div>
+        <div class="row"><span>Uniswap v4 adapter</span><a class="mono" data-addr="0x92c64e17a1A4c5B28a26B30102Ac1D453A7991b6"></a></div>
+        <div class="row"><span>USDC (ERC-20)</span><a class="mono" data-addr="0x3600000000000000000000000000000000000000"></a></div>
+      </div>
+      <div class="card note">
+        <h3>What works on testnet today</h3>
+        <p>Deposits, redemptions, fee accounting, basket creation and manager tools are live. The stock
+          tokens in the demo basket are test tokens without Uniswap liquidity yet, so baskets hold deposits in
+          USDC and redeem in USDC until pools are seeded. Prices are set by the admin and refresh daily.</p>
+      </div>
+    </section>
+
+    <section class="wrap built">
+      <p class="eyebrow">ETHGlobal</p>
+      <h2>Built on earlier work, ported to Arc at the hackathon</h2>
+      <p>ZenoIndex started on Robinhood Chain before the hackathon. At ETHGlobal we ported it to Arc: Arc builds
+        of the contracts and their deployment, Arc support in the API and app, fixes for Arc's USDC gas and RPC limits,
+        this site and the Android release. The repository keeps the full original history so judges can see exactly
+        which commits came when; the README lists them.</p>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap footer-inner">
+      <span>ZenoIndex · Arc testnet</span>
+      <span><a class="js-repo" href="https://github.com/Abhishekk24/zenoindex">GitHub</a> · <a href="https://testnet.arcscan.app" target="_blank" rel="noopener">Arc explorer</a></span>
+    </div>
+  </footer>
+
+  <script src="/config.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
