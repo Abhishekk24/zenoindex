@@ -18,6 +18,8 @@ Android app [latest release](https://github.com/Abhishekk24/zenoindex/releases/l
 Deployments: `backend/` and `website/` are two Vercel projects that deploy from `main` (each only when its
 folder changes). The API runs as one Node function with Neon Postgres and a daily cron for NAV snapshots.
 
+![ZenoIndex on Arc architecture](docs/architecture.svg)
+
 ## Arc testnet deployment
 
 Chain ID `5042002` · RPC `https://rpc.testnet.arc.io` · Explorer [testnet.arcscan.app](https://testnet.arcscan.app)
@@ -33,6 +35,21 @@ Chain ID `5042002` · RPC `https://rpc.testnet.arc.io` · Explorer [testnet.arcs
 
 Baskets are priced in Arc's ERC-20 USDC (`0x3600…0000`, 6 decimals). Arc pays gas in the same
 USDC (18 decimals natively), so the app keeps a fee reserve out of "max" deposits.
+
+## Uniswap v4 integration
+
+Vaults rebalance through Uniswap v4: a vault calls the factory's
+[`executeSwap`](contracts/src/arc/ZenoIndexVault.sol#L381-L394), which applies a price-table floor to
+`minAmountOut` and calls our router,
+[`UniswapV4Adapter`](contracts/src/arc/adapters/UniswapV4Adapter.sol#L121-L203). The adapter opens one
+`PoolManager.unlock` per swap and runs every hop of a multi-hop exact-input path inside `unlockCallback`
+(`swap`, `sync`/`settle` the input, `take` the output). It only accepts allowlisted hooks and rejects hook
+deltas that would make it settle more than it received. Our developer feedback, with links to each line,
+is in [FEEDBACK.md](FEEDBACK.md).
+
+On Arc testnet the adapter is deployed against PoolManager `0x1d70…F929`. The canonical v4 deployment there
+is `0x8366…0951`, which is where the official Quoter, StateView and PositionManager point. Moving the adapter
+to the canonical manager and seeding pools for the basket tokens is the next step (see FEEDBACK.md).
 
 ## What existed before the hackathon, and what we built at ETHGlobal
 
@@ -64,7 +81,8 @@ and claim
   baskets hold their deposits in USDC and redeem in USDC; swaps into the constituents are not live.
 - Asset prices are set by the super-admin and expire after 24 h (`maxPriceAge`).
 - Creating a basket needs the super-admin to allowlist the manager wallet (`setVaultCreator`).
-- Arc's public RPC limits `eth_getLogs` to under 10k blocks, so basket activity history is partial.
+- Arc's public RPC limits `eth_getLogs` to under 10k blocks, so basket activity is read in 5k-block chunks
+  back from the chain head (about the last two days of activity per refresh).
 
 ## Run it
 
