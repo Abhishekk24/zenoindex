@@ -40,12 +40,32 @@ export function accountWallet(linked: LinkedAccount[]): Address | null {
   return wallet ? getAddress(wallet.address!) : null;
 }
 
+/** The Privy app a token says it was issued for (its unverified `aud`), only to log a mismatch. App IDs aren't secret. */
+export function tokenAudience(token: string): string | undefined {
+  try {
+    const payload = JSON.parse(Buffer.from(token.split(".")[1] ?? "", "base64url").toString("utf8")) as { aud?: unknown };
+    return typeof payload.aud === "string" ? payload.aud : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function privyAuth(appId: string, appSecret: string): PrivyAuth {
   const client = new PrivyClient({ appId, appSecret });
   return {
     async walletOf(accessToken) {
       // Checks signature, expiry, issuer and that the token was issued for this app.
-      const claims = await client.utils().auth().verifyAccessToken(accessToken).catch(() => null);
+      const claims = await client
+        .utils()
+        .auth()
+        .verifyAccessToken(accessToken)
+        .catch((e: unknown) => {
+          // Never logs the token. The SDK's reason is vague ("token is invalid"), so name a wrong PRIVY_APP_ID outright.
+          const aud = tokenAudience(accessToken);
+          const mismatch = aud && aud !== appId ? `; token is for Privy app ${aud} but PRIVY_APP_ID is ${appId}` : "";
+          console.warn(`privy: access token rejected (${e instanceof Error ? e.message : String(e)}${mismatch})`);
+          return null;
+        });
       if (!claims) return null;
       // The user's wallets come from Privy's API (needs the app secret), never from the client.
       const user = await client.users()._get(claims.user_id);
