@@ -1,19 +1,20 @@
 /**
  * Sign-in step 2 for email (design): the email with a CHANGE link, the 6-digit
- * code in six boxes, Verify code, the resend countdown, and "Connect with"
- * Google or a wallet instead. Wrong / expired / locked codes show under the
- * boxes (not in the design; the boxes turn red).
+ * code in six boxes, Verify code, the resend countdown, and "Connect with" a
+ * wallet instead (the design's Google button is hidden until Google sign-in
+ * is set up). Wrong / expired / locked codes show under the boxes (not in the
+ * design; the boxes turn red).
  *
  * One hidden TextInput sits over the boxes and takes the typing, pasting and
  * SMS / email autofill (autoComplete="one-time-code"); the boxes only draw it.
  *
- * The parent decides what Verify, Resend, Google and wallet do (sign-in.tsx).
+ * The parent decides what Verify, Resend and wallet do (sign-in.tsx).
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { colors, fonts } from '../../theme/tokens';
-import { GoogleIcon, WalletIcon } from '../icons';
+import { WalletIcon } from '../icons';
 import { DIVIDER, INPUT_BG, INPUT_BORDER } from './palette';
 import { PrimaryButton } from './PrimaryButton';
 
@@ -54,7 +55,6 @@ export function EmailCodeStep({
   onVerify,
   onResend,
   onChangeEmail,
-  onGoogle,
   onWallet,
 }: {
   email: string;
@@ -68,8 +68,7 @@ export function EmailCodeStep({
   onVerify: (code: string) => void;
   onResend: () => void;
   onChangeEmail: () => void;
-  /** "Connect with": sign in with Google or a wallet instead. */
-  onGoogle: () => void;
+  /** "Connect with": sign in with a wallet instead. */
   onWallet: () => void;
 }) {
   const input = useRef<React.ComponentRef<typeof TextInput>>(null);
@@ -190,15 +189,6 @@ export function EmailCodeStep({
       <View style={styles.connect}>
         <Text style={styles.connectLabel}>CONNECT WITH</Text>
         <View style={styles.connectLine} />
-        <Pressable
-          onPress={onGoogle}
-          disabled={!!busy}
-          accessibilityRole="button"
-          accessibilityLabel="Continue with Google"
-          style={({ pressed }) => [styles.method, pressed && styles.pressed]}
-        >
-          <GoogleIcon size={20} />
-        </Pressable>
         <Pressable
           onPress={onWallet}
           disabled={!!busy}

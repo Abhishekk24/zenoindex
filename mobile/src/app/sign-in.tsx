@@ -1,10 +1,10 @@
 /**
- * Sign in with email, Google or a wallet (design: sign-in mockup) — all three
- * through Privy, so every user is a Privy user.
+ * Sign in with email or a wallet (design: sign-in mockup) — both through
+ * Privy, so every user is a Privy user. Google is off until its OAuth client
+ * is set up in Privy (the design's "Continue with Google" is hidden).
  *
  * - Email: Send code → "Check your email" step (EmailCodeStep) → Privy checks
- *   the code. Google: Privy's OAuth page, returning via the app's scheme.
- *   Privy then creates the user's embedded wallet.
+ *   the code. Privy then creates the user's embedded wallet.
  * - Connect wallet: our wallet picker (components/wallet/WalletPicker)
  *   connects an external wallet over WalletConnect (MetaMask, Rainbow, … any
  *   WalletConnect wallet), which signs Privy's Sign-In with Ethereum message — a signature
@@ -17,7 +17,6 @@
 import {
   useEmbeddedEthereumWallet,
   useLoginWithEmail,
-  useLoginWithOAuth,
   useLoginWithSiwe,
   usePrivy,
 } from '@privy-io/expo';
@@ -48,7 +47,6 @@ import {
   INPUT_BORDER,
 } from '../components/auth/palette';
 import { PrimaryButton } from '../components/auth/PrimaryButton';
-import { GoogleIcon } from '../components/icons';
 import { Notice, type NoticeContent } from '../components/ui';
 import { chooseWallet as openWalletPicker } from '../components/wallet/WalletPicker';
 import { SIWE_ORIGIN } from '../config/wallet';
@@ -140,7 +138,6 @@ export default function SignInScreen() {
   const privy = usePrivy();
   const { wallets } = useEmbeddedEthereumWallet();
   const { sendCode: sendPrivyCode, loginWithCode } = useLoginWithEmail();
-  const { login: loginWithOAuth } = useLoginWithOAuth();
   const { generateSiweMessage, loginWithSiwe } = useLoginWithSiwe();
   // The external wallet (WalletConnect): one source of truth for its address.
   const externalWallet = useExternalWallet();
@@ -183,7 +180,7 @@ export default function SignInScreen() {
   // Zeno session expired): waiting for the wallet, then the Zeno session.
   // Privy refuses a second login, so this never shows the form.
   const finishing = privy.isReady && Boolean(privy.user);
-  // Wallet sign-ins have their wallet already; email / Google users' embedded
+  // Wallet sign-ins have their wallet already; email users' embedded
   // wallet appears shortly after login (createOnLogin), and the backend looks
   // it up on the Privy user, so wait for it before exchanging.
   const accountWallet = signsWithExternalWallet(privy.user)
@@ -231,6 +228,7 @@ export default function SignInScreen() {
   const sendCode = async () => {
     setBusy(true);
     setError(undefined);
+    setNotice(undefined);
     setCodeError(undefined);
     try {
       await sendPrivyCode({ email: email.trim() });
@@ -273,18 +271,6 @@ export default function SignInScreen() {
     }
   };
 
-  const googleSignIn = async () => {
-    setBusy(true);
-    setError(undefined);
-    try {
-      await loginWithOAuth({ provider: 'google' });
-    } catch (e) {
-      setError(signInErrorMessage(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const walletSignIn = async (wallet: string) => {
     setBusy(true);
     setError(undefined);
@@ -294,11 +280,18 @@ export default function SignInScreen() {
       // check a signature made on another chain (Robinhood after trading) —
       // smart-account wallets sign per network (Fahmin, ebb742d). Always
       // asked: the network known from connecting may not be the wallet's.
+      // Best effort: a wallet that can't switch (it didn't allow switching
+      // for Zeno, or errors) signs where it is — a plain wallet's signature
+      // checks on any network.
       setWalletStep('switch');
       try {
         await switchChain(mainnet.id, { always: true });
       } catch (e) {
-        if (e instanceof WalletError && e.kind === 'rejected') {
+        if (e instanceof WalletError && e.kind === 'failed') {
+          walletTrace(
+            `switch to Ethereum failed, signing anyway: ${e.message}`,
+          );
+        } else if (e instanceof WalletError && e.kind === 'rejected') {
           setNotice({
             tone: 'error',
             title: 'Network switch declined',
@@ -311,8 +304,9 @@ export default function SignInScreen() {
             ],
           });
           return;
+        } else {
+          throw e;
         }
-        throw e;
       }
 
       // Privy's SIWE message for this wallet; Privy checks the signature.
@@ -525,7 +519,6 @@ export default function SignInScreen() {
               resendAfterSeconds={RESEND_AFTER_SECONDS}
               onVerify={verifyEmailCode}
               onResend={resendEmailCode}
-              onGoogle={googleSignIn}
               onWallet={chooseWallet}
               onChangeEmail={() => {
                 setCodeError(undefined);
@@ -564,12 +557,6 @@ export default function SignInScreen() {
                 <Text style={styles.dividerText}>OR CONTINUE WITH</Text>
                 <View style={styles.dividerLine} />
               </View>
-              <LightButton
-                label="Continue with Google"
-                icon={<GoogleIcon />}
-                onPress={googleSignIn}
-                disabled={busy || pickerOpen}
-              />
               {isConnected &&
               address &&
               connectedTopic &&

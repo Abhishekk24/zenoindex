@@ -242,6 +242,15 @@ export function toWalletError(e: unknown, fallback: string): WalletError {
   if (STALE_SESSION.test(text)) {
     return new WalletError(WALLET_SESSION_EXPIRED, 'expired', code);
   }
+  // WalletConnect refused a request the wallet never approved for this
+  // connection ("Missing or invalid. request() method: …").
+  if (/request\(\) method/i.test(text)) {
+    return new WalletError(
+      `This request isn’t supported by ${walletName()}. Try another wallet.`,
+      'failed',
+      code,
+    );
+  }
   // The relay socket was dead when sending ("Failed to publish payload,
   // please try again. id:… tag:…").
   if (/failed to publish/i.test(text)) {
@@ -663,6 +672,31 @@ function approvedChain(approved: number[], preferred: number): number {
   return approved.includes(preferred) ? preferred : (approved[0] ?? preferred);
 }
 
+/**
+ * The methods the session on `topic` approved for `chainId`, the way
+ * WalletConnect checks a request: the methods of every namespace with an
+ * account on that chain. A wallet approves only what it supports (Zeno asks
+ * with optional namespaces), and a request for anything else is refused before
+ * it reaches the wallet ("Missing or invalid. request() method: …").
+ */
+function approvedMethods(
+  provider: UniversalProvider,
+  topic: string,
+  chainId: number,
+): string[] {
+  let namespaces;
+  try {
+    namespaces = provider.client.session.get(topic).namespaces;
+  } catch {
+    return [];
+  }
+  return Object.values(namespaces).flatMap(ns =>
+    ns.accounts.some(a => a.split(':').slice(0, 2).join(':') === caip(chainId))
+      ? ns.methods
+      : [],
+  );
+}
+
 /** A transaction request, short: where to, value, gas set, data size. */
 function describeParams(method: string, params: unknown[]): string {
   if (method !== 'eth_sendTransaction') return '';
@@ -779,6 +813,33 @@ export async function switchChain(
   { always = false }: { always?: boolean } = {},
 ): Promise<void> {
   if (!always && shared.state.chainId === chainId) return;
+  const provider = await walletConnectProvider();
+  const topic = shared.state.topic;
+  // No approved networks: the session is gone, and the request below says so.
+  const approved = topic ? approvedChains(provider, topic) : [];
+  if (topic && approved.length > 0) {
+    const methods = approvedMethods(
+      provider,
+      topic,
+      approvedChain(approved, chainId),
+    );
+    if (!methods.includes('wallet_switchEthereumChain')) {
+      // This wallet didn't allow network switches for Zeno (some approve
+      // only signing and sending). A network the session did approve needs
+      // no switch: each request names its network, and the wallet uses it.
+      if (approved.includes(chainId)) {
+        walletTrace(
+          `wallet_switchEthereumChain not approved; chain ${chainId} is, so requests go there directly`,
+        );
+        return;
+      }
+      const chain = CHAINS.find(c => c.id === chainId);
+      throw new WalletError(
+        `Zeno can’t switch ${walletName()} to ${chain?.name ?? 'this network'}. Switch it there in the wallet, then connect again.`,
+        'failed',
+      );
+    }
+  }
   try {
     await walletRequest(
       'wallet_switchEthereumChain',
