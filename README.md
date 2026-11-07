@@ -65,9 +65,9 @@ mobile app. That is every commit up to and including `150fa81` / `ef58904` / `d3
 | Area | Work | Commits |
 |---|---|---|
 | Contracts | Arc build (`src/arc`): zero-address and path-length checks, overflow-safe price math (`FullMath`), regression tests; deployed factory, escrow, access control, adapter and a demo basket on Arc testnet | `03a0133` |
-| API | Arc chain selection; Multicall3 and 18-decimal native USDC for Arc (every read failed without it); USDC as the base asset | `4a7413b`, `20fec2e` |
-| Mobile | Arc network support; onboarding redirect loop under Expo Router 58; gas reserve on "max" because Arc gas is USDC; network-fee estimate; trade panel and Manager Mode fixes | `e6b894c`, `3a29070`, `6e273ae` |
-| Delivery | This monorepo, Vercel deployment of the API and website, the Android APK | commits after `c74b710` |
+| API | Arc chain selection; Multicall3 and 18-decimal native USDC for Arc (every read failed without it); USDC as the base asset | `4a7413b`, `6879c60` |
+| Mobile | Arc network support; onboarding redirect loop under Expo Router 58; gas reserve on "max" because Arc gas is USDC; network-fee estimate; trade panel and Manager Mode fixes | `e6b894c`, `e02ecd6`, `323e575` |
+| Delivery | This monorepo, Vercel deployment of the API and website, the Android APK | commits after `e0e3038` |
 
 End-to-end on Arc testnet (deposit → shares → redeem → claim, fees to FeeEscrow) was verified through
 the API and in the app, e.g. deposit
