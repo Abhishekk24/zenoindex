@@ -23,12 +23,19 @@ export type CreateAsset = {
   /** 'zap' assets can be a basket's base asset (USDG). */
   mode: 'zap' | 'in-kind';
   logoUrl?: string | null;
+  /**
+   * The factory has a current price for it. createVault reverts on any asset
+   * without one, so the picker shows these as unavailable.
+   */
+  available: boolean;
 };
 
 /**
- * Who may create (and the limits), plus the assets a basket can hold: every
- * asset with a price — createVault reverts on one without. The list comes
- * from GET /assets, the same one the Assets tab shows.
+ * Who may create (and the limits), plus the assets a basket can hold: the
+ * factory's active assets (GET /manager/create), shown with the names and
+ * logos the Assets tab uses (GET /assets). Whether one can be picked is the
+ * server's `selectable`: it checks the factory's price is set and not stale,
+ * which the Assets tab's price alone doesn't (an expired price still shows).
  */
 export async function loadCreateOptions() {
   const [options, all] = await Promise.all([
@@ -36,19 +43,26 @@ export async function loadCreateOptions() {
     api.listAssets(),
   ]);
   const base = options.baseAssetId?.toLowerCase();
+  const selectable = new Map(
+    options.assets.map(a => [a.id.toLowerCase(), a.selectable]),
+  );
   const assets: CreateAsset[] = all
-    .filter(a => a.priceUsdg !== null)
+    .filter(a => selectable.has(a.id.toLowerCase()))
     .map(a => ({
       id: a.id,
       name: a.name,
       symbol: a.symbol,
-      mode: a.id === base ? 'zap' : 'in-kind',
+      mode: a.id.toLowerCase() === base ? 'zap' : 'in-kind',
       logoUrl: a.logoUrl ?? null,
+      available: selectable.get(a.id.toLowerCase()) === true,
     }));
   console.log(
-    `[create] ${assets.length} of ${all.length} assets priced: ${assets
-      .map(a => a.symbol)
-      .join(', ')}; base ${base}; canCreate ${options.canCreate}`,
+    `[create] ${assets.length} of ${all.length} assets offered; unpriced: ${
+      assets
+        .filter(a => !a.available)
+        .map(a => a.symbol)
+        .join(', ') || 'none'
+    }; base ${base}; canCreate ${options.canCreate}`,
   );
   return { ...options, assets };
 }

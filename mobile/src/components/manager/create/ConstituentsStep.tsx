@@ -2,8 +2,9 @@
  * Create step 2, Constituents (design): base asset, search-and-add target
  * assets, a weight slider per asset (whole percents, capped so the total can't
  * pass 100%), and the running total (must reach 100% with at least 2 assets
- * to continue). Focusing the search lists every asset still available; typing
- * narrows it.
+ * to continue). Focusing the search lists every asset not yet added; typing
+ * narrows it. An asset without a current price is listed greyed with "No price
+ * yet" and can't be picked (createVault would revert on it).
  */
 import Slider from '@react-native-community/slider';
 import React, { useMemo, useState } from 'react';
@@ -55,20 +56,28 @@ export function ConstituentsStep({
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (picked || (!q && !focused)) return [];
-    return assets
-      .filter(
-        a =>
-          a.mode === 'in-kind' &&
-          !taken.has(a.id) &&
-          (!q ||
-            a.name.toLowerCase().includes(q) ||
-            a.symbol.toLowerCase().includes(q)),
-      )
-      .slice(0, 8);
+    return (
+      assets
+        .filter(
+          a =>
+            a.mode === 'in-kind' &&
+            !taken.has(a.id) &&
+            (!q ||
+              a.name.toLowerCase().includes(q) ||
+              a.symbol.toLowerCase().includes(q)),
+        )
+        // Unavailable ones stay listed (greyed, "No price yet") but sort last.
+        .sort((a, b) => Number(b.available) - Number(a.available))
+        .slice(0, 8)
+    );
   }, [query, picked, focused, taken, assets]);
+  // What Add (or Done) would add without a tap on a match.
+  const onlyMatch =
+    matches.length === 1 && matches[0]!.available ? matches[0]!.id : undefined;
+  const canAdd = Boolean(picked ?? onlyMatch);
 
   const add = () => {
-    const id = picked ?? (matches.length === 1 ? matches[0]!.id : undefined);
+    const id = picked ?? onlyMatch;
     if (!id) return;
     update({
       constituents: [...form.constituents, { assetId: id, weight: '' }],
@@ -104,7 +113,7 @@ export function ConstituentsStep({
         placeholder="Enter name"
         chevron={false}
         options={assets
-          .filter(a => a.mode === 'zap')
+          .filter(a => a.mode === 'zap' && a.available)
           .map(a => ({
             value: a.id,
             label: `${a.name} (${a.symbol})`,
@@ -134,12 +143,12 @@ export function ConstituentsStep({
           />
           <Pressable
             onPress={add}
-            disabled={!picked && matches.length !== 1}
+            disabled={!canAdd}
             accessibilityRole="button"
             accessibilityLabel="Add asset"
             style={({ pressed }) => [
               styles.add,
-              !picked && matches.length !== 1 && styles.addDisabled,
+              !canAdd && styles.addDisabled,
               pressed && styles.pressed,
             ]}
           >
@@ -163,11 +172,11 @@ export function ConstituentsStep({
             message={loadError}
             actions={onRetry ? [{ label: 'Try again', onPress: onRetry }] : []}
           />
-        ) : !assets.some(a => a.mode === 'in-kind') ? (
+        ) : !assets.some(a => a.mode === 'in-kind' && a.available) ? (
           <Notice
             tone="warning"
             title="No assets to add yet"
-            message="None of the assets can be added to a basket right now. Try again later."
+            message="None of the assets has a price yet, so none can be added to a basket. Try again later."
             actions={onRetry ? [{ label: 'Try again', onPress: onRetry }] : []}
           />
         ) : null}
@@ -180,14 +189,35 @@ export function ConstituentsStep({
                   setPicked(a.id);
                   setQuery(a.name);
                 }}
+                disabled={!a.available}
                 accessibilityRole="button"
+                accessibilityState={{ disabled: !a.available }}
+                accessibilityHint={
+                  a.available
+                    ? undefined
+                    : 'No price yet, so it can’t be added to a basket.'
+                }
                 style={({ pressed }) => [
                   styles.match,
-                  pressed && styles.matchPressed,
+                  pressed && a.available && styles.matchPressed,
                 ]}
               >
-                <Text style={styles.matchName}>{a.name}</Text>
-                <Text style={styles.matchSymbol}>{a.symbol}</Text>
+                <Text
+                  style={[styles.matchName, !a.available && styles.unavailable]}
+                >
+                  {a.name}
+                </Text>
+                {a.available ? null : (
+                  <Text style={styles.noPrice}>No price yet</Text>
+                )}
+                <Text
+                  style={[
+                    styles.matchSymbol,
+                    !a.available && styles.unavailable,
+                  ]}
+                >
+                  {a.symbol}
+                </Text>
               </Pressable>
             ))}
           </View>
@@ -346,6 +376,13 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     fontFamily: fonts.mono,
     fontSize: 13,
+    color: colors.muted,
+  },
+  unavailable: { color: colors.dim },
+  noPrice: {
+    flexShrink: 0,
+    fontFamily: fonts.regular,
+    fontSize: 12,
     color: colors.muted,
   },
   table: {

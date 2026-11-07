@@ -353,7 +353,11 @@ export function createRoutes(app: Hono<AppEnv>, { db, client, logos }: Deps) {
     const needPrice = body.weights.map((w) => w.assetId).filter((a) => a !== usdg) as Address[];
     const priced = await hasPrices(client, needPrice, project.factory);
     const unpriced = needPrice.filter((_, i) => !priced[i]);
-    if (unpriced.length) throw badRequest("no_price", `weights: no price yet for ${unpriced.join(", ")}`);
+    if (unpriced.length) {
+      // Symbols read better than addresses in the app's alert; the address stands in for a token without one.
+      const symbolOf = (mint: string) => snap.assets.find((a) => a.mint.toLowerCase() === mint.toLowerCase())?.symbol ?? mint;
+      throw badRequest("no_price", `No price yet for ${unpriced.map(symbolOf).join(", ")}, so it can't go in a basket. Remove it or try again later.`);
+    }
 
     const tx = buildCreateVault(project.factory, {
       name: body.name,
